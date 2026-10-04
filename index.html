@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Pacetime</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+
+    <div id="hud" hidden>
+      <section class="card goals-card">
+        <h2 id="scene-title"></h2>
+        <ul id="goals"></ul>
+        <p id="tip"></p>
+      </section>
+
+      <section class="card gauge">
+        <div class="gauge-row">
+          <span class="label">speed</span>
+          <span id="speed-word">standing</span>
+        </div>
+        <div class="bar"><div id="speed-fill"></div><span class="c-mark" title="the speed of light">c</span></div>
+        <div class="gauge-row small">
+          <span id="beta">0% of light</span>
+          <span id="gamma">γ 1.00</span>
+        </div>
+      </section>
+
+      <section class="card watches">
+        <div class="watch"><span class="label">your watch</span><b id="tau">0.0</b></div>
+        <div class="watch"><span class="label">world clock</span><b id="worldt">0.0</b></div>
+        <div id="younger">in step with the world</div>
+        <div id="tea" hidden>
+          <div class="gauge-row small"><span>⏳ your sand</span><span id="sand-text"></span></div>
+          <div class="bar sand"><div id="sand-fill"></div></div>
+          <div class="gauge-row small"><span>🫖 kettle (as you see it)</span><span id="brew-text"></span></div>
+          <div class="bar brew"><div id="brew-fill"></div></div>
+        </div>
+      </section>
+
+      <div id="crosshair"></div>
+      <div id="look-hint">click to look around</div>
+      <div class="corner-buttons">
+        <button id="lab-btn" title="Lab (L)">🧪 Lab</button>
+        <button id="menu-btn" title="Scenes (M)">🗺️ Scenes</button>
+      </div>
+      <button id="back-btn">👀 look back</button>
+    </div>
+
+    <aside id="lab" class="card" hidden>
+      <h3>🧪 The Lab</h3>
+      <label class="slider">
+        <span>speed of light <b id="c-value"></b></span>
+        <input id="c-slider" type="range" min="0" max="2.5" step="0.01" />
+        <small id="c-word"></small>
+      </label>
+      <div id="toggles"></div>
+      <p class="fine">Turn effects off one at a time to see which one is doing what.</p>
+    </aside>
+
+    <div id="toast"></div>
+
+    <div id="menu">
+      <div class="menu-inner">
+        <h1 class="logo"><span>P</span><span>a</span><span>c</span><span>e</span><span>t</span><span>i</span><span>m</span><span>e</span></h1>
+        <p class="tagline">One morning, light slowed down to a walk.</p>
+        <div id="scene-cards"></div>
+        <p class="controls">
+          <kbd>WASD</kbd> walk · <kbd>Shift</kbd> sprint · mouse to look · hold <kbd>B</kbd> or right-click to glance back ·
+          <kbd>L</kbd> lab · <kbd>M</kbd> scenes · <kbd>R</kbd> restart
+        </p>
+        <p class="controls touch">Touch: left thumb to move (push far to sprint), right thumb to look.</p>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
