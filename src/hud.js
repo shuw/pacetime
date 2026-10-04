@@ -96,6 +96,7 @@ function seeing(player, look) {
   if (b < 0.25) return "";
   const v = player.v.clone().normalize();
   const along = v.dot(look);
+  if (along > 0.6 && b > 0.99) return "Ahead: shifted past violet into darkness. Ringed round it, the world behind you has swung into view.";
   if (along > 0.6) return b > 0.8 ? "Ahead: the whole world crowds into a circle ringed with rainbow." : "Ahead: things bunch together and shift bluer.";
   if (along < -0.6) return b > 0.8 ? "Behind: the world stretches away, dim and red." : "Behind: things spread apart and redden.";
   return "Beside you: things you've passed still look ahead of you.";

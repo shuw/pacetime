@@ -288,9 +288,13 @@ export default {
         ];
       },
       sound(eye) {
-        const near = cabs.map(({ m }) => ({ m, s: m.seen(eye) })).sort((a, b) => a.s.pos.distanceTo(eye) - b.s.pos.distanceTo(eye))[0];
         if (riding) return { pos: eye, D: 1, riding: true };
-        return near ? { pos: near.s.pos, D: near.m.doppler(eye, player.v), riding: false } : null;
+        // You hear a taxi where it really is (sound is fast here), with an
+        // ordinary sound Doppler shift.
+        const near = cabs.map(({ m }) => ({ m, p: m.at(world.t) })).sort((a, b) => a.p.distanceTo(eye) - b.p.distanceTo(eye))[0];
+        if (!near) return null;
+        const toward = near.m.vel.dot(eye.clone().sub(near.p).normalize());
+        return { pos: near.p, D: SOUND_SPEED / (SOUND_SPEED - toward), riding: false };
       },
       action() {
         if (riding) return { label: "Get out of the taxi", run: end };

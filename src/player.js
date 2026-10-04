@@ -8,6 +8,7 @@ const EYE_HEIGHT = 1.6;
 // with a realistic c they're just an ordinary walk and sprint.
 const WALK_U = 0.63; // × the place's light speed
 const SPRINT_U = 3.04;
+const BOOST_U = 9.95; // hold Space too: 99.5% of light speed, γ = 10
 
 export class Player {
   constructor(canvas) {
@@ -153,10 +154,11 @@ export class Player {
     // Steer proper velocity toward the target. Proper velocity has no ceiling,
     // so however hard you push you never reach c.
     const c = world.c;
-    const target = this.autopilot ? this.autopilot.clone() : dir.multiplyScalar((sprint ? SPRINT_U : WALK_U) * this.legs);
+    const boost = sprint && k.has("Space");
+    const target = this.autopilot ? this.autopilot.clone() : dir.multiplyScalar((boost ? BOOST_U : sprint ? SPRINT_U : WALK_U) * this.legs);
     // Slowing down is quick, so letting go of the keys doesn't coast you far.
     const braking = target.lengthSq() < this.u.lengthSq();
-    const rate = (braking ? 7 : sprint ? 2.7 : 2) * this.legs * dTau;
+    const rate = (braking ? 7 : boost ? 6 : sprint ? 2.7 : 2) * this.legs * dTau;
     const delta = target.sub(this.u);
     if (delta.length() > rate) delta.setLength(rate);
     this.u.add(delta);

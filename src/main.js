@@ -292,6 +292,7 @@ addEventListener("pointerdown", unlockAudio);
 
 addEventListener("keydown", (e) => {
   unlockAudio();
+  if (e.code === "Space" && !paused) e.preventDefault();
   if (e.repeat) return;
   if (e.key === "?") return setHelp(help.hidden);
   if (e.code === "KeyN") return toggleSound();
