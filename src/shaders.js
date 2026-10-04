@@ -247,6 +247,10 @@ uniform vec3 uSkyHorizon;
 uniform vec4 uWindows;  // cell width, cell height, fraction lit, seed
 uniform vec3 uWindowColor;
 #endif
+#ifdef SPIRAL
+uniform vec4 uSpiral;   // lamp x, lamp z, angular speed, beam half-width (rad)
+uniform vec3 uSpiralColor;
+#endif
 #ifdef FLASHES
 uniform vec4 uFlash[6];      // xyz where, w world time when
 uniform vec3 uFlashColor[6];
@@ -378,10 +382,33 @@ void main() {
       uv += glow * 0.4;
     }
   #endif
+  #ifdef SPIRAL
+    // Mist around a lighthouse glows where the turning beam's light passes.
+    // Light leaving the lamp at te reaches this spot at te + r/c, then needs
+    // vDist/c more to reach us, so the lit band is a spiral that unwinds outward.
+    {
+      vec2 d = vWorld.xz - uSpiral.xy;
+      float r = length(d);
+      float seen = uTime - (uDelay > 0.5 ? vDist / uC : 0.0);
+      float te = seen - (uDelay > 0.5 ? r / uC : 0.0);
+      float dAng = mod(uSpiral.z * te - atan(d.y, d.x) + 3.14159, 6.28318) - 3.14159;
+      float glow = exp(-pow(dAng / uSpiral.w, 2.0)) * smoothstep(1.5, 6.0, r) / (1.0 + r * 0.025);
+      rgb += uSpiralColor * glow * 0.7;
+      ir += glow * 0.4;
+      uv += glow * 0.4;
+    }
+  #endif
   float f = smoothstep(uFogRange.x, uFogRange.y, vDist);
-  rgb = mix(rgb, uFog, f);
-  ir = mix(ir, 0.3 * (1.0 - uNight), f);
-  uv = mix(uv, 0.4 * (1.0 - uNight), f);
+  #ifdef ADDITIVE
+    // Glows add to what's behind them, so haze just dims them.
+    rgb *= 1.0 - f;
+    ir *= 1.0 - f;
+    uv *= 1.0 - f;
+  #else
+    rgb = mix(rgb, uFog, f);
+    ir = mix(ir, 0.3 * (1.0 - uNight), f);
+    uv = mix(uv, 0.4 * (1.0 - uNight), f);
+  #endif
 
   vec3 col = searchlight(spectralShift(rgb, ir, uv, D), D);
   float alpha = uOpacity;
@@ -410,11 +437,18 @@ void main() {
   vec3 dir = normalize(vWorld - uCam);
   float D = doppler(dir);
   float h = clamp(dir.y, -0.2, 1.0);
-  vec3 rgb = mix(uSkyHorizon, uSkyTop, pow(max(h, 0.0), 0.6));
-  float uv = mix(0.5, 1.1, max(h, 0.0)) * (1.0 - uNight);
+  // The warm horizon band hugs the horizon and is strongest toward the sun.
+  vec2 across = dir.xz / max(length(dir.xz), 1e-4);
+  vec2 sunFlat = uSun.xz / max(length(uSun.xz), 1e-4);
+  float sunSide = 0.5 + 0.5 * dot(across, sunFlat);
+  vec3 horizon = mix(mix(uSkyTop, uSkyHorizon, 0.35) * 1.3, uSkyHorizon, sunSide * sunSide);
+  vec3 rgb = mix(horizon, uSkyTop, 1.0 - pow(1.0 - max(h, 0.0), 4.0));
+  // Skylight beyond the rainbow scales with how bright the sky is.
+  float skyLum = clamp(dot(rgb, vec3(0.3, 0.5, 0.2)) * 2.5, 0.0, 1.0);
+  float uv = mix(0.5, 1.1, max(h, 0.0)) * (1.0 - uNight) * skyLum;
   float sun = smoothstep(0.9975, 0.999, dot(dir, uSun)) * (1.0 - uSpace);
   rgb += vec3(2.5, 2.2, 1.6) * sun * (1.0 - uNight);
-  float ir = 0.3 * (1.0 - uNight) + 0.03 + 2.0 * sun;
+  float ir = 0.3 * (1.0 - uNight) * skyLum + 0.03 + 2.0 * sun;
   if (uSpace > 0.5) {
     // Deep space: no horizon, a faint galactic band, stars in every direction.
     vec3 gal = normalize(vec3(0.3, 0.9, -0.3));
@@ -485,10 +519,12 @@ export function mat({
   rotor = null,     // { uRotCenter, uRotAxis, uOmega, uPivot } uniforms for something spinning
   water = false,
   windows = null,   // { size: [w, h], lit, color, seed }
+  spiral = null,    // { uSpiral, uSpiralColor } uniforms for a lighthouse beam
+  depthWrite = null,
   vertexColors = false,
 } = {}) {
   const key = JSON.stringify(arguments[0] ?? {});
-  const special = mover || flashes || beam || wake || sourceVel || rotor;
+  const special = mover || flashes || beam || wake || sourceVel || rotor || spiral;
   if (!special && cache.has(key)) return cache.get(key);
   const defines = {};
   if (checker) defines.CHECKER = "";
@@ -496,6 +532,7 @@ export function mat({
   if (toon) defines.TOON = "";
   if (unlit) defines.UNLIT = "";
   if (mover) defines.MOVER = "";
+  if (additive) defines.ADDITIVE = "";
   if (flashes) defines.FLASHES = "";
   if (beam) defines.BEAM = "";
   if (rect) defines.CLIP_RECT = "";
@@ -504,6 +541,7 @@ export function mat({
   if (rotor) defines.ROTOR = "";
   if (water) defines.WATER = "";
   if (windows) defines.WINDOWS = "";
+  if (spiral) defines.SPIRAL = "";
   if (doubleSided) defines.DOUBLE_SIDED = "";
   const m = new THREE.ShaderMaterial({
     vertexShader: vertex,
@@ -526,13 +564,14 @@ export function mat({
       ...(wake && { uWakeFade: { value: wake } }),
       ...(sourceVel && { uVel: sourceVel }),
       ...(rotor && rotor),
+      ...(spiral && spiral),
       ...(windows && {
         uWindows: { value: new THREE.Vector4(windows.size[0], windows.size[1], windows.lit ?? 0.5, windows.seed ?? 1) },
         uWindowColor: { value: new THREE.Color(windows.color ?? "#ffcf8a") },
       }),
     },
     transparent: opacity < 1 || additive,
-    depthWrite: !additive && opacity >= 1,
+    depthWrite: depthWrite ?? (!additive && opacity >= 1),
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
     side: doubleSided ? THREE.DoubleSide : THREE.FrontSide,
   });

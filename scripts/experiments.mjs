@@ -58,6 +58,27 @@ if (which === "railway") {
   console.log("after ride", JSON.stringify(await state(), null, 1));
 }
 
+if (which === "pier") {
+  await place(-16, -122, 0);
+  await page.waitForTimeout(3500);
+  await page.screenshot({ path: "shots/pier-wheel.png" });
+  await place(0, -118, 0);
+  await page.evaluate(() => { pacetime.player.pitch = 0.25; });
+  await until(() => pacetime.instance.log.seen.length >= 2, null, 60000);
+  await page.screenshot({ path: "shots/pier-fireworks.png" });
+  console.log("twin", JSON.stringify(await state(), null, 1));
+  await place(24.4, -131, Math.PI);
+  await until(() => pacetime.instance.action()?.label === "Board the coaster", null, 90000);
+  await page.evaluate(() => pacetime.act());
+  console.log("boarded:", await page.evaluate(() => !!pacetime.player.vehicle));
+  await until(() => pacetime.player.pos.y > 12, null, 60000);
+  await page.screenshot({ path: "shots/pier-lift.png" });
+  await until(() => pacetime.player.beta > 0.85, null, 60000);
+  await page.screenshot({ path: "shots/pier-drop.png" });
+  await until(() => pacetime.instance.goals[4].done, null, 90000);
+  console.log("lap", JSON.stringify(await state(), null, 1));
+}
+
 if (which === "beam") {
   await page.waitForTimeout(9000);
   await page.screenshot({ path: "shots/exp-beam-watch.png" });

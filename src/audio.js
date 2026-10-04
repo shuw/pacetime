@@ -228,6 +228,18 @@ export const sfx = {
     burst(0.35, { gain: 0.22, from: 8000, to: 600, type: "bandpass", q: 3, pan });
     tone(2400, 0, 0.25, { type: "triangle", gain: 0.05, slide: 0.3, pan });
   },
+  // A firework: a deep thump with a crackle after.
+  bang(pos) {
+    const { pan, gain } = placed(pos, 60);
+    tone(60, 0, 0.9, { gain: 0.35 * gain, slide: 0.5, pan });
+    burst(0.5, { gain: 0.4 * gain, from: 3000, to: 200, pan });
+    for (let i = 0; i < 6; i++) burst(0.08, { gain: 0.08 * gain, from: 5000, to: 2000, type: "highpass", pan: pan + (Math.random() - 0.5) * 0.4, start: 0.4 + Math.random() * 0.9 });
+  },
+  // A ride's motor and wheels, as a short swoosh.
+  swoosh(pos, amount = 1) {
+    const { pan, gain } = placed(pos, 20);
+    burst(0.9, { gain: 0.15 * gain * amount, from: 400, to: 2500, type: "bandpass", q: 1.5, pan, attack: 0.3 });
+  },
   step(soft = 1) {
     burst(0.07, { gain: 0.05 * soft, from: 900, to: 300, q: 1 });
   },

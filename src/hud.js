@@ -58,7 +58,7 @@ export function toast(msg, seconds = 6) {
 let lastGoals = "", lastLog = 0, logRef = null;
 
 export function showScene(scene, index) {
-  $("kicker").textContent = `Experiment ${index + 1} · ${scene.tag}`;
+  $("kicker").textContent = `${index + 1} · ${scene.tag}`;
   $("scene-title").textContent = scene.title;
   lastGoals = "";
   lastLog = 0;
@@ -72,7 +72,7 @@ export function updateHud({ player, instance, locked, prompt }) {
   $("gamma").textContent = `γ ${player.gamma.toFixed(3)}`;
   $("speed-fill").style.width = `${(b * 100).toFixed(2)}%`;
   $("speed-ms").textContent = `${(b * world.c).toFixed(2)} m/s`;
-  $("riding").textContent = player.vehicle ? "on the train" : "";
+  $("riding").textContent = player.vehicle ? "riding" : "";
 
   $("tau").textContent = sec(player.tau);
   $("worldt").textContent = sec(world.t);

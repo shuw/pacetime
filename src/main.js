@@ -11,8 +11,9 @@ import { initLab, showScene, syncLab, toast, toggleLab, updateHud } from "./hud.
 import { isMuted, setListener, setMuted, sfx, unlockAudio, updateAudio } from "./audio.js";
 import railway from "./scenes/railway.js";
 import beam from "./scenes/beam.js";
+import pier from "./scenes/pier.js";
 
-const SCENES = [railway, beam];
+const SCENES = [pier, railway, beam];
 
 const canvas = document.getElementById("view");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -274,54 +275,66 @@ function footsteps(dt) {
   }
 }
 
+// One step of simulation: the player's own time advances by dTau.
+function simulate(dTau, { realtime = true } = {}) {
+  const { instance, scene } = current;
+  const dT = player.update(dTau, instance);
+  world.t += dT;
+  player.applyTo(camera);
+  camera.updateMatrixWorld();
+  eye.copy(player.eye);
+
+  shared.uCam.value.copy(eye);
+  shared.uBeta.value.copy(player.v).divideScalar(world.c);
+  shared.uFlags.value.set(+effects.aberration, +effects.doppler, +effects.searchlight, 0);
+  shared.uTime.value = world.t;
+  shared.uC.value = world.c;
+  shared.uDelay.value = +effects.delay;
+  shared.uContract.value = +effects.dilation;
+  adaptExposure(dTau);
+  sky.position.copy(eye);
+
+  instance.update({ player, eye, camera, t: world.t, dT, dTau });
+  instance.group.traverse((c) => { if (c.follow) c.position.set(eye.x, c.followY ?? 0, eye.z); });
+  if (!realtime) return;
+
+  setListener(eye, right.set(1, 0, 0).applyQuaternion(camera.quaternion));
+  updateAudio({ beta: player.beta, train: instance.sound?.(eye) ?? instance.train?.audio(eye, player) ?? null });
+  footsteps(dTau);
+  if (!paused) {
+    const nDone = instance.goals?.filter((g) => g.done).length ?? 0;
+    if (nDone > goalsDone) sfx.goal();
+    goalsDone = nDone;
+    const complete = instance.goals?.length > 0 && instance.goals.every((g) => g.done);
+    if (complete && !wasComplete && !done[scene.id]) {
+      done[scene.id] = true;
+      store.set("pacetime-done", JSON.stringify(done));
+      setTimeout(() => toast(`${scene.title}: all observations made. Open Experiments (M) for the next one.`, 7), 9000);
+    }
+    wasComplete = complete;
+  }
+}
+
+// Tests can run the world faster than real time.
+let warp = 1;
+
 function frame() {
   const now = performance.now();
   const dTau = Math.min((now - last) / 1000, 0.05);
   last = now;
   if (current) {
-    const { instance, scene } = current;
     // Behind the title screen the world keeps running so the menu has a live backdrop.
-    const step = (paused || !help.hidden) && instance.started ? 0 : dTau;
-    const dT = player.update(step, instance);
-    world.t += dT;
-    player.applyTo(camera);
-    camera.updateMatrixWorld();
-    eye.copy(player.eye);
-
-    shared.uCam.value.copy(eye);
-    shared.uBeta.value.copy(player.v).divideScalar(world.c);
-    shared.uFlags.value.set(+effects.aberration, +effects.doppler, +effects.searchlight, 0);
-    shared.uTime.value = world.t;
-    shared.uC.value = world.c;
-    shared.uDelay.value = +effects.delay;
-    shared.uContract.value = +effects.dilation;
-    adaptExposure(step);
-    sky.position.copy(eye);
-
-    instance.update({ player, eye, camera, t: world.t, dT, dTau: step });
-    instance.group.traverse((c) => { if (c.follow) c.position.set(eye.x, 0, eye.z); });
-
-    setListener(eye, right.set(1, 0, 0).applyQuaternion(camera.quaternion));
-    updateAudio({ beta: player.beta, train: instance.sound?.(eye) ?? instance.train?.audio(eye, player) ?? null });
-    footsteps(step);
-
+    const frozen = (paused || !help.hidden) && current.instance.started;
+    const total = frozen ? 0 : dTau * warp;
+    const n = Math.max(1, Math.ceil(total / 0.05));
+    for (let i = 0; i < n; i++) simulate(total / n, { realtime: i === n - 1 });
     if (!paused) {
       updateHud({
-        player, instance,
+        player, instance: current.instance,
         locked: document.pointerLockElement === canvas || matchMedia("(pointer: coarse)").matches,
-        prompt: instance.action?.(eye) ?? null,
+        prompt: current.instance.action?.(eye) ?? null,
       });
       writeHash(dTau);
-      const nDone = instance.goals?.filter((g) => g.done).length ?? 0;
-      if (nDone > goalsDone) sfx.goal();
-      goalsDone = nDone;
-      const complete = instance.goals?.length > 0 && instance.goals.every((g) => g.done);
-      if (complete && !wasComplete && !done[scene.id]) {
-        done[scene.id] = true;
-        store.set("pacetime-done", JSON.stringify(done));
-        setTimeout(() => toast(`${scene.title}: all observations made. Open Experiments (M) for the next one.`, 7), 9000);
-      }
-      wasComplete = complete;
     }
   }
   if (usePost) composer.render();
@@ -340,7 +353,14 @@ frame();
 
 // Handy for poking at the physics from the console.
 window.pacetime = {
-  player, world, effects, closeMenu, act,
+  player, world, effects, closeMenu, act, shared, bloom,
   get instance() { return current?.instance; },
+  get warp() { return warp; },
+  set warp(k) { warp = Math.max(0, Math.min(k, 40)); },
+  // Jump ahead: run the world for `seconds` of your own time without drawing.
+  advance(seconds) {
+    const steps = Math.ceil(seconds / 0.05);
+    for (let i = 0; i < steps; i++) simulate(seconds / steps, { realtime: false });
+  },
   load: (id) => { load(SCENES.find((s) => s.id === id)); current.instance.started = true; },
 };
