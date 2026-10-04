@@ -670,11 +670,6 @@ export function mat({
   return m;
 }
 
-// A private (uncached) material whose uniforms a prop can animate.
-export function liveMat(opts) {
-  return mat({ ...opts, unique: true });
-}
-
 export function skyMaterial() {
   return new THREE.ShaderMaterial({
     vertexShader: vertex,

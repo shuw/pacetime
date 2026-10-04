@@ -1,4 +1,3 @@
-import * as THREE from "three";
 import { effects, frameTime, world } from "./relativity.js";
 
 // Things that happen at a place and a world time. Each is logged the moment its
@@ -41,5 +40,3 @@ export class EventLog {
   }
 }
 
-export const fmtT = (s) => `${s.toFixed(2)} s`;
-export { THREE };

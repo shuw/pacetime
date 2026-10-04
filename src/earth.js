@@ -159,17 +159,6 @@ export function neon(text, { pos = [0, 0, 0], rotY = 0, size = 0.25, color = "#f
   return g;
 }
 
-export function pine(x, z, h = 7, { snow = false } = {}) {
-  const g = new THREE.Group();
-  g.add(box(0.4, h * 0.3, 0.4, { color: "#3a2a20", ir: 0.3 }, [x, h * 0.15, z]));
-  for (let i = 0; i < 3; i++) {
-    const r = h * (0.32 - i * 0.08), y = h * (0.3 + i * 0.22);
-    g.add(mesh(new THREE.ConeGeometry(1, 1, 10), mat({ color: snow && i === 2 ? "#dfe8f2" : "#1f3b2c", ir: 1.4, uv: 0.05 }), { pos: [x, y + h * 0.15, z], scale: [r, h * 0.38, r] }));
-    if (snow) g.add(mesh(new THREE.ConeGeometry(1, 1, 10), mat({ color: "#e9f0f7", ir: 0.6, uv: 0.4 }), { pos: [x, y + h * 0.27, z], scale: [r * 0.7, h * 0.16, r * 0.7] }));
-  }
-  return g;
-}
-
 // A cottage with a pitched roof (snow optional) and lit windows.
 export function cottage(x, z, rotY = 0, { w = 6, d = 5, h = 3.4, color = "#6b4a3a", roof = "#2b2f3a", snow = false, seed = 1 } = {}) {
   const g = new THREE.Group();

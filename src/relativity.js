@@ -54,18 +54,6 @@ export function retardedTime(observer, src) {
   return world.t - observer.distanceTo(src) / world.c;
 }
 
-// Unit direction (observer frame) in which a source at rest appears.
-export function apparentDirection(observer, v, src) {
-  const x = new THREE.Vector3().subVectors(src, observer);
-  const d = x.length();
-  const b = v.clone().divideScalar(world.c);
-  const beta = b.length();
-  if (beta < 1e-6 || !effects.aberration) return x.normalize();
-  const g = gammaOf(beta);
-  const n = b.clone().divideScalar(beta);
-  return x.addScaledVector(n, (g - 1) * x.dot(n)).addScaledVector(b, g * d).normalize();
-}
-
 // Velocity of something moving at w inside a frame that itself moves at V
 // (all m/s, world frame result).
 export function addVelocity(V, w) {

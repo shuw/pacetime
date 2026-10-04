@@ -99,7 +99,6 @@ function load(scene) {
   player.legs = world.c;
   goalsDone = 0;
   syncLab();
-  store.set("pacetime-last", scene.id);
 }
 
 // The address bar mirrors where you are, e.g. #tunnel@-30.0,17.0,0.00,0.00&c=8&off=doppler,
@@ -208,6 +207,7 @@ function startScene(scene) {
   sfx.ui();
   player.autopilot = null;
   load(scene);
+  store.set("pacetime-last", scene.id);
   if (scene.intro) startIntro();
   current.instance.started = true;
   closeMenu();
