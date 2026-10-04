@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { effects, gammaOf, world } from "./relativity.js";
+import { addVelocity, effects, gammaOf, world } from "./relativity.js";
 
 const EYE_HEIGHT = 1.6;
 // Your legs give you a proper velocity (distance on the meadow per tick of
@@ -22,6 +22,7 @@ export class Player {
     this.enabled = false;
     this.touchMove = new THREE.Vector2();
     this.touchSprint = false;
+    this.vehicle = null; // a train you're riding, if any
     this.bindInput();
   }
 
@@ -43,6 +44,19 @@ export class Player {
     this.v.set(0, 0, 0);
     this.yaw = yaw;
     this.pitch = 0;
+    this.vehicle = null;
+  }
+
+  board(vehicle) {
+    this.vehicle = vehicle;
+    this.u.set(0, 0, 0);
+  }
+
+  // Stepping off stops you dead on the deck.
+  alight() {
+    this.vehicle = null;
+    this.u.set(0, 0, 0);
+    this.v.set(0, 0, 0);
   }
 
   bindInput() {
@@ -119,7 +133,7 @@ export class Player {
     fwd -= this.touchMove.y;
     side += this.touchMove.x;
     if (!this.enabled) fwd = side = 0;
-    const sprint = k.has("ShiftLeft") || k.has("ShiftRight") || this.touchSprint;
+    const sprint = (k.has("ShiftLeft") || k.has("ShiftRight") || this.touchSprint) && !this.vehicle;
     this.lookBack = this.lookBack && this.enabled;
     const lookBackKey = k.has("KeyB") || k.has("KeyQ");
 
@@ -139,14 +153,22 @@ export class Player {
     if (delta.length() > rate) delta.setLength(rate);
     this.u.add(delta);
 
-    this.v.copy(this.u).divideScalar(Math.sqrt(1 + this.u.lengthSq() / (c * c)));
+    this.ownVelocity();
     const dT = effects.dilation ? dTau * this.gamma : dTau;
     this.pos.addScaledVector(this.v, dT);
-    this.collide(scene);
-    this.v.copy(this.u).divideScalar(Math.sqrt(1 + this.u.lengthSq() / (c * c)));
+    if (this.vehicle) this.vehicle.clamp(this.pos, world.t + dT);
+    else this.collide(scene);
+    this.ownVelocity();
     this.tau += dTau;
     this.looking = this.lookBack || lookBackKey;
     return dT;
+  }
+
+  // World-frame velocity: your own stride, carried along by any train.
+  ownVelocity() {
+    const c = world.c;
+    this.v.copy(this.u).divideScalar(Math.sqrt(1 + this.u.lengthSq() / (c * c)));
+    if (this.vehicle) this.v.copy(addVelocity(this.vehicle.velocity, this.v));
   }
 
   collide(scene) {
@@ -161,6 +183,22 @@ export class Player {
         const into = this.u.x * nx + this.u.z * nz;
         if (into < 0) { this.u.x -= into * nx; this.u.z -= into * nz; }
       }
+    }
+    if (scene.walk) {
+      // Stay on the walkable rectangles: snap back to the nearest one.
+      if (!scene.walk.some(([x0, z0, x1, z1]) => p.x >= x0 && p.x <= x1 && p.z >= z0 && p.z <= z1)) {
+        let best = null, bd = Infinity;
+        for (const [x0, z0, x1, z1] of scene.walk) {
+          const q = [THREE.MathUtils.clamp(p.x, x0, x1), THREE.MathUtils.clamp(p.z, z0, z1)];
+          const dd = (q[0] - p.x) ** 2 + (q[1] - p.z) ** 2;
+          if (dd < bd) { bd = dd; best = q; }
+        }
+        if (best[0] !== p.x) this.u.x = 0;
+        if (best[1] !== p.z) this.u.z = 0;
+        p.x = best[0];
+        p.z = best[1];
+      }
+      return;
     }
     const R = scene.bounds ?? 100;
     const d = Math.hypot(p.x, p.z);

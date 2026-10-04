@@ -64,3 +64,36 @@ export function apparentDirection(observer, v, src) {
   const n = b.clone().divideScalar(beta);
   return x.addScaledVector(n, (g - 1) * x.dot(n)).addScaledVector(b, g * d).normalize();
 }
+
+// Velocity of something moving at w inside a frame that itself moves at V
+// (all m/s, world frame result).
+export function addVelocity(V, w) {
+  const c2 = world.c * world.c;
+  const gV = 1 / Math.sqrt(Math.max(1e-9, 1 - V.lengthSq() / c2));
+  const vw = V.dot(w) / c2;
+  return w.clone().divideScalar(gV)
+    .addScaledVector(V, 1 + (gV / (1 + gV)) * vw)
+    .divideScalar(1 + vw);
+}
+
+// Time coordinate, in the frame of an observer at `here` moving at v, of an
+// event at world time t and place `pos`, relative to the observer's "now" T.
+export function frameTime(t, pos, T, here, v) {
+  const c2 = world.c * world.c;
+  const g = 1 / Math.sqrt(Math.max(1e-9, 1 - v.lengthSq() / c2));
+  const dx = new THREE.Vector3().subVectors(pos, here);
+  return g * ((t - T) - v.dot(dx) / c2);
+}
+
+// World time at which light now reaching `eye` left something whose world
+// position at time t is path(t). Bisection; works for anything slower than light.
+export function seenTimeOf(path, eye, T = world.t, span = 600) {
+  if (!effects.delay) return T;
+  let lo = T - span, hi = T;
+  for (let i = 0; i < 48; i++) {
+    const mid = (lo + hi) / 2;
+    if (world.c * (T - mid) > path(mid).distanceTo(eye)) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}

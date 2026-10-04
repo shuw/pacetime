@@ -1,6 +1,6 @@
 # Pacetime
 
-A whimsical 3D browser playground where light travels at walking pace (3 m/s), so special relativity is something you feel rather than read about. Jog and the meadow bends toward you, colors slide along the rainbow, the world ahead brightens, and your watch falls behind every other clock.
+A browser game set on a rail station adrift in deep space, where light moves at a walking pace. At 3 to 5 m/s, the strange parts of special relativity stop being equations and become things you can stand and watch. Lightning that strikes "at the same time" doesn't, depending on where you ride. A train fits in a tunnel shorter than itself. A clock on a passing train ticks slow. And however fast you run after a pulse of light, it pulls away at exactly c.
 
 ## Play
 
@@ -9,32 +9,35 @@ bun install
 bun run dev        # http://localhost:5180
 ```
 
-WASD to walk, Shift to sprint, mouse to look, hold B (or right-click) to glance back, L for the Lab, M for the scene map. On touch screens: left thumb moves (push far to sprint), right thumb looks.
+WASD to move, Shift to sprint, mouse to look, E to board or step off a train, hold B to look back, T to return to the start, L for the Lab, M for the experiments. On touch screens, the left thumb moves (push far to sprint) and the right thumb looks.
 
-## Scenes
+## Experiments
 
-- **Lollipop Meadow**: a checkerboard playground with an avenue of rainbow arches and a clock tower. Sprint through the arches, glance back, and get younger than the meadow.
-- **Firefly Choir**: forty fireflies flash at the same instant, but you see the flashes ripple outward from wherever you stand. Find the one spot where they look in sync.
-- **The Shy Garden**: critters painted only in infrared or ultraviolet. Sprint at the imps to blueshift them into view; run away from the moths and glance back.
-- **Tea for Two**: the twin paradox as a picnic. The kettle needs 90 s of world time and your sand timer holds 40 s of yours, so run laps fast enough to come back younger than your twin, Pip.
+1. **Einstein's Train** (simultaneity). Lightning hits both ends of a passing train at once by the platform's clocks. Watch from the platform, then ride the train through the strikes.
+2. **Train and Tunnel** (length contraction). A 62 m train fits a 40 m tunnel with both doors shut. To the passengers, the tunnel is only 20 m long and the doors don't shut together.
+3. **The Light Clock** (time dilation). A photon bounces between two mirrors on the platform and on a train. Trails show the moving one zigzagging, and from the train it's the platform clock that runs slow.
+4. **Chasing the Beam** (constancy of c). Pulses you can watch crawl through the dust. Outgoing ones seem to move at half speed, incoming ones arrive with no warning, and sprinting after one changes nothing.
 
-The Lab lets you change the speed of light and switch each effect off on its own (bending, color shift, brightening, light delay, slow watch).
+An observation log records when each event's light reached you and, with the travel time taken out, when it happened in your frame. The Lab changes the speed of light and switches each effect off on its own.
 
 ## How it works
 
-Everything in the world is at rest except you. Every surface is drawn by one shader (`src/shaders.js`):
+One shader (`src/shaders.js`) draws everything as you would actually see it:
 
-- **Where things appear**: each vertex is placed where the light it emitted earlier lands in your moving frame. That's a Lorentz boost of the emission event on your past light cone, so aberration and the apparent stretching come out exactly.
-- **What color they are**: every surface has red, green and blue bands plus broad infrared and ultraviolet light. All wavelengths are divided by the Doppler factor and read back through three eye-response curves. Leaves are bright in infrared, as real foliage is, so trees glow when you run at them.
-- **How bright**: intensity scales with the Doppler factor, and an eye-adaptation exposure keeps the view from blowing out or going black.
-- **When**: animated things (clocks, fireflies, the kettle) show the world time at which their light left them. Your watch advances in proper time, and the world advances γ times faster.
+- **Where**: each vertex is drawn where it was when the light now reaching you left it, then boosted into your moving frame. Moving trains are solved for their own retarded positions and drawn Lorentz-contracted.
+- **What color**: surfaces send out red, green and blue light plus infrared and ultraviolet tails. Every wavelength is divided by the Doppler factor and read back through the eye's three color responses. That's what turns the star field into a rainbow "starbow" ring at high speed.
+- **How bright**: intensity follows the Doppler factor, with eye adaptation so the view doesn't black out.
+- **Light in flight**: flashes and beams are drawn by the glow they scatter off the deck and the dust. Each flash appears as an expanding ellipse with the flash and your eye at its foci, which is exactly where its light can have reached you by now.
 
-You "push" with a fixed proper velocity, so with realistic light speed (try the Lab slider) you are back to an ordinary walk and sprint.
+Riding a train composes your walking velocity with the train's relativistically. Your watch runs in your own proper time while the platform clock advances γ times faster.
 
 ## Prior art
 
-[A Slower Speed of Light](https://gamelab.mit.edu/games/a-slower-speed-of-light/) and its OpenRelativity toolkit (MIT Game Lab), [Velocity Raptor](https://testtubegames.com/velocityraptor_old.html), [Real Time Relativity](https://arxiv.org/abs/physics/0701200), Ute Kraus's [Space Time Travel](https://www.spacetimetravel.org/), and [Relativity for Games](https://arxiv.org/abs/1703.07063).
+[A Slower Speed of Light](https://gamelab.mit.edu/games/a-slower-speed-of-light/) and OpenRelativity (MIT Game Lab), [Velocity Raptor](https://testtubegames.com/velocityraptor_old.html), [Real Time Relativity](https://arxiv.org/abs/physics/0701200), Ute Kraus's [Space Time Travel](https://www.spacetimetravel.org/), and [Relativity for Games](https://arxiv.org/abs/1703.07063).
 
 ## Scripts
 
-`scripts/playtest.mjs` screenshots each scene at rest, walking, sprinting and glancing back. `scripts/goals.mjs` plays the choir and tea goals with scripted steering. Both need the dev server running and Google Chrome installed.
+With the dev server running and Google Chrome installed:
+
+- `node scripts/playtest.mjs` screenshots each experiment.
+- `node scripts/experiments.mjs <scene>` plays one experiment with scripted moves (watch, board, ride) and prints what the log recorded.

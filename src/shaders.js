@@ -32,10 +32,18 @@ uniform vec4 uFlags;
 #ifdef MOVER
 uniform vec3 uVel;    // m/s, world frame
 uniform vec3 uAnchor; // where the object's origin is at world time 0
+uniform vec2 uLife;   // world times between which the object exists
 uniform float uC;
 uniform float uTime;
 uniform float uDelay;
 uniform float uContract;
+#endif
+#ifdef WAKE
+attribute float aBirth;
+uniform float uC;
+uniform float uTime;
+uniform float uDelay;
+varying float vAge;
 #endif
 varying vec3 vNormalW;
 varying vec3 vWorld;
@@ -61,11 +69,13 @@ void main() {
     vec3 w = uAnchor + rel + uVel * uTime - uCam;
     float tau = 0.0;
     if (uDelay > 0.5) {
-      float a = uC * uC - u2;
+      float a = max(uC * uC - u2, 1e-6);
       float wu = dot(w, uVel);
       tau = (-wu + sqrt(wu * wu + a * dot(w, w))) / a;
     }
     wp.xyz = w - uVel * tau + uCam;
+    float te = uTime - tau;
+    if (te < uLife.x || te > uLife.y) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); return; }
   #endif
   #ifdef UNLIT
     vNormalW = vec3(0.0, 1.0, 0.0);
@@ -87,6 +97,10 @@ void main() {
   vec3 x = wp.xyz - uCam;
   float d = max(length(x), 1e-4);
   vDist = d;
+  #ifdef WAKE
+    // How long ago, as seen from here, this bit of trail was laid down.
+    vAge = uTime - (uDelay > 0.5 ? d / uC : 0.0) - aBirth;
+  #endif
   vec3 P = x;
   float b = length(uBeta);
   if (b > 1e-5 && uFlags.x > 0.5) {
@@ -121,15 +135,20 @@ float doppler(vec3 x) {
   return inversesqrt(1.0 - b2) * (1.0 + dot(uBeta, normalize(x)));
 }
 
-// rgb plus broad infrared (760-4000 nm) and ultraviolet (100-400 nm) light,
-// as seen with Doppler factor D: every wavelength gets divided by D.
+// rgb plus infrared and ultraviolet light that tails off away from the
+// visible (roughly like sunlight), as seen with Doppler factor D: every
+// wavelength gets divided by D.
 vec3 spectralShift(vec3 rgb, float ir, float uv, float D) {
   if (uFlags.y < 0.5) D = 1.0;
   vec3 a = uCorr * rgb;
   float k = 1.0 / D;
   vec3 o = eye(610.0 * k, a.r) + eye(545.0 * k, a.g) + eye(465.0 * k, a.b)
-         + eyeSpan(760.0 * k, 4000.0 * k, 0.4 * ir)
-         + eyeSpan(100.0 * k, 400.0 * k, 0.4 * uv);
+         + eyeSpan(760.0 * k, 1100.0 * k, 0.5 * ir)
+         + eyeSpan(1100.0 * k, 1800.0 * k, 0.22 * ir)
+         + eyeSpan(1800.0 * k, 3200.0 * k, 0.08 * ir)
+         + eyeSpan(330.0 * k, 400.0 * k, 0.6 * uv)
+         + eyeSpan(250.0 * k, 330.0 * k, 0.25 * uv)
+         + eyeSpan(120.0 * k, 250.0 * k, 0.06 * uv);
   return max(o, 0.0);
 }
 
@@ -161,12 +180,29 @@ uniform vec2 uFogRange;
 uniform vec3 uCheckerB;
 uniform float uCheckerSize;
 uniform float uNight;
-#ifdef MOVER
-uniform vec3 uVel;
+uniform float uTime;
 uniform float uC;
+uniform float uDelay;
+#if defined(MOVER) || defined(SOURCE_VEL)
+uniform vec3 uVel;
 #endif
 uniform vec3 uGridColor;
 uniform vec3 uGrid; // spacing, line width in pixels, glow
+#ifdef FLASHES
+uniform vec4 uFlash[6];      // xyz where, w world time when
+uniform vec3 uFlashColor[6];
+#endif
+#ifdef BEAM
+uniform vec4 uBeam;          // origin x, direction (+1/-1), period, first pulse time
+uniform vec3 uBeamColor;
+#endif
+#ifdef CLIP_RECT
+uniform vec4 uRect;          // min x, min z, max x, max z
+#endif
+#ifdef WAKE
+uniform float uWakeFade;
+varying float vAge;
+#endif
 varying vec3 vNormalW;
 varying vec3 vWorld;
 varying vec3 vTint;
@@ -175,8 +211,14 @@ uniform vec3 uCam;
 ${common}
 
 void main() {
+  #ifdef CLIP_RECT
+    if (vWorld.x < uRect.x || vWorld.z < uRect.y || vWorld.x > uRect.z || vWorld.z > uRect.w) discard;
+  #endif
+  #ifdef WAKE
+    if (vAge < 0.0) discard;
+  #endif
   float D = doppler(vWorld - uCam);
-  #ifdef MOVER
+  #if defined(MOVER) || defined(SOURCE_VEL)
     vec3 bs = uVel / uC;
     D /= inversesqrt(max(1e-6, 1.0 - dot(bs, bs))) * (1.0 + dot(bs, normalize(vWorld - uCam)));
   #endif
@@ -210,13 +252,46 @@ void main() {
   float ir = uSpec.x * mix(lum, 1.6, e);
   float uv = uSpec.y * mix(lum, 1.6, e);
 
+  #ifdef FLASHES
+    // A flash lights each bit of floor as its wavefront passes; that glow then
+    // has to travel on to us. The bright band we see is an ellipse with the
+    // flash and our eye at its foci.
+    for (int i = 0; i < 6; i++) {
+      float age = uTime - uFlash[i].w;
+      if (age > 0.0 && age < 80.0) {
+        float k = (distance(vWorld, uFlash[i].xyz) + (uDelay > 0.5 ? distance(vWorld, uCam) : 0.0)) / uC;
+        float z = (age - k) * uC / 0.3;
+        float band = exp(-z * z) * (1.0 / (1.0 + age * 0.12));
+        rgb += uFlashColor[i] * band * 1.1;
+        ir += band * 0.3;
+        uv += band * 0.3;
+      }
+    }
+  #endif
+  #ifdef BEAM
+    // Dust along the beam line glows briefly as each pulse passes.
+    {
+      float s = (vWorld.x - uBeam.x) * uBeam.y;
+      float seen = uTime - (uDelay > 0.5 ? vDist / uC : 0.0);
+      float since = seen - uBeam.w - max(s, 0.0) / uC;
+      float age = mod(since, uBeam.z);
+      float glow = since > 0.0 && s > -0.5 ? exp(-age * 5.0) * 3.0 + exp(-age * 0.8) * 0.15 : 0.0;
+      rgb += uBeamColor * glow;
+      ir += glow * 0.4;
+      uv += glow * 0.4;
+    }
+  #endif
   float f = smoothstep(uFogRange.x, uFogRange.y, vDist);
   rgb = mix(rgb, uFog, f);
   ir = mix(ir, 0.3 * (1.0 - uNight), f);
   uv = mix(uv, 0.4 * (1.0 - uNight), f);
 
   vec3 col = searchlight(spectralShift(rgb, ir, uv, D), D);
-  gl_FragColor = vec4(softClip(col), uOpacity);
+  float alpha = uOpacity;
+  #ifdef WAKE
+    alpha *= exp(-vAge / uWakeFade);
+  #endif
+  gl_FragColor = vec4(softClip(col), alpha);
   #include <colorspace_fragment>
 }
 `;
@@ -249,17 +324,21 @@ void main() {
     rgb = vec3(0.004, 0.005, 0.012) + vec3(0.05, 0.045, 0.06) * band;
     uv = 0.05 * band;
     ir = 0.08 * band;
-    for (int i = 0; i < 2; i++) {
-      float scale = i == 0 ? 220.0 : 520.0;
+    // Stars have broad spectra, so as you speed up they crowd ahead into a
+    // ring (the starbow) before shifting out of sight at its center.
+    for (int i = 0; i < 3; i++) {
+      float scale = i == 0 ? 160.0 : (i == 1 ? 340.0 : 700.0);
       vec3 cell = floor(dir * scale);
       float s = hash(cell + float(i) * 17.0);
       vec3 f = fract(dir * scale) - 0.5;
-      float star = step(i == 0 ? 0.992 : 0.985 - 0.02 * band, s) * smoothstep(0.35, 0.0, length(f));
+      float density = i == 0 ? 0.985 : (i == 1 ? 0.975 : 0.96) - 0.03 * band;
+      float star = step(density, s) * smoothstep(0.42, 0.0, length(f));
       float temp = fract(s * 113.0);
-      vec3 tint = mix(vec3(1.0, 0.75, 0.55), vec3(0.7, 0.85, 1.2), temp);
-      rgb += tint * star * (i == 0 ? 3.0 : 1.2);
-      ir += star * (1.2 - temp);
-      uv += star * temp * 1.2;
+      vec3 tint = mix(vec3(1.0, 0.72, 0.5), vec3(0.72, 0.86, 1.25), temp);
+      float bright = i == 0 ? 4.0 : (i == 1 ? 2.2 : 1.4);
+      rgb += tint * star * bright;
+      ir += star * bright * (1.4 - temp);
+      uv += star * bright * (0.3 + temp);
     }
     float sunDisk = smoothstep(0.9992, 0.9996, dot(dir, uSun));
     rgb += vec3(6.0, 5.5, 5.0) * sunDisk;
@@ -299,16 +378,27 @@ export function mat({
   doubleSided = false,
   unique = false,
   mover = null,
+  flashes = null,
+  beam = null,
+  rect = null,
+  wake = 0,
+  sourceVel = null, // colors only: the velocity of something placed by hand at its seen position
   vertexColors = false,
 } = {}) {
   const key = JSON.stringify(arguments[0] ?? {});
-  if (!mover && cache.has(key)) return cache.get(key);
+  const special = mover || flashes || beam || wake || sourceVel;
+  if (!special && cache.has(key)) return cache.get(key);
   const defines = {};
   if (checker) defines.CHECKER = "";
   if (grid) defines.GRID = "";
   if (toon) defines.TOON = "";
   if (unlit) defines.UNLIT = "";
   if (mover) defines.MOVER = "";
+  if (flashes) defines.FLASHES = "";
+  if (beam) defines.BEAM = "";
+  if (rect) defines.CLIP_RECT = "";
+  if (wake) defines.WAKE = "";
+  if (sourceVel) defines.SOURCE_VEL = "";
   if (doubleSided) defines.DOUBLE_SIDED = "";
   const m = new THREE.ShaderMaterial({
     vertexShader: vertex,
@@ -324,14 +414,19 @@ export function mat({
       uCheckerSize: { value: checker?.size ?? 1 },
       uGridColor: { value: new THREE.Color(grid?.color ?? "#fff") },
       uGrid: { value: new THREE.Vector3(grid?.spacing ?? 4, grid?.width ?? 1, grid?.glow ?? 0) },
-      ...(mover && { uVel: mover.uVel, uAnchor: mover.uAnchor }),
+      ...(mover && { uVel: mover.uVel, uAnchor: mover.uAnchor, uLife: mover.uLife ?? { value: new THREE.Vector2(-1e9, 1e9) } }),
+      ...(flashes && { uFlash: flashes.uFlash, uFlashColor: flashes.uFlashColor }),
+      ...(beam && { uBeam: beam.uBeam, uBeamColor: beam.uBeamColor }),
+      ...(rect && { uRect: { value: new THREE.Vector4(...rect) } }),
+      ...(wake && { uWakeFade: { value: wake } }),
+      ...(sourceVel && { uVel: sourceVel }),
     },
     transparent: opacity < 1 || additive,
     depthWrite: !additive && opacity >= 1,
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
     side: doubleSided ? THREE.DoubleSide : THREE.FrontSide,
   });
-  if (!unique && !mover) cache.set(key, m);
+  if (!unique && !special) cache.set(key, m);
   return m;
 }
 
