@@ -64,6 +64,7 @@ export default {
   title: "Neon Crossroads",
   tag: "light delay · Doppler · aberration",
   blurb: "Rain, neon and taxis at 85% of light speed that seem to outrun light coming toward you. Hail one and watch the city fold.",
+  intro: true,
   tour: { from: [-2, 120, 0], dir: [0, -1], length: 220 },
 
   build({ player, toast }) {

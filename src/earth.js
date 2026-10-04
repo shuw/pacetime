@@ -187,8 +187,9 @@ const FIREWORK_COLORS = ["#ff5a7a", "#ffd166", "#7bdcff", "#b98cff", "#7dffb0", 
 // surfaces, and bang. The bang reaches you at the speed of sound, long before
 // the light does.
 export class Fireworks {
-  constructor(group, flashes, { capacity = 4000, seed = 3, mirrorY = null, scale = 1 } = {}) {
+  constructor(group, flashes, { capacity = 4000, seed = 3, mirrorY = null, scale = 1, c = null } = {}) {
     this.scale = scale;
+    this.c = c; // the place's own light speed, so shells don't change if the Lab does
     // Each spark is a glowing head and a streak behind it.
     this.sparks = sparkField(capacity, { gravity: 1.6, intensity: 6, uv: 1 });
     this.streaks = sparkField(capacity, { gravity: 1.6, intensity: 2.2, lines: true, uv: 1 });
@@ -219,7 +220,7 @@ export class Fireworks {
   // Launch from `from` to burst at `at` (world time tBurst).
   shell(from, at, tBurst, { color, count = 220, speed = null } = {}) {
     const rand = this.rand;
-    const c = world.c;
+    const c = this.c ?? world.c;
     const rise = new THREE.Vector3().subVectors(at, from);
     const climbSpeed = 0.45 * c;
     const climb = rise.length() / climbSpeed;

@@ -34,6 +34,8 @@ export function initLab(onChange) {
   syncLab();
 }
 
+export const cWord = (c) => C_WORDS.find(([v]) => c <= v)[1];
+
 export function syncLab() {
   for (const [k] of TOGGLES) $(`fx-${k}`).checked = effects[k];
   $("c-slider").value = Math.log10(world.c);

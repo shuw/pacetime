@@ -86,6 +86,7 @@ export default {
   title: "Seaside Funfair",
   tag: "light delay · Doppler",
   blurb: "A pier at dusk. A Ferris wheel near light speed, a coaster, a spiralling lighthouse beam, and fireworks you hear before you see.",
+  intro: true,
   tour: { from: [0, 30, 0], dir: [0, -1], length: 150 },
 
   build({ player, toast }) {
@@ -223,7 +224,7 @@ export default {
 
     // Fireworks barge.
     group.add(box(10, 1, 6, { color: "#2b2d33", ir: 0.3 }, [BARGE.x, SEA + 0.4, BARGE.z]));
-    const fw = new Fireworks(group, flashes, { mirrorY: SEA });
+    const fw = new Fireworks(group, flashes, { mirrorY: SEA, c: C });
     const log = new EventLog();
     let nextShell = 3, nextTwin = 14;
     const twins = [];

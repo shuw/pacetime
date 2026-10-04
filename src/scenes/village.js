@@ -30,6 +30,7 @@ export default {
   title: "Winter Village",
   tag: "time dilation · aberration · light delay",
   blurb: "A snowy valley. A carousel that leaves you younger, a church clock that's always behind, and snowfall that turns to hyperspace.",
+  intro: true,
   tour: { from: [-40, 80, 0.35], dir: [0.34, -0.94], length: 160 },
 
   build({ player, toast }) {
@@ -240,7 +241,7 @@ export default {
     }
     group.add(snow);
 
-    const fw = new Fireworks(group, flashes, { seed: 9 });
+    const fw = new Fireworks(group, flashes, { seed: 9, c: C });
     let nextShell = 20;
 
     group.add(lights);

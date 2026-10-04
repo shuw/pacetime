@@ -8,7 +8,7 @@ import { Player } from "./player.js";
 import { bake } from "./geo.js";
 import { shared, skyMaterial } from "./shaders.js";
 import { effects, world } from "./relativity.js";
-import { clearToast, initBrief, initLab, onGoalClick, showScene, syncLab, toast, toggleLab, updateHud } from "./hud.js";
+import { clearToast, cWord, initBrief, initLab, onGoalClick, showScene, syncLab, toast, toggleLab, updateHud } from "./hud.js";
 import { addVelocity } from "./relativity.js";
 import { sparkField } from "./shaders.js";
 import { isMuted, setAmbience, setListener, setMuted, sfx, unlockAudio, updateAudio } from "./audio.js";
@@ -72,6 +72,7 @@ function applyPost(post) {
 
 function load(scene) {
   if (current) root.remove(current.instance.group);
+  if (intro) { intro = null; document.getElementById("intro").hidden = true; }
   clearToast();
   player.place(0, 0, 0);
   player.tau = 0;
@@ -169,11 +170,39 @@ function closeMenu() {
   player.enabled = true;
 }
 
+// Arriving at an everyday place, light starts at its real speed and slows to
+// walking pace, so you watch the world turn strange.
+const REAL_C = 299792458;
+let intro = null;
+function startIntro() {
+  intro = { c1: world.c, t: 0, dur: 6 };
+  world.c = REAL_C;
+  document.getElementById("intro").hidden = false;
+}
+function runIntro(dt) {
+  if (!intro) return;
+  intro.t += dt;
+  const k = Math.min(1, intro.t / intro.dur);
+  const e = k < 0.15 ? 0 : (k - 0.15) / 0.85;
+  const smooth = e * e * (3 - 2 * e);
+  world.c = Math.exp(Math.log(REAL_C) + (Math.log(intro.c1) - Math.log(REAL_C)) * smooth);
+  const c = world.c;
+  document.getElementById("intro-c").textContent = `${c >= 100 ? Math.round(c).toLocaleString("en-US") : c.toFixed(1)} m/s`;
+  document.getElementById("intro-word").textContent = k < 0.15 ? "as it is in our world" : k < 1 ? "slowing down…" : `about as fast as ${cWord(intro.c1)}. Have a look around.`;
+  if (intro.t > intro.dur + 2.5) {
+    world.c = intro.c1;
+    intro = null;
+    document.getElementById("intro").hidden = true;
+    syncLab();
+  }
+}
+
 function startScene(scene) {
   unlockAudio();
   sfx.ui();
   player.autopilot = null;
   load(scene);
+  if (scene.intro) startIntro();
   current.instance.started = true;
   closeMenu();
   if (matchMedia("(pointer: fine)").matches) canvas.requestPointerLock?.();
@@ -206,6 +235,17 @@ function act() {
 }
 
 document.getElementById("menu-btn").addEventListener("click", openMenu);
+document.getElementById("throw-btn").addEventListener("click", () => throwBall());
+
+// Playback speed for everything, for studying fast things.
+const SPEEDS = [0.25, 0.5, 1];
+let playback = 1;
+function setPlayback(k) {
+  playback = k;
+  const el = document.getElementById("slowmo");
+  el.hidden = k === 1;
+  el.textContent = `slow motion ${k === 0.25 ? "¼" : "½"}×`;
+}
 document.getElementById("act-btn").addEventListener("click", act);
 const back = document.getElementById("back-btn");
 back.addEventListener("touchstart", (e) => { player.lookBack = true; e.preventDefault(); });
@@ -256,6 +296,9 @@ addEventListener("keydown", (e) => {
   else if (e.code === "KeyL" && toggleLab()) document.exitPointerLock?.();
   else if (e.code === "KeyE") act();
   else if (e.code === "KeyF") throwBall();
+  else if (e.code === "Comma") setPlayback(SPEEDS[Math.max(0, SPEEDS.indexOf(playback) - 1)]);
+  else if (e.code === "Period") setPlayback(SPEEDS[Math.min(SPEEDS.length - 1, SPEEDS.indexOf(playback) + 1)]);
+  else if (e.code === "KeyH") document.body.classList.toggle("photo");
   else if (e.code === "KeyT" && current) {
     const [x, z, yaw] = current.instance.spawn;
     player.alight();
@@ -341,7 +384,10 @@ function simulate(dTau, { realtime = true } = {}) {
   adaptExposure(dTau);
   sky.position.copy(eye);
 
+  // Nothing counts as spotted while light is still slowing down.
+  const before = intro ? instance.goals?.map((g) => g.done) : null;
   instance.update({ player, eye, camera, t: world.t, dT, dTau });
+  if (before) instance.goals.forEach((g, i) => (g.done = before[i]));
   if (realtime) pickLamps(instance.lamps, eye);
   instance.group.traverse((c) => { if (c.follow) c.position.set(eye.x, c.followY ?? 0, eye.z); });
   if (!realtime) return;
@@ -414,7 +460,8 @@ function frame() {
     // Behind the title screen the world keeps running so the menu has a live backdrop.
     const frozen = (paused || !help.hidden) && current.instance.started;
     tour(dTau);
-    const total = frozen ? 0 : dTau * warp;
+    const total = frozen ? 0 : dTau * warp * playback;
+    if (!frozen) runIntro(dTau);
     const n = Math.max(1, Math.ceil(total / 0.05));
     for (let i = 0; i < n; i++) simulate(total / n, { realtime: i === n - 1 });
     if (!paused) {
