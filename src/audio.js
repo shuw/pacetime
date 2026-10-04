@@ -299,6 +299,39 @@ export const sfx = {
     const { pan, gain } = placed(pos, 20);
     [1568, 2093, 2637].forEach((f, i) => tone(f, i * 0.04, 0.6, { type: "triangle", gain: 0.06 * gain, pan }));
   },
+  // Light slowing down: a long falling shimmer settling into a low hum.
+  slowdown(dur = 5) {
+    if (!ctx) return;
+    const t0 = ctx.currentTime + 0.8;
+    const s = noiseSource();
+    s.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = "bandpass";
+    f.Q.value = 6;
+    f.frequency.setValueAtTime(5000, t0);
+    f.frequency.exponentialRampToValueAtTime(140, t0 + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(0.12, t0 + 0.6);
+    g.gain.setValueAtTime(0.12, t0 + dur - 1);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + 1.5);
+    s.connect(f).connect(g).connect(master);
+    s.start(t0);
+    s.stop(t0 + dur + 2);
+    [[880, 110], [1320, 165], [1760, 220]].forEach(([a, b], i) => {
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.setValueAtTime(a, t0);
+      o.frequency.exponentialRampToValueAtTime(b, t0 + dur);
+      const og = ctx.createGain();
+      og.gain.setValueAtTime(0, t0);
+      og.gain.linearRampToValueAtTime(0.03 / (i + 1), t0 + 1);
+      og.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + 1.8);
+      o.connect(og).connect(master);
+      o.start(t0);
+      o.stop(t0 + dur + 2);
+    });
+  },
   toss() {
     tone(320, 0, 0.35, { type: "sine", gain: 0.08, slide: 2.4 });
     burst(0.2, { gain: 0.06, from: 2500, to: 800, type: "bandpass", q: 2 });

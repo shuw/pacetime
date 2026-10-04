@@ -182,6 +182,7 @@ let intro = null;
 function startIntro() {
   intro = { c1: world.c, t: 0, dur: 6 };
   world.c = REAL_C;
+  sfx.slowdown(intro.dur * 0.85);
   document.getElementById("intro").hidden = false;
 }
 function runIntro(dt) {
