@@ -106,6 +106,7 @@ export class Player {
           const dx = (t.clientX - s.x) / 60, dy = (t.clientY - s.y) / 60;
           this.touchMove.set(THREE.MathUtils.clamp(dx, -1.5, 1.5), THREE.MathUtils.clamp(dy, -1.5, 1.5));
           this.touchSprint = this.touchMove.length() > 1.1;
+          this.touchBoost = this.touchMove.length() > 1.45;
         } else {
           this.yaw -= (t.clientX - s.x) * 0.005;
           this.pitch = THREE.MathUtils.clamp(this.pitch - (t.clientY - s.y) * 0.004, -1.2, 1.2);
@@ -119,7 +120,7 @@ export class Player {
       for (const t of e.changedTouches) {
         if (sticks.get(t.identifier)?.left) {
           this.touchMove.set(0, 0);
-          this.touchSprint = false;
+          this.touchSprint = this.touchBoost = false;
         }
         sticks.delete(t.identifier);
       }
@@ -154,7 +155,7 @@ export class Player {
     // Steer proper velocity toward the target. Proper velocity has no ceiling,
     // so however hard you push you never reach c.
     const c = world.c;
-    const boost = sprint && k.has("Space");
+    const boost = sprint && (k.has("Space") || this.touchBoost);
     const target = this.autopilot ? this.autopilot.clone() : dir.multiplyScalar((boost ? BOOST_U : sprint ? SPRINT_U : WALK_U) * this.legs);
     // Slowing down is quick, so letting go of the keys doesn't coast you far.
     const braking = target.lengthSq() < this.u.lengthSq();
