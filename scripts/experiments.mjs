@@ -43,6 +43,10 @@ if (which === "railway") {
   await until((n) => pacetime.instance.log.seen.filter((e) => e.tag === "door").length >= n + 2, d0);
   await page.screenshot({ path: "shots/rail-tunnel.png" });
   console.log("tunnel ring", JSON.stringify((await state()).note));
+  // Platform edge as a train flies past.
+  await place(-50, 4, 0, 0);
+  await until(() => pacetime.instance.goals[6].done, null, 120000);
+  await page.screenshot({ path: "shots/rail-terrell.png" });
   await place(54, 12, -0.3);
   await until(() => pacetime.instance.trains.some((tr) => Math.abs(tr.centerAt(pacetime.world.t) - 62) < 4), null, 120000);
   await page.screenshot({ path: "shots/rail-clock.png" });

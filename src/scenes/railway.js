@@ -116,6 +116,7 @@ export default {
       { group: "Length contraction", text: "Ride through the tunnel: on board, the exit opens before the entry shuts", done: false, at: [-150, 4.8, -Math.PI / 2, 0] },
       { group: "Time dilation", text: "Near the blue ring, watch a train's clock tick slower than the platform's", done: false, at: [54, 12, -0.3, 0] },
       { group: "Time dilation", text: "Ride past the platform clock: now it's the slow one", done: false, at: [-150, 4.8, -Math.PI / 2, 0] },
+      { group: "Appearance", text: "Stand at the platform edge as a train flies by: you see its far end, as if it turned", done: false, at: [-50, 4, 0, 0.05] },
     ];
     let note = "Trains leave every 45 seconds. Watch from a ring, or board one at the start of the platform.";
 
@@ -184,6 +185,7 @@ export default {
     });
 
     let stillTicks = -1;
+    const fwdR = new THREE.Vector3();
     return {
       group,
       walk,
@@ -233,7 +235,7 @@ export default {
         }
         return null;
       },
-      update({ eye, t, dTau }) {
+      update({ eye, camera, t, dTau }) {
         schedule(t);
         trains.forEach((s) => s.train.update());
         const ride = ridingSlot();
@@ -277,6 +279,19 @@ export default {
           s.lamps(n);
           if (n !== s.ticks) { if (s.ticks >= 0 && s.photon.visible) sfx.tick(s.photon.position, 880); s.ticks = n; }
           if (!ride && Math.abs(tr.centerAt(retardedTime(eye, s.photon.position)) - player.pos.x) < 12 && Math.abs(player.pos.x - CLOCK.x) < 30) goals[4].done = true;
+        }
+        // Terrell rotation: a passing train seen up close looks turned.
+        if (!ride && player.pos.z < 6 && !goals[6].done) {
+          for (const s of trains) {
+            const path = (tt) => s.train.pointAt(0, tt);
+            const seen = path(seenTimeOf(path, eye, t, 60));
+            const toIt = seen.clone().sub(eye);
+            camera.getWorldDirection(fwdR);
+            if (Math.abs(seen.x - eye.x) < 14 && toIt.length() < 20 && fwdR.dot(toIt.normalize()) > 0.7) {
+              goals[6].done = true;
+              note = "The light from the train's far end left earlier, when the train was further back, so you see that end too. A fast box looks turned, not squashed: Terrell rotation.";
+            }
+          }
         }
         if (ride && Math.abs(player.pos.x - CLOCK.x) < 10 && !goals[5].done) {
           goals[5].done = true;
