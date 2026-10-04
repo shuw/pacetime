@@ -458,7 +458,8 @@ function adaptExposure(dt) {
   // On a train, the carriage around you moves with you and fills the view, so don't adapt.
   const k = shared.uGlowAmt.value;
   const Dg = k > 0.999 ? D : Math.exp(k * 1.5 * Math.tanh(Math.log(Math.max(D, 1e-4)) / 1.5));
-  const target = effects.searchlight && !player.vehicle ? THREE.MathUtils.clamp(Dg < 1 ? Dg ** -1.2 : Dg ** -0.5, 0.3, 4) : 1;
+  const brightAhead = k > 0.999 ? Dg ** -0.5 : Dg ** -2; // gentle: the eye adapts fully
+  const target = effects.searchlight && !player.vehicle ? THREE.MathUtils.clamp(Dg < 1 ? Dg ** -1.2 : brightAhead, 0.3, 4) : 1;
   const u = shared.uExposure;
   u.value += (target - u.value) * Math.min(1, dt * 4);
 }

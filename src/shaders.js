@@ -36,6 +36,7 @@ export const shared = {
   uLampColor: { value: Array.from({ length: 8 }, () => new THREE.Color(0, 0, 0)) },
   uPointScale: { value: 600 },
   uExposure: { value: 1 },
+  uAberrK: { value: 0.55 },   // 1 = true to life; less softens the bending
   uShiftAmt: { value: 0.4 },   // 1 = true to life; less softens the color shift
   uGlowAmt: { value: 0.5 },    // 1 = true to life; less softens the brightening
   uGrain: { value: 0 },
@@ -49,6 +50,7 @@ const vertex = /* glsl */ `
 uniform vec3 uCam;
 uniform vec3 uBeta;
 uniform vec4 uFlags;
+uniform float uAberrK;
 uniform float uPass;
 uniform mat4 uShadowMatrix;
 #ifdef MOVER
@@ -173,9 +175,11 @@ void main() {
   vec3 P = x;
   float b = length(uBeta);
   if (b > 1e-5 && uFlags.x > 0.5) {
-    float g = inversesqrt(1.0 - b * b);
+    // Gentle mode bends the view as if you were going slower (in rapidity).
+    float bv = uAberrK > 0.999 ? b : tanh(uAberrK * atanh(min(b, 0.999999)));
     vec3 n = uBeta / b;
-    P = x + n * ((g - 1.0) * dot(x, n)) + uBeta * (g * d);
+    float g = inversesqrt(1.0 - bv * bv);
+    P = x + n * ((g - 1.0) * dot(x, n)) + n * (bv * g * d);
   }
   gl_Position = projectionMatrix * viewMatrix * vec4(uCam + P, 1.0);
   // The sun's shadow map is made in the world's own frame, with no light delay.
@@ -246,7 +250,7 @@ vec3 spectralShift(vec3 rgb, float ir, float uv, float D) {
   vec3 tint = s > 0.0 ? mix(vec3(1.0), vec3(0.8, 0.96, 1.3), s) : mix(vec3(1.0), vec3(1.28, 0.93, 0.72), -s);
   float Dk = exp(uShiftAmt * 3.0 * tanh(l / 1.5));
   vec3 extra = max(beyondSeen(ir, uv, Dk) - beyondSeen(ir, uv, 1.0), 0.0);
-  extra *= 0.2 + 0.8 * smoothstep(0.6, 2.5, max(ir, uv));
+  extra *= smoothstep(1.8, 3.0, max(ir, uv));
   return max((rgb + beyondSeen(ir, uv, 1.0)) * tint + extra, 0.0);
 }
 
@@ -850,6 +854,7 @@ const sparkVertex = /* glsl */ `
 uniform vec3 uCam;
 uniform vec3 uBeta;
 uniform vec4 uFlags;
+uniform float uAberrK;
 uniform float uC;
 uniform float uTime;
 uniform float uDelay;
@@ -915,9 +920,11 @@ void main() {
   vec3 P = x;
   float b = length(uBeta);
   if (b > 1e-5 && uFlags.x > 0.5) {
-    float g = inversesqrt(1.0 - b * b);
+    // Gentle mode bends the view as if you were going slower (in rapidity).
+    float bv = uAberrK > 0.999 ? b : tanh(uAberrK * atanh(min(b, 0.999999)));
     vec3 n = uBeta / b;
-    P = x + n * ((g - 1.0) * dot(x, n)) + uBeta * (g * d);
+    float g = inversesqrt(1.0 - bv * bv);
+    P = x + n * ((g - 1.0) * dot(x, n)) + n * (bv * g * d);
   }
   vec4 clip = projectionMatrix * viewMatrix * vec4(uCam + P, 1.0);
   gl_Position = clip;
