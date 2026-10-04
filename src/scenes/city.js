@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { box, G, mesh, rng } from "../geo.js";
-import { mat, sparkField } from "../shaders.js";
+import { mat, shared, sparkField } from "../shaders.js";
+import { bolt, Flashes } from "../world.js";
+import { SOUND_SPEED } from "../earth.js";
 import { Mover, taxi } from "../movers.js";
 import { Train } from "../rail.js";
 import { building, lampPost, neon, reflection, surface } from "../earth.js";
@@ -71,7 +73,14 @@ export default {
     const rand = rng(23);
 
     // Wet asphalt mirrors every light, sidewalks are dry-ish concrete.
-    group.add(surface({ color: "#0b0c10", water: 0.12, ir: 0.15, uv: 0.1 }, { y: 0, reflective: true }));
+    const flashes = new Flashes();
+    group.add(surface({ color: "#0b0c10", water: 0.12, ir: 0.15, uv: 0.1, flashes }, { y: 0, reflective: true }));
+
+    // A thunderstorm: strikes land out among the towers. Thunder (at 343 m/s)
+    // reaches you long before the flash (at 10 m/s).
+    const bolts = [0, 1, 2].map((k) => { const b = bolt(new THREE.Vector3(0, 0, 0), 30 + k, "#e6ecff"); group.add(b); return b; });
+    let nextStrike = 9, strikeN = 0;
+    const strikes = [];
     const curb = { color: "#3b3c42", ir: 0.3, uv: 0.1, grid: { color: "#2b2c31", spacing: 1.5, width: 1, glow: 0 } };
     // Four corner blocks of pavement, so the roads stay clear where they cross.
     const outer = AVE + WALK;
@@ -223,6 +232,7 @@ export default {
       { group: "Light delay", text: "Look down the avenue during a power flicker: it rolls toward you", done: false, at: [1, 40, 0, 0] },
       { group: "Moving lights", text: "Watch a taxi come at you: it seems to outrun light. Then watch it crawl away", done: false, at: [1.5, -20, Math.PI, 0] },
       { group: "Moving lights", text: "Watch a taxi's taillights fade out as it leaves: redshifted into infrared", done: false, at: [1.5, -20, Math.PI, 0] },
+      { group: "Light delay", text: "Hear thunder, then wait: the lightning comes seconds later", done: false, at: [0, 0, 0, 0.35] },
       { group: "Ride", text: "Hail a taxi (E at the yellow TAXI sign) and ride up the avenue", done: false, at: [-7.6, 12, 0, 0] },
     ];
     let note = "Light here moves at 10 m/s, slower than a sprinter. The taxis do 8.5 m/s, so you see them where they were seconds ago.";
@@ -277,7 +287,7 @@ export default {
               player.pitch = 0;
               player.board(seat);
               sfx.board();
-              goals[4].done = true;
+              goals[5].done = true;
               toast("Off you go at 85% of light speed. Look ahead: the whole street folds into a bright blue tunnel.", 8);
             },
           };
@@ -285,6 +295,40 @@ export default {
         return null;
       },
       update({ eye, camera, t }) {
+        // Thunderstorm.
+        if (t > nextStrike) {
+          const b = bolts[strikeN++ % bolts.length];
+          const side = rand() < 0.5 ? -1 : 1;
+          const pos = rand() < 0.5
+            ? new THREE.Vector3(side * (30 + rand() * 60), 0, (rand() - 0.5) * 30)
+            : new THREE.Vector3((rand() - 0.5) * 30, 0, side * (50 + rand() * 90));
+          b.position.copy(pos);
+          b.strike = t;
+          flashes.add(pos.clone().setY(0.5), t, "#dfe6ff");
+          strikes.push({ pos, t, heard: false, seen: false });
+          nextStrike = t + 14 + rand() * 14;
+        }
+        let glow = 0;
+        for (const s of strikes) {
+          const d = s.pos.distanceTo(eye);
+          if (!s.heard && t >= s.t + d / SOUND_SPEED) { s.heard = true; sfx.strike(s.pos); s.heardAt = t; }
+          const since = t - (s.t + d / world.c);
+          if (since >= 0 && since < 0.6) glow = Math.max(glow, Math.exp(-since * 7) * (since % 0.12 < 0.07 ? 1 : 0.4));
+          if (!s.seen && since >= 0) {
+            s.seen = true;
+            if (s.heardAt !== undefined && since < 1) {
+              note = `Thunder first, then ${(d / world.c - d / SOUND_SPEED).toFixed(1)} s later the flash. Here, sound outruns light by a factor of 34.`;
+              goals[4].done = true;
+            }
+          }
+        }
+        while (strikes.length > 6) strikes.shift();
+        bolts.forEach((b) => b.update(eye));
+        // The sky lights up when the flash's light reaches you.
+        shared.uSky.value.setRGB(0.07 + glow * 0.9, 0.07 + glow * 0.95, 0.12 + glow * 1.1);
+        shared.uSkyTop.value.set("#04050b").lerp(new THREE.Color("#8a96c8"), glow * 0.6);
+        shared.uSkyHorizon.value.set("#221626").lerp(new THREE.Color("#b0b8e0"), glow * 0.6);
+
         // Taxis loop once their image has left the far end of the avenue.
         for (const c of cabs) {
           const s = c.m.seen(eye);

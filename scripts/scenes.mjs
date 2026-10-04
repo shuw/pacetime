@@ -62,6 +62,8 @@ await run("city", async () => {
     });
     if (!shotNear && d > 15 && d < 25) { shotNear = true; console.log("  oncoming taxi:", await t.snap("city-oncoming")); }
   }
+  await t.place(0, 0, 0, 0.3);
+  for (let i = 0; i < 120 && !(await t.q(() => pacetime.instance.goals[4].done)); i++) await t.advance(0.5);
   await t.place(-AVE_FIX(), 12, 0);
   await t.q(() => pacetime.act());
   await t.advance(4);
