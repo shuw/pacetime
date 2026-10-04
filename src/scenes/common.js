@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { box, G, mesh } from "../geo.js";
 import { mat } from "../shaders.js";
 import { seenTimeOf, world } from "../relativity.js";
+import { sfx } from "../audio.js";
 import { cosmos, deck, PALETTE, pylon, rails } from "../world.js";
 
 // The shared station: a long deck with a track along x at z = 0, a platform
@@ -41,6 +42,7 @@ export function service(train, player, { P = 90, headway = 1, toast, onRun, plat
       if (riding) {
         if (train.centerAt(world.t) + train.halfLength > P - 1) {
           player.alight();
+          sfx.alight();
           player.pos.set(Math.min(player.pos.x, P - 4), 0, platformZ + 0.6);
           toast?.("End of the line. Press T to walk back to the start of the platform.");
         }
@@ -54,10 +56,10 @@ export function service(train, player, { P = 90, headway = 1, toast, onRun, plat
     },
     // The board / step-off prompt.
     action(eye) {
-      if (player.vehicle === train.vehicle) return { label: "Step off the train", run: () => { player.alight(); player.pos.z = platformZ + 0.6; } };
+      if (player.vehicle === train.vehicle) return { label: "Step off the train", run: () => { player.alight(); sfx.alight(); player.pos.z = platformZ + 0.6; } };
       const near = Math.abs(player.pos.z - platformZ) < 1.4 || player.pos.z < platformZ + 1.4;
       if (near && Math.abs(player.pos.x - train.centerAt(world.t)) < train.halfLength - 1) {
-        return { label: "Board the train", run: () => { player.pos.z = train.z; player.board(train.vehicle); } };
+        return { label: "Board the train", run: () => { player.pos.z = train.z; player.board(train.vehicle); sfx.board(); } };
       }
       return null;
     },

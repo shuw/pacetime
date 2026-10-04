@@ -17,6 +17,8 @@ export const shared = {
   uSkyHorizon: { value: new THREE.Color("#ffe3ef") },
   uNight: { value: 0 },
   uSpace: { value: 0 },
+  uStars: { value: 1 },
+  uPointScale: { value: 600 },
   uExposure: { value: 1 },
   uGrain: { value: 0 },
   uTime: { value: 0 },
@@ -44,6 +46,20 @@ uniform float uC;
 uniform float uTime;
 uniform float uDelay;
 varying float vAge;
+#endif
+#ifdef ROTOR
+uniform vec3 uRotCenter;  // a point on the axis
+uniform vec3 uRotAxis;    // unit axis
+uniform float uOmega;     // rad/s, world frame
+uniform vec4 uPivot;      // xyz pivot; w = 1 to orbit without turning (gondolas)
+uniform float uC;
+uniform float uTime;
+uniform float uDelay;
+varying vec3 vSrcVel;
+vec3 rotateAbout(vec3 v, vec3 k, float a) {
+  float c = cos(a), s = sin(a);
+  return v * c + cross(k, v) * s + k * dot(k, v) * (1.0 - c);
+}
 #endif
 varying vec3 vNormalW;
 varying vec3 vWorld;
@@ -77,10 +93,42 @@ void main() {
     float te = uTime - tau;
     if (te < uLife.x || te > uLife.y) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); return; }
   #endif
+  #ifdef ROTOR
+    // Spinning things are built in their pose at world time 0. Find the world
+    // time whose light reaches us now (Newton's method on |p(t) - eye| = c (T - t)),
+    // and draw the vertex where it was then.
+    vec3 r0 = (uPivot.w > 0.5 ? uPivot.xyz : wp.xyz) - uRotCenter;
+    vec3 offset = uPivot.w > 0.5 ? wp.xyz - uPivot.xyz : vec3(0.0);
+    float tau = 0.0;
+    vec3 pr = rotateAbout(r0, uRotAxis, uOmega * uTime);
+    if (uDelay > 0.5) {
+      tau = length(uRotCenter + pr + offset - uCam) / uC;
+      for (int i = 0; i < 5; i++) {
+        vec3 ri = rotateAbout(r0, uRotAxis, uOmega * (uTime - tau));
+        vec3 q = uRotCenter + ri + offset - uCam;
+        float dq = length(q);
+        vec3 vel = uOmega * cross(uRotAxis, ri);
+        float f = dq - uC * tau;
+        float df = -dot(vel, q) / max(dq, 1e-4) - uC;
+        tau = max(0.0, tau - f / df);
+      }
+      pr = rotateAbout(r0, uRotAxis, uOmega * (uTime - tau));
+    }
+    vSrcVel = uOmega * cross(uRotAxis, pr);
+    if (uPivot.w < 0.5) {
+      // Turn the normal with the body.
+      wp.xyz = uRotCenter + pr;
+    } else {
+      wp.xyz = uRotCenter + pr + offset;
+    }
+  #endif
   #ifdef UNLIT
     vNormalW = vec3(0.0, 1.0, 0.0);
   #else
     vNormalW = normalize(mat3(m) * normal);
+    #ifdef ROTOR
+      if (uPivot.w < 0.5) vNormalW = rotateAbout(vNormalW, uRotAxis, uOmega * (uTime - tau));
+    #endif
   #endif
   vWorld = wp.xyz;
   vTint = vec3(1.0);
@@ -188,6 +236,17 @@ uniform vec3 uVel;
 #endif
 uniform vec3 uGridColor;
 uniform vec3 uGrid; // spacing, line width in pixels, glow
+#ifdef ROTOR
+varying vec3 vSrcVel;
+#endif
+#ifdef WATER
+uniform vec3 uSkyTop;
+uniform vec3 uSkyHorizon;
+#endif
+#ifdef WINDOWS
+uniform vec4 uWindows;  // cell width, cell height, fraction lit, seed
+uniform vec3 uWindowColor;
+#endif
 #ifdef FLASHES
 uniform vec4 uFlash[6];      // xyz where, w world time when
 uniform vec3 uFlashColor[6];
@@ -222,6 +281,10 @@ void main() {
     vec3 bs = uVel / uC;
     D /= inversesqrt(max(1e-6, 1.0 - dot(bs, bs))) * (1.0 + dot(bs, normalize(vWorld - uCam)));
   #endif
+  #ifdef ROTOR
+    vec3 bsr = vSrcVel / uC;
+    D /= inversesqrt(max(1e-6, 1.0 - dot(bsr, bsr))) * (1.0 + dot(bsr, normalize(vWorld - uCam)));
+  #endif
   vec3 base = uColor * vTint;
   float e = uSpec.z;
   #ifdef CHECKER
@@ -251,6 +314,40 @@ void main() {
   vec3 rgb = base * mix(light, vec3(1.6), e);
   float ir = uSpec.x * mix(lum, 1.6, e);
   float uv = uSpec.y * mix(lum, 1.6, e);
+
+  #ifdef WATER
+    // Gentle swell, and the sky reflected more strongly at grazing angles.
+    {
+      vec2 q = vWorld.xz;
+      float t = uTime;
+      vec3 n = normalize(vec3(
+        0.05 * sin(q.x * 0.35 + t * 0.9) + 0.03 * sin(q.x * 0.9 - q.y * 0.6 + t * 1.7) + 0.02 * sin(q.y * 1.7 + t * 2.3),
+        1.0,
+        0.05 * sin(q.y * 0.4 - t * 0.8) + 0.03 * sin(q.y * 1.1 + q.x * 0.5 + t * 1.3) + 0.02 * sin(q.x * 1.9 - t * 2.1)));
+      vec3 view = normalize(vWorld - uCam);
+      vec3 r = reflect(view, n);
+      float fres = 0.04 + 0.96 * pow(1.0 - max(dot(-view, n), 0.0), 5.0);
+      vec3 skyc = mix(uSkyHorizon, uSkyTop, pow(max(r.y, 0.0), 0.6));
+      float glint = pow(max(dot(r, uSun), 0.0), 300.0) * (1.0 - uNight);
+      rgb = mix(base * (uSky * 0.6 + 0.1), skyc, fres) + uSunColor * glint * 4.0;
+      ir = 0.15 + glint * 3.0;
+      uv = 0.2 * fres;
+    }
+  #endif
+  #ifdef WINDOWS
+    // A grid of windows on the wall, some lit, some dark.
+    {
+      vec2 wc = vec2(dot(vWorld.xz, vec2(abs(N.z), abs(N.x))), vWorld.y) / uWindows.xy;
+      vec2 cell = floor(wc);
+      vec2 f = fract(wc);
+      float inside = step(0.18, f.x) * step(f.x, 0.82) * step(0.22, f.y) * step(f.y, 0.78) * step(0.5, abs(N.y) < 0.5 ? 1.0 : 0.0);
+      float h = fract(sin(dot(cell + uWindows.w, vec2(41.3, 289.1))) * 43758.5);
+      float lit = step(1.0 - uWindows.z, h) * inside;
+      rgb = mix(rgb, uWindowColor * (0.8 + 0.6 * fract(h * 7.0)) * 1.6, lit);
+      rgb = mix(rgb, rgb * 0.35, inside * (1.0 - lit));
+      ir += lit * 0.8;
+    }
+  #endif
 
   #ifdef FLASHES
     // A flash lights each bit of floor as its wavefront passes; that glow then
@@ -303,6 +400,7 @@ uniform vec3 uSkyTop;
 uniform vec3 uSkyHorizon;
 uniform float uNight;
 uniform float uSpace;
+uniform float uStars;
 varying vec3 vWorld;
 ${common}
 
@@ -348,10 +446,11 @@ void main() {
     vec3 cell = floor(dir * 300.0);
     float s = hash(cell);
     float star = step(0.996, s) * smoothstep(0.0, 0.3, h) * smoothstep(0.4, 0.1, length(fract(dir * 300.0) - 0.5));
+    star *= uStars;
     rgb += vec3(1.0, 0.95, 0.9) * star * (0.6 + 2.0 * fract(s * 91.0));
     ir += star * 0.8;
     uv += star * 0.8;
-    float moon = smoothstep(0.99965, 0.99975, dot(dir, uSun));
+    float moon = smoothstep(0.99965, 0.99975, dot(dir, uSun)) * step(0.01, uStars);
     rgb += vec3(1.6, 1.6, 1.4) * moon;
   }
   vec3 col = searchlight(spectralShift(rgb, ir, uv, D), D);
@@ -383,10 +482,13 @@ export function mat({
   rect = null,
   wake = 0,
   sourceVel = null, // colors only: the velocity of something placed by hand at its seen position
+  rotor = null,     // { uRotCenter, uRotAxis, uOmega, uPivot } uniforms for something spinning
+  water = false,
+  windows = null,   // { size: [w, h], lit, color, seed }
   vertexColors = false,
 } = {}) {
   const key = JSON.stringify(arguments[0] ?? {});
-  const special = mover || flashes || beam || wake || sourceVel;
+  const special = mover || flashes || beam || wake || sourceVel || rotor;
   if (!special && cache.has(key)) return cache.get(key);
   const defines = {};
   if (checker) defines.CHECKER = "";
@@ -399,6 +501,9 @@ export function mat({
   if (rect) defines.CLIP_RECT = "";
   if (wake) defines.WAKE = "";
   if (sourceVel) defines.SOURCE_VEL = "";
+  if (rotor) defines.ROTOR = "";
+  if (water) defines.WATER = "";
+  if (windows) defines.WINDOWS = "";
   if (doubleSided) defines.DOUBLE_SIDED = "";
   const m = new THREE.ShaderMaterial({
     vertexShader: vertex,
@@ -420,12 +525,18 @@ export function mat({
       ...(rect && { uRect: { value: new THREE.Vector4(...rect) } }),
       ...(wake && { uWakeFade: { value: wake } }),
       ...(sourceVel && { uVel: sourceVel }),
+      ...(rotor && rotor),
+      ...(windows && {
+        uWindows: { value: new THREE.Vector4(windows.size[0], windows.size[1], windows.lit ?? 0.5, windows.seed ?? 1) },
+        uWindowColor: { value: new THREE.Color(windows.color ?? "#ffcf8a") },
+      }),
     },
     transparent: opacity < 1 || additive,
     depthWrite: !additive && opacity >= 1,
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
     side: doubleSided ? THREE.DoubleSide : THREE.FrontSide,
   });
+  m.userData.opts = arguments[0] ?? {};
   if (!unique && !special) cache.set(key, m);
   return m;
 }
@@ -443,4 +554,165 @@ export function skyMaterial() {
     side: THREE.BackSide,
     depthWrite: false,
   });
+}
+
+// Particles that fly in straight lines (with optional gravity) from a birth
+// event: sparks, rain, snow. Each vertex solves for the moment its light left
+// it, like everything else. As points they're soft dots; drawn as line pairs
+// (the second vertex lagging by aTail seconds) they're streaks.
+const sparkVertex = /* glsl */ `
+uniform vec3 uCam;
+uniform vec3 uBeta;
+uniform vec4 uFlags;
+uniform float uC;
+uniform float uTime;
+uniform float uDelay;
+uniform float uPointScale;
+uniform float uGravity;
+uniform float uPeriodic;  // 1: particles respawn every aLife seconds (rain, snow)
+uniform vec3 uWrap;       // periodic particles wrap around the camera within this box
+attribute vec3 aOrigin;
+attribute vec3 aVel;
+attribute float aBirth;
+attribute float aLife;
+attribute float aTail;
+attribute vec3 aColor;
+attribute float aSize;
+varying vec3 vColor;
+varying float vAgeK;
+varying vec3 vSrc;
+varying vec3 vWorld;
+
+// How long the particle had been flying at world time te.
+float flight(float te) { return uPeriodic > 0.5 ? mod(te - aBirth, aLife) : te - aBirth; }
+vec3 posAt(vec3 o, float a) { return o + aVel * a + vec3(0.0, -0.5 * uGravity * a * a, 0.0); }
+
+void main() {
+  float T = uTime - aTail;
+  vec3 o = aOrigin;
+  if (uPeriodic > 0.5) {
+    // Keep the field of drops centred on the viewer.
+    o.xz = uCam.xz + mod(aOrigin.xz - uCam.xz + uWrap.xz * 0.5, uWrap.xz) - uWrap.xz * 0.5;
+  }
+  float tau = 0.0;
+  if (uDelay > 0.5) {
+    tau = length(posAt(o, flight(T)) - uCam) / uC;
+    for (int i = 0; i < 4; i++) {
+      float a = flight(T - tau);
+      vec3 q = posAt(o, a) - uCam;
+      vec3 vel = aVel + vec3(0.0, -uGravity * a, 0.0);
+      float dq = length(q);
+      float f = dq - uC * tau;
+      float df = -dot(vel, q) / max(dq, 1e-4) - uC;
+      tau = max(0.0, tau - f / df);
+    }
+  }
+  float a = flight(T - tau);
+  vSrc = aVel + vec3(0.0, -uGravity * a, 0.0);
+  if (uPeriodic < 0.5 && (a < 0.0 || a > aLife)) {
+    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+    gl_PointSize = 0.0;
+    return;
+  }
+  vec3 p = posAt(o, a);
+  vWorld = p;
+  vAgeK = uPeriodic > 0.5 ? 0.0 : a / aLife;
+  vColor = aColor;
+  vec3 x = p - uCam;
+  float d = max(length(x), 1e-3);
+  vec3 P = x;
+  float b = length(uBeta);
+  if (b > 1e-5 && uFlags.x > 0.5) {
+    float g = inversesqrt(1.0 - b * b);
+    vec3 n = uBeta / b;
+    P = x + n * ((g - 1.0) * dot(x, n)) + uBeta * (g * d);
+  }
+  vec4 clip = projectionMatrix * viewMatrix * vec4(uCam + P, 1.0);
+  gl_Position = clip;
+  gl_PointSize = clamp(aSize * uPointScale / max(length(P), 0.1), 1.0, 64.0);
+}
+`;
+
+const sparkFragment = /* glsl */ `
+uniform vec3 uCam;
+uniform float uC;
+uniform float uIntensity;
+uniform float uRound;
+varying vec3 vColor;
+varying float vAgeK;
+varying vec3 vSrc;
+varying vec3 vWorld;
+${common}
+
+void main() {
+  float shape = 1.0;
+  if (uRound > 0.5) {
+    vec2 q = gl_PointCoord - 0.5;
+    shape = smoothstep(0.5, 0.0, length(q));
+    if (shape < 0.01) discard;
+  }
+  float D = doppler(vWorld - uCam);
+  vec3 bs = vSrc / uC;
+  D /= inversesqrt(max(1e-6, 1.0 - dot(bs, bs))) * (1.0 + dot(bs, normalize(vWorld - uCam)));
+  float fade = (1.0 - vAgeK) * (1.0 - vAgeK);
+  vec3 rgb = vColor * uIntensity * fade * shape;
+  float k = dot(vColor, vec3(0.33)) * uIntensity * fade * shape;
+  vec3 col = searchlight(spectralShift(rgb, k * 0.6, k * 0.6, D), D);
+  gl_FragColor = vec4(softClip(col), 1.0);
+  #include <colorspace_fragment>
+}
+`;
+
+// particles: { origin, vel, birth, life, color, size, tail }[]; as "points" or "lines".
+export function sparkField(count, { lines = false, gravity = 0, periodic = false, wrap = [60, 0, 60], intensity = 1.5, round = true } = {}) {
+  const n = lines ? count * 2 : count;
+  const geo = new THREE.BufferGeometry();
+  const attr = (name, size) => {
+    const a = new THREE.BufferAttribute(new Float32Array(n * size), size);
+    a.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute(name, a);
+    return a;
+  };
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  const A = {
+    origin: attr("aOrigin", 3), vel: attr("aVel", 3), birth: attr("aBirth", 1), life: attr("aLife", 1),
+    tail: attr("aTail", 1), color: attr("aColor", 3), size: attr("aSize", 1),
+  };
+  A.birth.array.fill(-1e9);
+  const material = new THREE.ShaderMaterial({
+    vertexShader: sparkVertex,
+    fragmentShader: sparkFragment,
+    uniforms: {
+      ...shared,
+      uGravity: { value: gravity },
+      uPeriodic: { value: periodic ? 1 : 0 },
+      uWrap: { value: new THREE.Vector3(...wrap) },
+      uIntensity: { value: intensity },
+      uRound: { value: round && !lines ? 1 : 0 },
+    },
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const obj = lines ? new THREE.LineSegments(geo, material) : new THREE.Points(geo, material);
+  obj.frustumCulled = false;
+  obj.renderOrder = 3;
+  let next = 0;
+  // Sets particle i (or the next free slot).
+  obj.set = (p, i = next++ % count) => {
+    const put = (j, tail) => {
+      A.origin.array.set([p.origin.x, p.origin.y, p.origin.z], j * 3);
+      A.vel.array.set([p.vel.x, p.vel.y, p.vel.z], j * 3);
+      A.birth.array[j] = p.birth;
+      A.life.array[j] = p.life;
+      A.tail.array[j] = tail;
+      A.color.array.set([p.color.r, p.color.g, p.color.b], j * 3);
+      A.size.array[j] = p.size ?? 0.1;
+    };
+    if (lines) { put(i * 2, 0); put(i * 2 + 1, p.tail ?? 0.05); }
+    else put(i, 0);
+    for (const a of Object.values(A)) a.needsUpdate = true;
+  };
+  obj.count = count;
+  return obj;
 }

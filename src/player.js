@@ -2,11 +2,12 @@ import * as THREE from "three";
 import { addVelocity, effects, gammaOf, world } from "./relativity.js";
 
 const EYE_HEIGHT = 1.6;
-// Your legs give you a proper velocity (distance on the meadow per tick of
-// your own watch). With c = 3 m/s these come out near 0.53c and 0.95c; with
-// a realistic c they're just a walk and a sprint.
-const WALK_U = 1.9;
-const SPRINT_U = 9;
+// Your legs give you a proper velocity (distance on the deck per tick of your
+// own watch), sized to each experiment's light speed so a walk is about 0.53c
+// and a sprint 0.95c. The Lab's light-speed slider doesn't change them, so
+// with a realistic c they're just an ordinary walk and sprint.
+const WALK_U = 0.63; // × the experiment's light speed
+const SPRINT_U = 3.04;
 
 export class Player {
   constructor(canvas) {
@@ -23,6 +24,7 @@ export class Player {
     this.touchMove = new THREE.Vector2();
     this.touchSprint = false;
     this.vehicle = null; // a train you're riding, if any
+    this.legs = 3; // the light speed your stride is sized for, m/s
     this.bindInput();
   }
 
@@ -35,7 +37,7 @@ export class Player {
   }
 
   get eye() {
-    return new THREE.Vector3(this.pos.x, EYE_HEIGHT, this.pos.z);
+    return new THREE.Vector3(this.pos.x, this.pos.y + EYE_HEIGHT, this.pos.z);
   }
 
   place(x, z, yaw = 0) {
@@ -57,6 +59,7 @@ export class Player {
     this.vehicle = null;
     this.u.set(0, 0, 0);
     this.v.set(0, 0, 0);
+    this.pos.y = 0;
   }
 
   bindInput() {
@@ -147,11 +150,25 @@ export class Player {
     // Steer proper velocity toward the target. Proper velocity has no ceiling,
     // so however hard you push you never reach c.
     const c = world.c;
-    const target = dir.multiplyScalar(sprint ? SPRINT_U : WALK_U);
-    const rate = (sprint ? 8 : 6) * dTau;
+    const target = dir.multiplyScalar((sprint ? SPRINT_U : WALK_U) * this.legs);
+    // Slowing down is quick, so letting go of the keys doesn't coast you far.
+    const braking = target.lengthSq() < this.u.lengthSq();
+    const rate = (braking ? 7 : sprint ? 2.7 : 2) * this.legs * dTau;
     const delta = target.sub(this.u);
     if (delta.length() > rate) delta.setLength(rate);
     this.u.add(delta);
+
+    // Seats (a coaster, a carousel horse) carry you along their own path.
+    if (this.vehicle?.carry) {
+      this.u.set(0, 0, 0);
+      this.v.copy(this.vehicle.velocity);
+      const dT = effects.dilation ? dTau * this.gamma : dTau;
+      this.vehicle.carry(this.pos, world.t + dT);
+      this.v.copy(this.vehicle.velocity);
+      this.tau += dTau;
+      this.looking = this.lookBack || lookBackKey;
+      return dT;
+    }
 
     this.ownVelocity();
     const dT = effects.dilation ? dTau * this.gamma : dTau;

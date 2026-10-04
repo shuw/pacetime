@@ -51,7 +51,7 @@ export default {
       { text: "Sprint after an outbound pulse above 90% of light speed", done: false },
     ];
     let note = "Gold pulses run east, away from the ring. Blue pulses run west, toward it.";
-    let watchedOut = 0, chase = 0, lastFired = [-1, -1];
+    let watchedOut = 0, chase = 0, lastFired = [-1, -1], lastHeard = [-1, -1], lastPassOut = null;
     let gapPrev = null, gapRate = 0;
     const fwd = new THREE.Vector3();
 
@@ -102,6 +102,20 @@ export default {
           }
         });
 
+        // Hear each beacon fire when its flash reaches you, and a zap as a pulse sweeps past.
+        beams.forEach((b, i) => {
+          const n = Math.floor((t - b.pos.distanceTo(eye) / world.c - b.start) / b.period);
+          if (n >= 0 && n !== lastHeard[i]) {
+            if (lastHeard[i] >= 0) sfx.pulse(b.pos, i === 0 ? 1600 : 2100);
+            lastHeard[i] = n;
+          }
+        });
+        if (player.pos.x > out.from) {
+          const nPass = Math.floor((t - out.start - (player.pos.x - out.from) / world.c) / out.period);
+          if (lastPassOut !== null && nPass !== lastPassOut && nPass >= 0) sfx.zap(new THREE.Vector3(player.pos.x, 1.5, LANE_OUT));
+          lastPassOut = nPass;
+        }
+
         const gap = gapAhead();
         if (gap !== null && gapPrev !== null && dTau > 0 && Math.abs(gap - gapPrev) < 2) {
           gapRate += ((gap - gapPrev) / dTau - gapRate) * Math.min(1, dTau * 3);
@@ -118,9 +132,9 @@ export default {
         // An inbound pulse passing you while you face it.
         const nIn = Math.floor((t - inn.start - (EAST - player.pos.x) / world.c) / inn.period);
         if (nIn >= 0 && nIn !== this.lastIn) {
+          if (this.lastIn !== undefined) sfx.zap(new THREE.Vector3(player.pos.x, 1.5, LANE_IN));
           if (this.lastIn !== undefined && fwd.x > 0.6 && !goals[1].done) {
             goals[1].done = true;
-            sfx.strike();
             note = "No warning: the light showing you an oncoming pulse travels right alongside it, so it all arrives at once.";
           }
           this.lastIn = nIn;

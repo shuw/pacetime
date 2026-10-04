@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { box, G, mesh } from "./geo.js";
 import { mat } from "./shaders.js";
-import { effects, world } from "./relativity.js";
+import { effects, gammaOf, seenTimeOf, world } from "./relativity.js";
 import { PALETTE } from "./world.js";
 
 // A glass maglev train on a straight track along x, moving at a fixed fraction
@@ -101,6 +101,21 @@ export class Train {
     const o = mesh(geo, material, { pos: [local, y, dz], scale });
     this.group.add(o);
     return o;
+  }
+
+  // Where you see the train's middle, and the Doppler factor of its light,
+  // for its sound. Silent once it's beyond a portal.
+  audio(eye, player) {
+    const riding = player.vehicle === this.vehicle;
+    const path = (t) => this.pointAt(0, t, 1.5);
+    const pos = path(seenTimeOf(path, eye));
+    if (this.clip && (pos.x < this.clip[0] - this.halfLength || pos.x > this.clip[2] + this.halfLength)) return null;
+    if (riding) return { pos, D: 1, riding };
+    const n = pos.clone().sub(eye).normalize();
+    const bo = player.v.clone().divideScalar(world.c);
+    const bs = this.vehicle.velocity.clone().divideScalar(world.c);
+    const D = (gammaOf(bo.length()) * (1 + bo.dot(n))) / (gammaOf(bs.length()) * (1 + bs.dot(n)));
+    return { pos, D: effects.doppler ? D : 1, riding };
   }
 
   isOn(p, t) {

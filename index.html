@@ -4,9 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Pacetime</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2305060c'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%236f8bff' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23ffb36b' stroke-width='2.5' stroke-dasharray='14 43' /%3E%3Ccircle cx='16' cy='16' r='2.2' fill='%23e9ecf5'/%3E%3C/svg%3E" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./src/style.css" />
   </head>
   <body>
     <canvas id="view"></canvas>
@@ -21,6 +21,7 @@
 
       <div class="top-right">
         <div class="buttons">
+          <button id="help-btn" title="Help (?)" aria-label="Help">?</button>
           <button id="lab-btn" title="Lab (L)">Lab</button>
           <button id="menu-btn" title="Experiments (M)">Experiments</button>
         </div>
@@ -61,8 +62,39 @@
         <small id="c-word"></small>
       </label>
       <div id="toggles"></div>
+      <label class="sound-toggle" for="sound-toggle"><input type="checkbox" id="sound-toggle" checked /> Sound <small>N</small></label>
       <p class="fine">Switch effects off one at a time to see what each one does.</p>
     </aside>
+
+    <div id="help" hidden role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <section class="panel help-card">
+        <div class="help-head">
+          <h2 id="help-title">Controls</h2>
+          <button id="help-close" aria-label="Close help"><kbd>?</kbd> close</button>
+        </div>
+        <dl class="keys">
+          <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Move (arrow keys work too)</dd>
+          <dt><kbd>Shift</kbd></dt><dd>Sprint, up to 95% of light speed</dd>
+          <dt>Mouse</dt><dd>Look around (click the view to capture the mouse)</dd>
+          <dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Turn</dd>
+          <dt><kbd>B</kbd> or right-click</dt><dd>Hold to look back</dd>
+          <dt><kbd>E</kbd></dt><dd>Board or step off a train</dd>
+          <dt><kbd>T</kbd></dt><dd>Back to the start of the platform</dd>
+          <dt><kbd>L</kbd></dt><dd>Lab: change the speed of light, switch effects on and off</dd>
+          <dt><kbd>M</kbd></dt><dd>Experiments</dd>
+          <dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>On the experiments screen, start that experiment</dd>
+          <dt><kbd>N</kbd></dt><dd>Sound on or off</dd>
+          <dt><kbd>?</kbd></dt><dd>This help</dd>
+          <dt><kbd>Esc</kbd></dt><dd>Release the mouse, or close this panel</dd>
+        </dl>
+        <h3>Touch</h3>
+        <p>Left thumb moves; push far to sprint. Right thumb looks. Buttons on screen board trains and look back.</p>
+        <h3>Coming back</h3>
+        <p>The address bar keeps your experiment, position and Lab settings, so a refresh (or a shared link) puts you back where you were.</p>
+        <h3>Reading the screen</h3>
+        <p><b>Your watch</b> runs on your own time. The <b>platform clock</b> runs on the station's. The gap between them is how much younger you are. In the observation log, <b>seen</b> is when an event's light reached you, and <b>happened</b> is when it took place in your frame, with the light's travel time taken out.</p>
+      </section>
+    </div>
 
     <div id="toast"></div>
 
@@ -74,7 +106,7 @@
         <ol id="scene-cards"></ol>
         <p class="controls">
           <kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · mouse to look · <kbd>E</kbd> board / step off ·
-          hold <kbd>B</kbd> to look back · <kbd>T</kbd> back to the start · <kbd>L</kbd> lab · <kbd>M</kbd> experiments
+          hold <kbd>B</kbd> to look back · <kbd>1</kbd>–<kbd>4</kbd> start an experiment · <kbd>?</kbd> all controls
         </p>
         <p class="controls touch">Left thumb moves (push far to sprint), right thumb looks.</p>
       </div>

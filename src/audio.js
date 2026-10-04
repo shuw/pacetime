@@ -1,11 +1,70 @@
-let ctx;
+// Synthesized sound: an ambient station hum, wind that rises with your speed,
+// a train hum pitched by the same Doppler factor you see, and one-shot effects
+// panned toward where they happen.
+import * as THREE from "three";
+
+let ctx = null, master = null, noiseBuf = null;
+let muted = false;
+const loops = {};
+const listener = { pos: new THREE.Vector3(), right: new THREE.Vector3(1, 0, 0) };
+
+try { muted = localStorage.getItem("pacetime-muted") === "1"; } catch {}
 
 export function unlockAudio() {
-  ctx ??= new AudioContext();
+  if (!ctx) {
+    ctx = new AudioContext();
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -18;
+    comp.ratio.value = 4;
+    master = ctx.createGain();
+    master.gain.value = muted ? 0 : 0.8;
+    master.connect(comp).connect(ctx.destination);
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    startLoops();
+  }
   if (ctx.state === "suspended") ctx.resume();
 }
 
-function tone(freq, start, dur, { type = "sine", gain = 0.1, slide = 0 } = {}) {
+export function isMuted() {
+  return muted;
+}
+
+export function setMuted(m) {
+  muted = m;
+  try { localStorage.setItem("pacetime-muted", m ? "1" : "0"); } catch {}
+  if (master) master.gain.setTargetAtTime(m ? 0 : 0.8, ctx.currentTime, 0.05);
+}
+
+export function setListener(pos, right) {
+  listener.pos.copy(pos);
+  listener.right.copy(right);
+}
+
+// Pan and loudness for a sound coming from a world position.
+function placed(pos, range = 18) {
+  if (!pos) return { pan: 0, gain: 1 };
+  const d = new THREE.Vector3().subVectors(pos, listener.pos);
+  const dist = d.length();
+  return { pan: dist > 0.01 ? THREE.MathUtils.clamp(d.normalize().dot(listener.right), -1, 1) * 0.85 : 0, gain: 1 / (1 + dist / range) };
+}
+
+function out(pan) {
+  const p = ctx.createStereoPanner();
+  p.pan.value = pan;
+  p.connect(master);
+  return p;
+}
+
+function noiseSource(loop = false) {
+  const s = ctx.createBufferSource();
+  s.buffer = noiseBuf;
+  s.loop = loop;
+  return s;
+}
+
+function tone(freq, start, dur, { type = "sine", gain = 0.1, slide = 0, pan = 0, attack = 0.005 } = {}) {
   if (!ctx) return;
   const t0 = ctx.currentTime + start;
   const o = ctx.createOscillator();
@@ -14,31 +73,168 @@ function tone(freq, start, dur, { type = "sine", gain = 0.1, slide = 0 } = {}) {
   o.frequency.setValueAtTime(freq, t0);
   if (slide) o.frequency.exponentialRampToValueAtTime(freq * slide, t0 + dur);
   g.gain.setValueAtTime(0, t0);
-  g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
+  g.gain.linearRampToValueAtTime(gain, t0 + attack);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  o.connect(g).connect(ctx.destination);
+  o.connect(g).connect(out(pan));
   o.start(t0);
   o.stop(t0 + dur + 0.05);
 }
 
-function noise(dur, gain, cutoff) {
+function burst(dur, { gain = 0.2, from = 2000, to = 200, type = "lowpass", q = 0.7, pan = 0, start = 0, attack = 0.005 } = {}) {
   if (!ctx) return;
-  const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length) ** 3;
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
+  const t0 = ctx.currentTime + start;
+  const s = noiseSource();
   const f = ctx.createBiquadFilter();
-  f.type = "lowpass";
-  f.frequency.value = cutoff;
+  f.type = type;
+  f.Q.value = q;
+  f.frequency.setValueAtTime(from, t0);
+  f.frequency.exponentialRampToValueAtTime(to, t0 + dur);
   const g = ctx.createGain();
-  g.gain.value = gain;
-  src.connect(f).connect(g).connect(ctx.destination);
-  src.start();
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(gain, t0 + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  s.connect(f).connect(g).connect(out(pan));
+  s.start(t0, Math.random());
+  s.stop(t0 + dur + 0.05);
+}
+
+function startLoops() {
+  // Station hum: two low detuned tones breathing slowly, plus soft air.
+  const hum = ctx.createGain();
+  hum.gain.value = 0.05;
+  hum.connect(master);
+  for (const [f, type] of [[55, "sine"], [82.6, "triangle"], [110.4, "sine"]]) {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.value = f;
+    const g = ctx.createGain();
+    g.gain.value = f > 100 ? 0.25 : 0.5;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.05 + f / 2000;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 0.2;
+    lfo.connect(lfoGain).connect(g.gain);
+    o.connect(g).connect(hum);
+    o.start();
+    lfo.start();
+  }
+  const air = noiseSource(true);
+  const airF = ctx.createBiquadFilter();
+  airF.type = "lowpass";
+  airF.frequency.value = 260;
+  const airG = ctx.createGain();
+  airG.gain.value = 0.25;
+  air.connect(airF).connect(airG).connect(hum);
+  air.start();
+
+  // Rush of speed: band-passed noise that brightens and swells as you speed up.
+  const wind = noiseSource(true);
+  const windF = ctx.createBiquadFilter();
+  windF.type = "bandpass";
+  windF.Q.value = 0.8;
+  windF.frequency.value = 300;
+  const windG = ctx.createGain();
+  windG.gain.value = 0;
+  wind.connect(windF).connect(windG).connect(master);
+  wind.start();
+  loops.wind = { f: windF, g: windG };
+
+  // Maglev train hum.
+  const trainG = ctx.createGain();
+  trainG.gain.value = 0;
+  const trainF = ctx.createBiquadFilter();
+  trainF.type = "lowpass";
+  trainF.frequency.value = 900;
+  const trainP = ctx.createStereoPanner();
+  trainF.connect(trainG).connect(trainP).connect(master);
+  const oscs = [[1, "sawtooth", 0.35], [2, "sine", 0.6], [3.01, "sine", 0.2]].map(([k, type, gain]) => {
+    const o = ctx.createOscillator();
+    o.type = type;
+    const g = ctx.createGain();
+    g.gain.value = gain;
+    o.connect(g).connect(trainF);
+    o.start();
+    return { o, k };
+  });
+  loops.train = { g: trainG, p: trainP, f: trainF, oscs };
+}
+
+// Called every frame. `train` is { pos (where you see it), D (Doppler factor), riding } or null.
+export function updateAudio({ beta, train, dt }) {
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const w = loops.wind;
+  w.g.gain.setTargetAtTime(0.22 * beta * beta, now, 0.15);
+  w.f.frequency.setTargetAtTime(250 + 2600 * beta * beta, now, 0.15);
+
+  const tr = loops.train;
+  if (train) {
+    const { pan, gain } = placed(train.pos, 14);
+    const base = 46 * THREE.MathUtils.clamp(train.D, 0.2, 5);
+    tr.oscs.forEach(({ o, k }) => o.frequency.setTargetAtTime(base * k, now, 0.05));
+    tr.f.frequency.setTargetAtTime(500 + 300 * train.D, now, 0.05);
+    tr.g.gain.setTargetAtTime(train.riding ? 0.07 : 0.16 * gain * Math.min(1.6, Math.sqrt(train.D)), now, 0.08);
+    tr.p.pan.setTargetAtTime(train.riding ? 0 : pan, now, 0.05);
+  } else {
+    tr.g.gain.setTargetAtTime(0, now, 0.2);
+  }
 }
 
 export const sfx = {
-  strike: () => { noise(1.4, 0.35, 900); tone(55, 0, 1.2, { type: "sine", gain: 0.2, slide: 0.6 }); },
-  door: () => { noise(0.3, 0.2, 400); tone(90, 0, 0.3, { type: "triangle", gain: 0.12, slide: 0.7 }); },
-  chime: () => [659, 988].forEach((f, i) => tone(f, i * 0.12, 1.4, { type: "sine", gain: 0.05 })),
+  // Thunder: a sharp crack, then a long low roll.
+  strike(pos) {
+    const { pan, gain } = placed(pos, 40);
+    burst(0.25, { gain: 0.5 * gain, from: 6000, to: 800, pan });
+    burst(2.8, { gain: 0.35 * gain, from: 900, to: 60, pan, start: 0.05, attack: 0.08 });
+    tone(42, 0.02, 2.2, { gain: 0.3 * gain, slide: 0.7, pan });
+  },
+  doorShut(pos) {
+    const { pan, gain } = placed(pos, 20);
+    tone(180, 0, 0.35, { type: "sawtooth", gain: 0.05 * gain, slide: 0.5, pan });
+    burst(0.4, { gain: 0.4 * gain, from: 700, to: 80, pan, start: 0.3 });
+    tone(55, 0.3, 0.5, { gain: 0.3 * gain, slide: 0.8, pan });
+  },
+  doorOpen(pos) {
+    const { pan, gain } = placed(pos, 20);
+    burst(0.7, { gain: 0.18 * gain, from: 3000, to: 900, type: "bandpass", q: 2, pan });
+    tone(240, 0, 0.6, { type: "triangle", gain: 0.05 * gain, slide: 1.6, pan });
+  },
+  // Magnetic clamp, then the world accelerating past.
+  board() {
+    tone(70, 0, 0.25, { gain: 0.35, slide: 0.6 });
+    burst(0.1, { gain: 0.3, from: 3000, to: 500 });
+    burst(1.4, { gain: 0.2, from: 200, to: 3000, type: "bandpass", q: 1.2, start: 0.1, attack: 0.3 });
+  },
+  alight() {
+    burst(1.0, { gain: 0.18, from: 2500, to: 150, type: "bandpass", q: 1.2 });
+    tone(90, 0.05, 0.3, { gain: 0.25, slide: 0.5 });
+  },
+  // A clock tick, pitched per clock.
+  tick(pos, pitch = 1320) {
+    const { pan, gain } = placed(pos, 8);
+    if (gain < 0.15) return;
+    tone(pitch, 0, 0.08, { gain: 0.12 * gain, pan });
+    tone(pitch * 2.01, 0, 0.04, { gain: 0.04 * gain, pan });
+  },
+  // A beacon firing: a bright falling zing.
+  pulse(pos, pitch = 1800) {
+    const { pan, gain } = placed(pos, 25);
+    tone(pitch, 0, 0.6, { gain: 0.08 * gain, slide: 0.45, pan });
+    tone(pitch * 1.5, 0, 0.3, { gain: 0.03 * gain, slide: 0.5, pan });
+  },
+  // A pulse sweeping past you.
+  zap(pos) {
+    const { pan } = placed(pos);
+    burst(0.35, { gain: 0.22, from: 8000, to: 600, type: "bandpass", q: 3, pan });
+    tone(2400, 0, 0.25, { type: "triangle", gain: 0.05, slide: 0.3, pan });
+  },
+  step(soft = 1) {
+    burst(0.07, { gain: 0.05 * soft, from: 900, to: 300, q: 1 });
+  },
+  goal() {
+    [523.3, 784, 1046.5].forEach((f, i) => tone(f, i * 0.11, 1.6, { gain: 0.06, attack: 0.01 }));
+  },
+  ui() {
+    tone(1200, 0, 0.06, { gain: 0.04 });
+  },
 };

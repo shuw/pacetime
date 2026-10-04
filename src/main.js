@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import "./style.css";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
@@ -7,13 +8,11 @@ import { Player } from "./player.js";
 import { shared, skyMaterial } from "./shaders.js";
 import { effects, world } from "./relativity.js";
 import { initLab, showScene, syncLab, toast, toggleLab, updateHud } from "./hud.js";
-import { unlockAudio } from "./audio.js";
-import simultaneity from "./scenes/simultaneity.js";
-import tunnel from "./scenes/tunnel.js";
+import { isMuted, setListener, setMuted, sfx, unlockAudio, updateAudio } from "./audio.js";
+import railway from "./scenes/railway.js";
 import beam from "./scenes/beam.js";
-import lightclock from "./scenes/lightclock.js";
 
-const SCENES = [simultaneity, tunnel, lightclock, beam];
+const SCENES = [railway, beam];
 
 const canvas = document.getElementById("view");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -37,6 +36,7 @@ let usePost = false;
 const player = new Player(canvas);
 let current = null; // { scene, instance }
 let paused = true;
+const help = document.getElementById("help");
 
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -47,6 +47,7 @@ const done = JSON.parse(store.get("pacetime-done") ?? "{}");
 function applyEnv(e) {
   shared.uNight.value = e.night ?? 0;
   shared.uSpace.value = e.space ?? 0;
+  shared.uStars.value = e.stars ?? 1;
   shared.uSun.value.set(...e.sun).normalize();
   shared.uSunColor.value.setRGB(...e.sunColor);
   shared.uSky.value.setRGB(...e.sky);
@@ -75,9 +76,57 @@ function load(scene) {
   const [x, z, yaw] = instance.spawn;
   player.place(x, z, yaw ?? 0);
   showScene(scene, SCENES.indexOf(scene));
+  instance.c0 = world.c;
+  player.legs = world.c;
+  goalsDone = 0;
   syncLab();
   store.set("pacetime-last", scene.id);
 }
+
+// The address bar mirrors where you are, e.g. #tunnel@-30.0,17.0,0.00,0.00&c=8&off=doppler,
+// so a refresh or a shared link drops you back in the same spot.
+function stateHash() {
+  const p = player;
+  let h = `#${current.scene.id}@${p.pos.x.toFixed(1)},${p.pos.z.toFixed(1)},${p.yaw.toFixed(2)},${p.pitch.toFixed(2)}`;
+  if (Math.abs(world.c - current.instance.c0) > 1e-3) h += `&c=${+world.c.toFixed(2)}`;
+  const off = Object.keys(effects).filter((k) => !effects[k]);
+  if (off.length) h += `&off=${off.join(",")}`;
+  return h;
+}
+
+function parseHash() {
+  const [head, ...rest] = decodeURIComponent(location.hash.slice(1)).split("&");
+  const [id, pose] = head.split("@");
+  if (!SCENES.some((s) => s.id === id)) return null;
+  const opts = Object.fromEntries(rest.map((kv) => kv.split("=")));
+  return { id, pose: pose?.split(",").map(Number), c: opts.c ? Number(opts.c) : null, off: opts.off ? opts.off.split(",") : [] };
+}
+
+function restore(h) {
+  for (const k of Object.keys(effects)) effects[k] = !h.off.includes(k);
+  load(SCENES.find((s) => s.id === h.id));
+  current.instance.started = true;
+  if (h.c > 0) world.c = h.c;
+  if (h.pose?.length >= 3 && h.pose.every(Number.isFinite)) {
+    player.place(h.pose[0], h.pose[1], h.pose[2]);
+    player.pitch = h.pose[3] ?? 0;
+  }
+  syncLab();
+  closeMenu();
+}
+
+let hashClock = 0;
+function writeHash(dt) {
+  hashClock += dt;
+  if (hashClock < 0.5) return;
+  hashClock = 0;
+  const h = stateHash();
+  if (h !== location.hash) history.replaceState(null, "", h);
+}
+addEventListener("hashchange", () => {
+  const h = parseHash();
+  if (h && h.id !== current?.scene.id) restore(h);
+});
 
 function buildMenu() {
   document.getElementById("scene-cards").innerHTML = SCENES.map((s) => `
@@ -104,15 +153,18 @@ function closeMenu() {
   player.enabled = true;
 }
 
-document.getElementById("scene-cards").addEventListener("click", (e) => {
-  const card = e.target.closest(".scene-card");
-  if (!card) return;
+function startScene(scene) {
   unlockAudio();
-  const scene = SCENES.find((s) => s.id === card.dataset.id);
+  sfx.ui();
   if (current?.scene !== scene || current.instance.started) load(scene);
   current.instance.started = true;
   closeMenu();
   if (matchMedia("(pointer: fine)").matches) canvas.requestPointerLock?.();
+}
+
+document.getElementById("scene-cards").addEventListener("click", (e) => {
+  const card = e.target.closest(".scene-card");
+  if (card) startScene(SCENES.find((s) => s.id === card.dataset.id));
 });
 
 function act() {
@@ -128,13 +180,45 @@ back.addEventListener("touchend", () => (player.lookBack = false));
 canvas.addEventListener("click", () => {
   if (!paused && document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
 });
+function setHelp(open) {
+  if (help.hidden === !open) return;
+  sfx.ui();
+  help.hidden = !open;
+  player.enabled = !open && !paused;
+  if (open) document.exitPointerLock?.();
+  else if (!paused && matchMedia("(pointer: fine)").matches) canvas.requestPointerLock?.();
+}
+document.getElementById("help-btn").addEventListener("click", () => setHelp(true));
+document.getElementById("help-close").addEventListener("click", () => setHelp(false));
+help.addEventListener("click", (e) => { if (e.target === help) setHelp(false); });
+
+const soundToggle = document.getElementById("sound-toggle");
+soundToggle.checked = !isMuted();
+soundToggle.addEventListener("change", () => setMuted(!soundToggle.checked));
+function toggleSound() {
+  setMuted(!isMuted());
+  soundToggle.checked = !isMuted();
+  toast(isMuted() ? "Sound off" : "Sound on", 2);
+}
+addEventListener("pointerdown", unlockAudio);
+
 addEventListener("keydown", (e) => {
+  unlockAudio();
   if (e.repeat) return;
+  if (e.key === "?") return setHelp(help.hidden);
+  if (e.code === "KeyN") return toggleSound();
+  if (!help.hidden) {
+    if (e.code === "Escape") setHelp(false);
+    return;
+  }
   const menuOpen = !document.getElementById("menu").hidden;
+  const pick = menuOpen && /^Digit[1-9]$/.test(e.code) ? SCENES[Number(e.code.slice(5)) - 1] : null;
+  if (pick) return startScene(pick);
   if (e.code === "KeyM") menuOpen && current?.instance.started ? closeMenu() : openMenu();
   else if (e.code === "Escape" && menuOpen && current?.instance.started) closeMenu();
   else if (menuOpen) return;
-  else if (e.code === "KeyL") toggleLab();
+  // The Lab needs the mouse, so opening it lets go of the view.
+  else if (e.code === "KeyL" && toggleLab()) document.exitPointerLock?.();
   else if (e.code === "KeyE") act();
   else if (e.code === "KeyT" && current) {
     const [x, z, yaw] = current.instance.spawn;
@@ -153,6 +237,7 @@ function resize() {
   camera.aspect = w / h;
   camera.fov = w < h ? 90 : 72;
   camera.updateProjectionMatrix();
+  shared.uPointScale.value = (h * renderer.getPixelRatio()) / (2 * Math.tan((camera.fov * Math.PI) / 360));
 }
 addEventListener("resize", resize);
 resize();
@@ -173,7 +258,21 @@ function adaptExposure(dt) {
 
 let last = performance.now();
 const eye = new THREE.Vector3();
+const right = new THREE.Vector3();
 let wasComplete = false;
+let goalsDone = 0, stepDist = 0;
+
+// Footsteps, faster and firmer as you speed up. Nothing while riding.
+function footsteps(dt) {
+  const u = player.u.length();
+  if (player.vehicle || !player.enabled || u < 0.3) { stepDist = 0; return; }
+  stepDist += u * dt;
+  const stride = 0.75 + 0.14 * u;
+  if (stepDist > stride) {
+    stepDist -= stride;
+    sfx.step(Math.min(1, 0.4 + u / 9));
+  }
+}
 
 function frame() {
   const now = performance.now();
@@ -182,7 +281,7 @@ function frame() {
   if (current) {
     const { instance, scene } = current;
     // Behind the title screen the world keeps running so the menu has a live backdrop.
-    const step = paused && instance.started ? 0 : dTau;
+    const step = (paused || !help.hidden) && instance.started ? 0 : dTau;
     const dT = player.update(step, instance);
     world.t += dT;
     player.applyTo(camera);
@@ -202,12 +301,20 @@ function frame() {
     instance.update({ player, eye, camera, t: world.t, dT, dTau: step });
     instance.group.traverse((c) => { if (c.follow) c.position.set(eye.x, 0, eye.z); });
 
+    setListener(eye, right.set(1, 0, 0).applyQuaternion(camera.quaternion));
+    updateAudio({ beta: player.beta, train: instance.sound?.(eye) ?? instance.train?.audio(eye, player) ?? null });
+    footsteps(step);
+
     if (!paused) {
       updateHud({
         player, instance,
         locked: document.pointerLockElement === canvas || matchMedia("(pointer: coarse)").matches,
         prompt: instance.action?.(eye) ?? null,
       });
+      writeHash(dTau);
+      const nDone = instance.goals?.filter((g) => g.done).length ?? 0;
+      if (nDone > goalsDone) sfx.goal();
+      goalsDone = nDone;
       const complete = instance.goals?.length > 0 && instance.goals.every((g) => g.done);
       if (complete && !wasComplete && !done[scene.id]) {
         done[scene.id] = true;
@@ -222,9 +329,13 @@ function frame() {
   requestAnimationFrame(frame);
 }
 
-// A live scene runs behind the title screen.
-load(SCENES.find((s) => s.id === store.get("pacetime-last")) ?? simultaneity);
-openMenu();
+// Open where the address says; otherwise a live scene runs behind the title screen.
+const fromHash = parseHash();
+if (fromHash) restore(fromHash);
+else {
+  load(SCENES.find((s) => s.id === store.get("pacetime-last")) ?? SCENES[0]);
+  openMenu();
+}
 frame();
 
 // Handy for poking at the physics from the console.

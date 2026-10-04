@@ -2,7 +2,7 @@
 // Usage: bun run dev (in another shell), then: node scripts/experiments.mjs [scene]
 import { chromium } from "playwright-core";
 
-const which = process.argv[2] ?? "simultaneity";
+const which = process.argv[2] ?? "railway";
 const browser = await chromium.launch({ channel: "chrome", args: ["--use-angle=metal", "--enable-gpu"] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 860 } });
 page.on("pageerror", (e) => console.log("pageerror", e.message));
@@ -30,48 +30,32 @@ async function boardWhenPassing(atX) {
 
 await page.evaluate((id) => { pacetime.load(id); pacetime.closeMenu(); }, which);
 
-if (which === "simultaneity") {
-  await place(-10, 6.5, 0);
-  await until(() => document.querySelectorAll("#log li").length >= 2);
-  await page.waitForTimeout(300);
-  await page.screenshot({ path: "shots/exp-simul-platform.png" });
-  console.log("platform", JSON.stringify(await state(), null, 1));
-  console.log("boarded:", await boardWhenPassing(-70));
-  await page.waitForTimeout(1500);
-  await page.screenshot({ path: "shots/exp-simul-riding.png" });
-  await until(() => document.querySelectorAll("#log li").length >= 4, null, 180000);
-  await page.screenshot({ path: "shots/exp-simul-riding-strike.png" });
-  console.log("riding", JSON.stringify(await state(), null, 1));
-}
-
-if (which === "tunnel") {
-  await place(-30, 17, 0);
-  await until(() => document.querySelectorAll("#log li").length >= 1);
-  await page.waitForTimeout(400);
-  await page.screenshot({ path: "shots/exp-tunnel-inside.png" });
-  await until(() => document.querySelectorAll("#log li").length >= 2);
-  console.log("platform", JSON.stringify(await state(), null, 1));
-  console.log("boarded:", await boardWhenPassing(-85));
-  await until(() => pacetime.instance.train.centerAt(pacetime.world.t) > -48, null, 180000);
-  await page.screenshot({ path: "shots/exp-tunnel-riding.png" });
-  await until(() => document.querySelectorAll("#log li").length >= 4, null, 180000);
-  console.log("riding", JSON.stringify(await state(), null, 1));
-}
-
-if (which === "lightclock") {
-  await place(-6, 12, -0.4);
-  await until(() => Math.abs(pacetime.instance.train.centerAt(pacetime.world.t) - 4) < 3, null, 120000);
-  await page.screenshot({ path: "shots/exp-clock-platform.png" });
-  console.log("platform", JSON.stringify(await state(), null, 1));
-  console.log("boarded:", await boardWhenPassing(-50));
-  await page.evaluate(() => { pacetime.player.yaw = Math.PI / 2 + 0.2; pacetime.player.pitch = 0.15; });
-  await page.waitForTimeout(3000);
-  await page.screenshot({ path: "shots/exp-clock-riding.png" });
-  await until(() => Math.abs(pacetime.player.pos.x) < 8, null, 120000);
-  await page.evaluate(() => { pacetime.player.yaw = -0.3; });
-  await page.waitForTimeout(800);
-  await page.screenshot({ path: "shots/exp-clock-riding-past.png" });
-  console.log("riding", JSON.stringify(await state(), null, 1));
+if (which === "railway") {
+  const strikes = () => page.evaluate(() => pacetime.instance.log.seen.filter((e) => e.tag === "strike").length);
+  const doors = () => page.evaluate(() => pacetime.instance.log.seen.filter((e) => e.tag === "door").length);
+  await place(-90, 6.5, 0);
+  await until(() => pacetime.instance.log.seen.filter((e) => e.tag === "strike").length >= 2);
+  await page.screenshot({ path: "shots/rail-strike.png" });
+  console.log("strike ring", JSON.stringify((await state()).note));
+  const d0 = await doors();
+  await place(-10, 17, 0);
+  await until((n) => pacetime.instance.log.seen.filter((e) => e.tag === "door").length >= n + 2, d0);
+  await page.screenshot({ path: "shots/rail-tunnel.png" });
+  console.log("tunnel ring", JSON.stringify((await state()).note));
+  await place(54, 12, -0.3);
+  await until(() => pacetime.instance.trains.some((tr) => Math.abs(tr.centerAt(pacetime.world.t) - 62) < 4), null, 120000);
+  await page.screenshot({ path: "shots/rail-clock.png" });
+  // Board the next train at the start of the line and ride it to the end.
+  await until(() => pacetime.instance.trains.some((tr) => { const c = tr.centerAt(pacetime.world.t); return c > -150 && c < -144; }), null, 120000);
+  const c = await page.evaluate(() => pacetime.instance.trains.map((tr) => tr.centerAt(pacetime.world.t)).find((c) => c > -150 && c < -144));
+  await place(c, 4.6, -Math.PI / 2);
+  await page.evaluate(() => pacetime.act());
+  console.log("boarded:", await page.evaluate(() => !!pacetime.player.vehicle));
+  await until(() => pacetime.player.pos.x > -40, null, 120000);
+  await page.screenshot({ path: "shots/rail-riding.png" });
+  await until(() => !pacetime.player.vehicle, null, 180000);
+  await page.waitForTimeout(500);
+  console.log("after ride", JSON.stringify(await state(), null, 1));
 }
 
 if (which === "beam") {

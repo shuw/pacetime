@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --port 5180 ./index.html",
+    "dev": "bun scripts/serve.ts",
     "build": "bun build ./index.html --outdir dist --minify"
   },
   "dependencies": {

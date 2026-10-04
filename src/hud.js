@@ -35,6 +35,7 @@ export function initLab(onChange) {
 }
 
 export function syncLab() {
+  for (const [k] of TOGGLES) $(`fx-${k}`).checked = effects[k];
   $("c-slider").value = Math.log10(world.c);
   $("c-value").textContent = `${world.c < 10 ? world.c.toFixed(1) : Math.round(world.c)} m/s`;
   $("c-word").textContent = `about as fast as ${C_WORDS.find(([v]) => world.c <= v)[1]}`;
@@ -42,6 +43,7 @@ export function syncLab() {
 
 export function toggleLab() {
   $("lab").hidden = !$("lab").hidden;
+  return !$("lab").hidden;
 }
 
 let toastTimer;
@@ -82,7 +84,8 @@ export function updateHud({ player, instance, locked, prompt }) {
   if (sig !== lastGoals) {
     const prev = lastGoals.split("|");
     $("goals").innerHTML = goals
-      .map((g, i) => `<li class="${g.done ? "done" : ""} ${g.done && lastGoals && !prev[i]?.endsWith("true") ? "just" : ""}">${g.text}</li>`)
+      .map((g, i) => (g.group && g.group !== goals[i - 1]?.group ? `<li class="group">${g.group}</li>` : "") +
+        `<li class="${g.done ? "done" : ""} ${g.done && lastGoals && !prev[i]?.endsWith("true") ? "just" : ""}">${g.text}</li>`)
       .join("");
     lastGoals = sig;
   }
