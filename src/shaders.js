@@ -19,6 +19,8 @@ export const shared = {
   uSpace: { value: 0 },
   uStars: { value: 1 },
   uAurora: { value: 0 },
+  uSunDisk: { value: 1 },  // how much of the sun disk to draw at uSun
+  uMoon: { value: 1 },     // how much of the moon disk to draw at uSun (night)
   uPass: { value: 0 },               // 0 normal, 1 mirror (water reflection), 2 shadow depth
   uMirrorY: { value: -1e6 },
   uShadowMap: { value: null },
@@ -367,7 +369,7 @@ float sunVisible(vec3 p, vec3 N) {
   vec2 texel = vec2(1.0 / 2048.0);
   for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {
     float d = texture2D(uShadowMap, q.xy + vec2(float(i), float(j)) * texel * 1.5).r;
-    lit += step(q.z - 0.0015, d);
+    lit += step(q.z - 0.0012, d);
   }
   return mix(1.0, lit / 9.0, uShadowOn);
 }
@@ -375,6 +377,11 @@ float sunVisible(vec3 p, vec3 N) {
 void main() {
   if (uPass > 1.5) { gl_FragColor = vec4(1.0); return; }
   if (uPass > 0.5 && vWorld.y < uMirrorY - 0.05) discard;
+  #ifdef BLOB
+    // A soft contact shadow: darkest at the centre (vertex colour 1), fading out.
+    gl_FragColor = vec4(0.0, 0.0, 0.0, uOpacity * vTint.r * vTint.r);
+    return;
+  #endif
   #ifdef CLIP_RECT
     if (vWorld.x < uRect.x || vWorld.z < uRect.y || vWorld.x > uRect.z || vWorld.z > uRect.w) discard;
   #endif
@@ -602,6 +609,8 @@ uniform float uNight;
 uniform float uSpace;
 uniform float uStars;
 uniform float uAurora;
+uniform float uSunDisk;
+uniform float uMoon;
 uniform float uTime;
 uniform float uClouds;
 uniform vec3 uCloudLit;
@@ -683,8 +692,8 @@ void main() {
   float skyLum = clamp(dot(rgb, vec3(0.3, 0.5, 0.2)) * 2.5, 0.0, 1.0);
   float uv = mix(0.5, 1.1, max(h, 0.0)) * (1.0 - uNight) * skyLum;
   float sd = dot(dir, uSun);
-  float sun = smoothstep(0.99955, 0.99975, sd) * (1.0 - uSpace);
-  float halo = (pow(max(sd, 0.0), 400.0) * 0.6 + pow(max(sd, 0.0), 30.0) * 0.12) * (1.0 - uSpace);
+  float sun = smoothstep(0.99955, 0.99975, sd) * (1.0 - uSpace) * uSunDisk;
+  float halo = (pow(max(sd, 0.0), 400.0) * 0.6 + pow(max(sd, 0.0), 30.0) * 0.12) * (1.0 - uSpace) * uSunDisk;
   rgb += (vec3(3.2, 2.8, 2.0) * sun + uSunColor * halo) * (1.0 - uNight) * smoothstep(-0.04, 0.0, dir.y);
   float ir = 0.3 * (1.0 - uNight) * skyLum + 0.03 + 2.0 * sun;
   if (uSpace > 0.5) {
@@ -722,7 +731,8 @@ void main() {
     rgb += vec3(1.0, 0.95, 0.9) * star * (0.6 + 2.0 * fract(s * 91.0));
     ir += star * 0.8;
     uv += star * 0.8;
-    float moon = smoothstep(0.99965, 0.99975, dot(dir, uSun)) * step(0.01, uStars);
+    float moon = smoothstep(0.99965, 0.99975, dot(dir, uSun)) * step(0.01, uStars) * uMoon;
+    moon += pow(max(dot(dir, uSun), 0.0), 900.0) * 0.25 * uMoon * step(0.01, uStars);
     rgb += vec3(0.55, 0.55, 0.52) * moon;
   }
   vec4 cl = clouds(dir);
@@ -773,6 +783,7 @@ export function mat({
   water = false,     // true, or a wave height multiplier
   snow = false,
   planks = false,
+  blob = false,
   switched = false, // a lamp that comes on at uLightsOn
   windows = null,   // { size: [w, h], lit, color, seed }
   spiral = null,    // { uSpiral, uSpiralColor } uniforms for a lighthouse beam
@@ -801,6 +812,7 @@ export function mat({
   if (water) defines.WATER = "";
   if (snow) defines.SNOW = "";
   if (planks) defines.PLANKS = "";
+  if (blob) defines.BLOB = "";
   if (switched) defines.SWITCHED = "";
   if (windows) defines.WINDOWS = "";
   if (spiral) defines.SPIRAL = "";

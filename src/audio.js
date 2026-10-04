@@ -140,6 +140,50 @@ function startLoops() {
   wind.start();
   loops.wind = { f: windF, g: windG };
 
+  // The drive: two detuned saws through a resonant filter, a sub-bass, and a
+  // shimmering whine that only appears close to light speed.
+  const driveF = ctx.createBiquadFilter();
+  driveF.type = "lowpass";
+  driveF.Q.value = 7;
+  driveF.frequency.value = 200;
+  const driveG = ctx.createGain();
+  driveG.gain.value = 0;
+  driveF.connect(driveG).connect(master);
+  const saws = [0, 1].map((k) => {
+    const o = ctx.createOscillator();
+    o.type = "sawtooth";
+    o.frequency.value = 45;
+    o.detune.value = k ? 9 : -9;
+    o.connect(driveF);
+    o.start();
+    return o;
+  });
+  const sub = ctx.createOscillator();
+  sub.type = "sine";
+  sub.frequency.value = 34;
+  const subG = ctx.createGain();
+  subG.gain.value = 0;
+  sub.connect(subG).connect(master);
+  sub.start();
+  const whine = ctx.createOscillator();
+  whine.type = "sine";
+  whine.frequency.value = 900;
+  const vib = ctx.createOscillator();
+  vib.frequency.value = 5.5;
+  const vibG = ctx.createGain();
+  vibG.gain.value = 12;
+  vib.connect(vibG).connect(whine.frequency);
+  vib.start();
+  const whineF = ctx.createBiquadFilter();
+  whineF.type = "bandpass";
+  whineF.Q.value = 3;
+  whineF.frequency.value = 1200;
+  const whineG = ctx.createGain();
+  whineG.gain.value = 0;
+  whine.connect(whineF).connect(whineG).connect(master);
+  whine.start();
+  loops.drive = { saws, driveF, driveG, subG, sub, whine, whineF, whineG, vibG, lastBeta: 0, swoopAt: 0 };
+
   // Maglev train hum.
   const trainG = ctx.createGain();
   trainG.gain.value = 0;
@@ -193,8 +237,30 @@ export function updateAudio({ beta, train, dt }) {
   if (loops.ambState.kind === "sea") loops.amb.sea.f.frequency.setTargetAtTime(380 + 260 * (0.5 + 0.5 * Math.sin(now * 0.7)) ** 2, now, 0.3);
   if (loops.ambState.kind === "snow") loops.amb.snow.g.gain.setTargetAtTime(0.04 + 0.04 * (0.5 + 0.5 * Math.sin(now * 0.23) * Math.sin(now * 0.61)), now, 0.5);
   const w = loops.wind;
-  w.g.gain.setTargetAtTime(0.22 * beta * beta, now, 0.15);
-  w.f.frequency.setTargetAtTime(250 + 2600 * beta * beta, now, 0.15);
+  w.g.gain.setTargetAtTime(0.07 * beta * beta, now, 0.15);
+  w.f.frequency.setTargetAtTime(400 + 2200 * beta * beta, now, 0.15);
+
+  // The drive rises with γ: pitch climbs, the filter opens, the whine joins in.
+  const d = loops.drive;
+  const g = 1 / Math.sqrt(Math.max(1e-6, 1 - beta * beta));
+  const lg = Math.log(g); // 0 at rest, ~1.2 at 95% c, ~2.3 at 99.5% c
+  const on = THREE.MathUtils.smoothstep(beta, 0.08, 0.3);
+  d.saws.forEach((o) => o.frequency.setTargetAtTime(42 + 34 * lg + 30 * beta, now, 0.12));
+  d.driveF.frequency.setTargetAtTime(160 + 900 * beta * beta + 700 * lg, now, 0.12);
+  d.driveG.gain.setTargetAtTime(0.05 * on * (0.5 + 0.5 * beta), now, 0.15);
+  d.subG.gain.setTargetAtTime(0.09 * on * beta, now, 0.2);
+  d.sub.frequency.setTargetAtTime(30 + 10 * lg, now, 0.2);
+  d.whine.frequency.setTargetAtTime(700 + 520 * lg, now, 0.1);
+  d.whineF.frequency.setTargetAtTime(900 + 700 * lg, now, 0.1);
+  d.whineG.gain.setTargetAtTime(0.022 * THREE.MathUtils.smoothstep(beta, 0.75, 0.97), now, 0.2);
+  d.vibG.gain.setTargetAtTime(8 + 30 * lg, now, 0.2);
+  // A swoop when you surge forward or pull up.
+  const dBeta = beta - d.lastBeta;
+  if (now > d.swoopAt && Math.abs(dBeta) > 0.012) {
+    d.swoopAt = now + 0.9;
+    swoop(dBeta > 0);
+  }
+  d.lastBeta = beta;
 
   const tr = loops.train;
   if (train) {
@@ -207,6 +273,28 @@ export function updateAudio({ beta, train, dt }) {
   } else {
     tr.g.gain.setTargetAtTime(0, now, 0.2);
   }
+}
+
+// A filtered sweep: up when speeding up, down when slowing.
+function swoop(up) {
+  if (!ctx) return;
+  const t0 = ctx.currentTime;
+  const o = ctx.createOscillator();
+  o.type = "sawtooth";
+  o.frequency.setValueAtTime(up ? 80 : 260, t0);
+  o.frequency.exponentialRampToValueAtTime(up ? 260 : 70, t0 + 0.7);
+  const f = ctx.createBiquadFilter();
+  f.type = "lowpass";
+  f.Q.value = 9;
+  f.frequency.setValueAtTime(up ? 300 : 2400, t0);
+  f.frequency.exponentialRampToValueAtTime(up ? 2400 : 250, t0 + 0.7);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(0.045, t0 + 0.08);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.8);
+  o.connect(f).connect(g).connect(master);
+  o.start(t0);
+  o.stop(t0 + 0.85);
 }
 
 export const sfx = {
@@ -336,8 +424,10 @@ export const sfx = {
     tone(320, 0, 0.35, { type: "sine", gain: 0.08, slide: 2.4 });
     burst(0.2, { gain: 0.06, from: 2500, to: 800, type: "bandpass", q: 2 });
   },
+  // Footsteps: a soft synthetic tap.
   step(soft = 1) {
-    burst(0.07, { gain: 0.05 * soft, from: 900, to: 300, q: 1 });
+    tone(150 + Math.random() * 20, 0, 0.09, { type: "sine", gain: 0.05 * soft, slide: 0.6 });
+    burst(0.04, { gain: 0.02 * soft, from: 3000, to: 1200, type: "bandpass", q: 2 });
   },
   goal() {
     [523.3, 784, 1046.5].forEach((f, i) => tone(f, i * 0.11, 1.6, { gain: 0.06, attack: 0.01 }));

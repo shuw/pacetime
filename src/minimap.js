@@ -1,7 +1,8 @@
 // A small top-down map of where you really are (not where the bent light
 // makes things look). North is up. It fades in while you move.
 const SIZE = 150; // CSS pixels
-const RANGE = 70; // metres from the centre to the edge
+// Metres from the centre to the edge: wider the faster you go.
+const RANGE_WALK = 120, RANGE_SPRINT = 220;
 
 export class Minimap {
   constructor(canvas) {
@@ -12,29 +13,36 @@ export class Minimap {
     this.ctx.scale(dpr, dpr);
     this.trail = [];
     this.idle = 99;
+    this.range = RANGE_WALK;
   }
 
   reset() {
     this.trail = [];
     this.idle = 99;
+    this.range = RANGE_WALK;
   }
 
   update(player, instance, dt) {
     const moving = player.u.length() > 0.2 || !!player.vehicle;
     this.idle = moving ? 0 : this.idle + dt;
     const show = this.idle < 2.5;
+    // Zoom out smoothly with speed, and stay put while it fades away.
+    if (moving) {
+      const target = RANGE_WALK + (RANGE_SPRINT - RANGE_WALK) * Math.min(1, Math.max(0, (player.beta - 0.55) / 0.4));
+      this.range += (target - this.range) * Math.min(1, dt * 2);
+    }
     this.canvas.classList.toggle("show", show);
     const p = player.pos;
     const last = this.trail.at(-1);
-    if (!last || Math.hypot(p.x - last[0], p.z - last[1]) > 0.8) {
+    if (!last || Math.hypot(p.x - last[0], p.z - last[1]) > 1.5) {
       this.trail.push([p.x, p.z]);
-      if (this.trail.length > 160) this.trail.shift();
+      if (this.trail.length > 240) this.trail.shift();
     }
     if (show) this.draw(player, instance);
   }
 
   draw(player, instance) {
-    const g = this.ctx, k = SIZE / 2 / RANGE, cx = player.pos.x, cz = player.pos.z;
+    const g = this.ctx, k = SIZE / 2 / this.range, cx = player.pos.x, cz = player.pos.z;
     const X = (x) => SIZE / 2 + (x - cx) * k, Y = (z) => SIZE / 2 + (z - cz) * k;
     g.clearRect(0, 0, SIZE, SIZE);
     g.save();

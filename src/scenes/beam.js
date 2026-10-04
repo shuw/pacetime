@@ -78,6 +78,7 @@ export default {
       walk: [[WEST - 10, -6.5, EAST + 10, 6.5]],
       spawn: [WEST + 4, 0, -Math.PI / 2],
       env: COSMIC.env,
+      shadows: true,
       post: COSMIC.post,
       goals,
       tips: [

@@ -117,9 +117,34 @@ export function personMat(extra = {}) {
   return mat({ color: "#ffffff", vertexColors: true, ir: 0.4, uv: 0.2, ...extra });
 }
 
-export function person(look, { pos = [0, 0, 0], rotY = 0, scale = 1, pose = "stand" } = {}) {
-  const m = mesh(personGeometry(look, { scale, pose }), personMat(), { pos, rot: [0, rotY, 0] });
+// A soft round shadow on the ground, darkest in the middle.
+let blobGeo = null;
+export function blobGeometry() {
+  if (blobGeo) return blobGeo;
+  const g = new THREE.CircleGeometry(1, 24);
+  g.rotateX(-Math.PI / 2);
+  const n = g.attributes.position.count;
+  const col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const r = Math.hypot(g.attributes.position.getX(i), g.attributes.position.getZ(i));
+    col.fill(r < 0.01 ? 1 : 0, i * 3, i * 3 + 3);
+  }
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  return (blobGeo = g);
+}
+
+export function blobShadow(pos, r = 0.5, opacity = 0.4, extra = {}) {
+  const m = mesh(blobGeometry(), mat({ color: "#000000", blob: true, vertexColors: true, opacity, depthWrite: false, ...extra }), { pos, scale: r });
+  m.layers.set(2); // seen directly; not in reflections or the sun's shadow map
+  m.renderOrder = 1;
   return m;
+}
+
+export function person(look, { pos = [0, 0, 0], rotY = 0, scale = 1, pose = "stand" } = {}) {
+  const g = new THREE.Group();
+  g.add(mesh(personGeometry(look, { scale, pose }), personMat(), { pos, rot: [0, rotY, 0] }));
+  if (pose === "stand") g.add(blobShadow([pos[0], (pos[1] ?? 0) + 0.02, pos[2]], 0.48 * scale * (look.wide ?? 1)));
+  return g;
 }
 
 // People walking up and down a strip, wrapping at the ends. Each is a Mover,
@@ -138,6 +163,10 @@ export class Strollers {
       const geo = personGeometry(randomLook(rand), { scale: kid ? 0.62 : 1 + rand() * 0.25 });
       const body = mesh(geo, m.mat({ color: "#ffffff", vertexColors: true, ir: 0.4, uv: 0.2 }), { rot: [0, dir > 0 ? Math.PI : 0, 0] });
       m.group.add(body);
+      const shadow = mesh(blobGeometry(), m.mat({ color: "#000000", blob: true, vertexColors: true, opacity: 0.4, depthWrite: false }), { pos: [0, 0.02, 0], scale: kid ? 0.32 : 0.5 });
+      shadow.layers.set(2);
+      shadow.renderOrder = 1;
+      m.group.add(shadow);
       m.group.userData.dynamic = true;
       group.add(m.group);
       // Keep a clear lane down the middle (where you start) if asked.
@@ -156,7 +185,7 @@ export class Strollers {
       // Bouncy steps: hop up, squash a little on landing.
       const ph = t * p.v * 3.2 + p.stepPhase;
       const hop = Math.abs(Math.sin(ph));
-      p.m.anchor.y = hop * (p.kid ? 0.16 : 0.08);
+      p.body.position.y = hop * (p.kid ? 0.16 : 0.08);
       const squash = 1 + 0.07 * (hop - 0.5) * (p.kid ? 1.6 : 1);
       p.body.scale.set(1 / Math.sqrt(squash), squash, 1 / Math.sqrt(squash));
       p.body.rotation.z = Math.sin(ph) * 0.06;

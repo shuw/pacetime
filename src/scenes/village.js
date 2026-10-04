@@ -297,6 +297,7 @@ export default {
       spawn: [-6, 4, 0.15],
       env: DUSK.env,
       ambience: "snow",
+      shadows: true,
       post: DUSK.post,
       goals,
       tips: [

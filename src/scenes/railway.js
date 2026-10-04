@@ -192,6 +192,7 @@ export default {
       trains: trains.map((s) => s.train),
       spawn: [STRIKE_X - 6, 11, -0.35],
       env: COSMIC.env,
+      shadows: true,
       post: COSMIC.post,
       goals,
       log,

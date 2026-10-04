@@ -32,8 +32,8 @@ const DAY = [
   { p: 0.25, elev: 0.08, sun: [1.45, 0.85, 0.5], sky: [0.4, 0.35, 0.46], ground: [0.38, 0.26, 0.21], top: "#34589e", hor: "#ffa262", fog: "#e8946e", lit: "#ffc070", shade: "#94607e", clouds: 0.55, stars: 0, night: 0, fogNear: 110, fogFar: 850, bloom: [0.45, 0.78], dark: 0.05 },
   { p: 0.45, elev: 0.0, sun: [1.3, 0.55, 0.32], sky: [0.32, 0.25, 0.36], ground: [0.26, 0.16, 0.15], top: "#2a4282", hor: "#ff6a44", fog: "#c47068", lit: "#ff7a52", shade: "#703c6e", clouds: 0.58, stars: 0, night: 0, fogNear: 100, fogFar: 800, bloom: [0.55, 0.7], dark: 0.25 },
   { p: 0.6, elev: -0.05, sun: [0.75, 0.32, 0.3], sky: [0.22, 0.18, 0.3], ground: [0.14, 0.1, 0.12], top: "#1e2d66", hor: "#e0506a", fog: "#70496a", lit: "#e8607e", shade: "#40294f", clouds: 0.55, stars: 0.1, night: 0.2, fogNear: 90, fogFar: 760, bloom: [0.7, 0.58], dark: 0.6 },
-  { p: 0.8, elev: -0.11, sun: [0.32, 0.22, 0.34], sky: [0.14, 0.15, 0.27], ground: [0.07, 0.06, 0.1], top: "#111b46", hor: "#78406c", fog: "#3a3052", lit: "#8a4c7c", shade: "#211f3a", clouds: 0.5, stars: 0.6, night: 0.7, fogNear: 90, fogFar: 760, bloom: [0.7, 0.55], dark: 0.88 },
-  { p: 1, elev: -0.25, sun: [0.08, 0.08, 0.13], sky: [0.07, 0.08, 0.15], ground: [0.03, 0.03, 0.05], top: "#060a1c", hor: "#1c1b36", fog: "#121428", lit: "#30324f", shade: "#10101d", clouds: 0.45, stars: 1, night: 1, fogNear: 90, fogFar: 760, bloom: [0.7, 0.56], dark: 1 },
+  { p: 0.8, elev: -0.11, sun: [0, 0, 0], sky: [0.14, 0.15, 0.27], ground: [0.07, 0.06, 0.1], top: "#111b46", hor: "#78406c", fog: "#3a3052", lit: "#8a4c7c", shade: "#211f3a", clouds: 0.5, stars: 0.6, night: 0.7, fogNear: 90, fogFar: 760, bloom: [0.7, 0.55], dark: 0.88 },
+  { p: 1, elev: -0.25, sun: [0, 0, 0], sky: [0.07, 0.08, 0.15], ground: [0.03, 0.03, 0.05], top: "#060a1c", hor: "#1c1b36", fog: "#121428", lit: "#30324f", shade: "#10101d", clouds: 0.45, stars: 1, night: 1, fogNear: 90, fogFar: 760, bloom: [0.7, 0.56], dark: 1 },
 ];
 
 // The coaster: a closed track, a station stop, a chain lift, then gravity.
@@ -281,23 +281,35 @@ export default {
         group.add(mesh(G.ball, spin({ color: "#fff2c8", emissive: 1, ir: 1, uv: 2, switched: true }), { pos: [WHEEL.x + Math.cos(a) * r, WHEEL.y + Math.sin(a) * r, WHEEL.z + 1.0], scale: 0.08 }));
       }
     }
-    // Gondolas, each with its rider, hang level as the wheel turns.
+    // Open gondolas hang level as the wheel turns: a basket, four posts and a
+    // roof, roomy enough to ride in. Riders are separate so yours can step out.
     const cabinPivots = [];
+    const riders = [];
     for (let i = 0; i < 16; i++) {
       const a = (i / 16) * Math.PI * 2;
       const pivot = [WHEEL.x + Math.cos(a) * WHEEL_R, WHEEL.y + Math.sin(a) * WHEEL_R, WHEEL.z];
       cabinPivots.push(new THREE.Vector3(Math.cos(a) * WHEEL_R, Math.sin(a) * WHEEL_R, 0));
       const c = BRIGHT[i % BRIGHT.length];
+      const [px, py, pz] = pivot;
       const p = new Painter();
-      p.add(G.cyl, "#d9dde6", { pos: [pivot[0], pivot[1] - 0.45, pivot[2]], scale: [0.05, 0.9, 0.05] });
-      p.add(new THREE.CylinderGeometry(0.85, 0.95, 1.1, 16), c, { pos: [pivot[0], pivot[1] - 1.85, pivot[2]] });
-      p.add(new THREE.ConeGeometry(1.0, 0.45, 16), "#f6f2ea", { pos: [pivot[0], pivot[1] - 0.95, pivot[2]] });
-      p.add(new THREE.CylinderGeometry(0.97, 0.97, 0.06, 16), "#ffe9a8", { pos: [pivot[0], pivot[1] - 1.3, pivot[2]] });
-      if (i % 3 !== 0) {
-        const rider = personGeometry(randomLook(rand), { pose: "seated", scale: 0.85 });
-        p.addPainted(rider, new THREE.Matrix4().makeTranslation(pivot[0], pivot[1] - 2.4, pivot[2]));
+      p.add(G.cyl, "#d9dde6", { pos: [px, py - 0.3, pz], scale: [0.05, 0.6, 0.05] });
+      p.add(new THREE.ConeGeometry(1.05, 0.45, 16), "#f6f2ea", { pos: [px, py - 0.6, pz] });
+      p.add(new THREE.CylinderGeometry(1.06, 1.06, 0.08, 16), c, { pos: [px, py - 0.84, pz] });
+      for (let k = 0; k < 4; k++) {
+        const b = (k / 4) * Math.PI * 2 + Math.PI / 4;
+        p.add(G.cyl, "#f6f2ea", { pos: [px + Math.cos(b) * 0.82, py - 1.3, pz + Math.sin(b) * 0.82], scale: [0.035, 0.92, 0.035] });
       }
-      group.add(mesh(p.geometry(), mat({ color: "#ffffff", vertexColors: true, ir: 0.5, uv: 1.2, rotor: orbiting(wr, pivot) })));
+      p.add(new THREE.CylinderGeometry(0.88, 0.8, 0.7, 20, 1, true), c, { pos: [px, py - 2.1, pz] });
+      p.add(new THREE.CylinderGeometry(0.8, 0.8, 0.05, 20), "#3b3355", { pos: [px, py - 2.45, pz] });
+      p.add(new THREE.TorusGeometry(0.88, 0.05, 6, 24), "#ffe9a8", { pos: [px, py - 1.75, pz], rot: [Math.PI / 2, 0, 0] });
+      const gr = orbiting(wr, pivot);
+      group.add(mesh(p.geometry(), mat({ color: "#ffffff", vertexColors: true, doubleSided: true, ir: 0.5, uv: 1.2, rotor: gr })));
+      if (i % 3 !== 0) {
+        const rider = mesh(personGeometry(randomLook(rand), { pose: "seated", scale: 0.85 }), mat({ color: "#ffffff", vertexColors: true, ir: 0.4, uv: 0.4, rotor: gr }), { pos: [px, py - 2.45, pz] });
+        rider.userData.dynamic = true;
+        group.add(rider);
+        riders[i] = rider;
+      }
     }
     for (const dz of [-2.4, 2.4]) for (const sx of [-1, 1]) {
       const foot = new THREE.Vector3(WHEEL.x + sx * 7.5, 0, WHEEL.z + dz);
@@ -473,7 +485,7 @@ export default {
       carry(p, t) {
         const a = angleOf(wr, t), c = Math.cos(a), s = Math.sin(a);
         const r = new THREE.Vector3(this.r0.x * c - this.r0.y * s, this.r0.x * s + this.r0.y * c, 0);
-        p.set(WHEEL.x + r.x, WHEEL.y + r.y - 2.75, WHEEL.z);
+        p.set(WHEEL.x + r.x, WHEEL.y + r.y - 2.9, WHEEL.z); // seated, eyes just above the rim
         this.velocity.set(-r.y, r.x, 0).multiplyScalar(wr.uOmega.value);
       },
     };
@@ -565,6 +577,7 @@ export default {
             label: "Step off the wheel",
             run: () => {
               riding = null;
+              if (wheelSeat.rider) wheelSeat.rider.visible = true;
               player.alight();
               player.pos.set(WHEEL.x, 0, WHEEL.z + 4);
               sfx.alight();
@@ -580,8 +593,11 @@ export default {
             label: "Ride the Ferris wheel",
             run: () => {
               const a = angleOf(wr, world.t);
-              const best = cabinPivots.map((p0) => ({ p0, y: p0.x * Math.sin(a) + p0.y * Math.cos(a) })).sort((m, n) => m.y - n.y)[0].p0;
-              wheelSeat.r0 = best;
+              const best = cabinPivots.map((p0, i) => ({ p0, i, y: p0.x * Math.sin(a) + p0.y * Math.cos(a) })).sort((m, n) => m.y - n.y)[0];
+              wheelSeat.r0 = best.p0;
+              // Whoever was in this gondola hops out to make room.
+              wheelSeat.rider = riders[best.i] ?? null;
+              if (wheelSeat.rider) wheelSeat.rider.visible = false;
               riding = wheelSeat;
               wheelStart = { tau: player.tau, t: world.t };
               player.yaw = 0;

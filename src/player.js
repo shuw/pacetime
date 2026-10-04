@@ -25,6 +25,8 @@ export class Player {
     this.touchMove = new THREE.Vector2();
     this.touchSprint = false;
     this.vehicle = null; // a train you're riding, if any
+    this.mouseWalk = false; // left button held while the mouse is captured
+    this.pace = 0; // 0 walk, 1 sprint, 2 afterburner: set by the scroll wheel
     this.legs = 3; // the light speed your stride is sized for, m/s
     this.autopilot = null; // a proper velocity to hold, for the title screen
     this.stride = 0;
@@ -51,6 +53,11 @@ export class Player {
     this.yaw = yaw;
     this.pitch = 0;
     this.vehicle = null;
+  }
+
+  setPace(p) {
+    this.pace = Math.max(0, Math.min(2, p));
+    this.onPace?.(this.pace);
   }
 
   board(vehicle) {
@@ -80,10 +87,28 @@ export class Player {
     });
     this.canvas.addEventListener("mousedown", (e) => {
       if (e.button === 2) this.lookBack = true;
+      if (e.button === 0 && document.pointerLockElement === this.canvas) this.mouseWalk = true;
     });
     addEventListener("mouseup", (e) => {
       if (e.button === 2) this.lookBack = false;
+      if (e.button === 0) this.mouseWalk = false;
     });
+    // Scroll (or swipe on a trackpad) to change pace; a pause between flicks
+    // lets one swipe count once.
+    let wheelAcc = 0, wheelAt = 0;
+    addEventListener("wheel", (e) => {
+      if (document.pointerLockElement !== this.canvas) return;
+      e.preventDefault();
+      const now = performance.now();
+      if (now - wheelAt > 250) wheelAcc = 0;
+      wheelAt = now;
+      wheelAcc += e.deltaY;
+      if (Math.abs(wheelAcc) > 60) {
+        this.setPace(this.pace + (wheelAcc < 0 ? 1 : -1));
+        wheelAcc = 0;
+        wheelAt = now + 300; // ignore the rest of this swipe
+      }
+    }, { passive: false });
     this.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     this.bindTouch();
   }
@@ -136,12 +161,12 @@ export class Player {
     const turn = (k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0);
     this.yaw += turn * 2.2 * dTau;
 
-    let fwd = (k.has("KeyW") || k.has("ArrowUp") ? 1 : 0) - (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0);
+    let fwd = (k.has("KeyW") || k.has("ArrowUp") || this.mouseWalk ? 1 : 0) - (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0);
     let side = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
     fwd -= this.touchMove.y;
     side += this.touchMove.x;
     if (!this.enabled) fwd = side = 0;
-    const sprint = (k.has("ShiftLeft") || k.has("ShiftRight") || this.touchSprint) && !this.vehicle;
+    const sprint = (k.has("ShiftLeft") || k.has("ShiftRight") || this.touchSprint || this.pace > 0) && !this.vehicle;
     this.lookBack = this.lookBack && this.enabled;
     const lookBackKey = k.has("KeyB") || k.has("KeyQ");
 
@@ -155,7 +180,7 @@ export class Player {
     // Steer proper velocity toward the target. Proper velocity has no ceiling,
     // so however hard you push you never reach c.
     const c = world.c;
-    const boost = sprint && (k.has("Space") || this.touchBoost);
+    const boost = sprint && (k.has("Space") || this.touchBoost || this.pace > 1);
     const legs = this.legs;
     const target = this.autopilot ? this.autopilot.clone() : dir.multiplyScalar((boost ? BOOST_U : sprint ? SPRINT_U : WALK_U) * legs);
     // Slowing down is quick, so letting go of the keys doesn't coast you far.

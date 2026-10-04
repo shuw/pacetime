@@ -4,7 +4,9 @@ import { shared } from "./shaders.js";
 // A sky that changes with the time of day. Keys are sorted by phase p in
 // [0, 1]; everything in between is blended.
 export class DayCycle {
-  constructor(keys, { length = 180, azimuth = [-0.45, -0.89], start = 0 } = {}) {
+  constructor(keys, { length = 180, azimuth = [-0.45, -0.89], start = 0, moon = [0.35, 0.62, 0.7], moonColor = [0.24, 0.29, 0.48] } = {}) {
+    this.moonDir = new THREE.Vector3(...moon).normalize();
+    this.moonColor = moonColor;
     this.keys = keys.map((k) => ({
       ...k,
       top: new THREE.Color(k.top), hor: new THREE.Color(k.hor), fog: new THREE.Color(k.fog),
@@ -42,8 +44,21 @@ export class DayCycle {
     const arr = (x, y) => x.map((v, j) => lerp(v, y[j]));
     const elev = lerp(a.elev, b.elev);
     const c = Math.cos(elev);
-    shared.uSun.value.set(this.az.x * c, Math.sin(elev), this.az.y * c).normalize();
-    shared.uSunColor.value.setRGB(...arr(a.sun, b.sun));
+    // After sunset the moon takes over as the light (and shadow) source. The
+    // sunlight fades to nothing before the switch, so it never jumps.
+    const sunFade = THREE.MathUtils.smoothstep(elev, -0.075, -0.02);
+    if (elev > -0.075) {
+      shared.uSun.value.set(this.az.x * c, Math.sin(elev), this.az.y * c).normalize();
+      shared.uSunColor.value.setRGB(...arr(a.sun, b.sun)).multiplyScalar(sunFade);
+      shared.uSunDisk.value = 1;
+      shared.uMoon.value = 0;
+    } else {
+      const moonUp = THREE.MathUtils.smoothstep(-elev, 0.075, 0.13);
+      shared.uSun.value.copy(this.moonDir);
+      shared.uSunColor.value.setRGB(...this.moonColor).multiplyScalar(moonUp);
+      shared.uSunDisk.value = 0;
+      shared.uMoon.value = moonUp;
+    }
     shared.uSky.value.setRGB(...arr(a.sky, b.sky));
     shared.uGround.value.setRGB(...arr(a.ground, b.ground));
     shared.uSkyTop.value.copy(a.top).lerp(b.top, k);

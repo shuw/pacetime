@@ -46,7 +46,7 @@ camera.layers.enable(2);
 const SHADOW_SIZE = 2048;
 const shadowRT = new THREE.WebGLRenderTarget(SHADOW_SIZE, SHADOW_SIZE, { depthBuffer: true });
 shadowRT.depthTexture = new THREE.DepthTexture(SHADOW_SIZE, SHADOW_SIZE, THREE.FloatType);
-const shadowCam = new THREE.OrthographicCamera(-80, 80, 80, -80, 1, 900);
+const shadowCam = new THREE.OrthographicCamera(-80, 80, 80, -80, 200, 700);
 shadowCam.layers.set(0);
 
 function renderShadow() {
@@ -61,8 +61,9 @@ function renderShadow() {
   shadowCam.lookAt(center);
   shadowCam.updateMatrixWorld();
   shared.uShadowMatrix.value.multiplyMatrices(shadowCam.projectionMatrix, shadowCam.matrixWorldInverse);
-  const delay = shared.uDelay.value;
-  shared.uDelay.value = 0;
+  // Moving things cast their shadows from where you see them (light delay
+  // included), so a fast wheel's shadow and its self-shadowing line up with
+  // what's on screen. The view bending is left out: shadows fall in the world.
   shared.uPass.value = 2;
   // A texture can't be read while it's being drawn into.
   shared.uShadowMap.value = null;
@@ -71,7 +72,6 @@ function renderShadow() {
   renderer.render(root, shadowCam);
   renderer.setRenderTarget(null);
   shared.uPass.value = 0;
-  shared.uDelay.value = delay;
   shared.uShadowMap.value = shadowRT.depthTexture;
 }
 
@@ -142,6 +142,8 @@ function applyEnv(e) {
   shared.uNight.value = e.night ?? 0;
   shared.uSpace.value = e.space ?? 0;
   shared.uStars.value = e.stars ?? 1;
+  shared.uSunDisk.value = 1;
+  shared.uMoon.value = 1;
   shared.uAurora.value = e.aurora ?? 0;
   shared.uClouds.value = e.clouds ?? 0;
   shared.uLightsOn.value = -1e9;
@@ -177,7 +179,9 @@ function load(scene) {
   instance.group.add(instance.balls);
   instance.lamps = [];
   instance.group.traverse((o) => o.userData.lamp && instance.lamps.push(o.userData.lamp));
+  const t0 = performance.now();
   bake(instance.group);
+  instance.bakeMs = performance.now() - t0;
   root.add(instance.group);
   current = { scene, instance };
   applyEnv(instance.env);
@@ -362,8 +366,11 @@ back.addEventListener("touchend", () => (player.lookBack = false));
 canvas.addEventListener("click", () => {
   if (paused) return;
   if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
-  else throwBall();
 });
+player.onPace = (p) => {
+  toast(["Walking pace", "Sprinting pace (scroll down to slow)", "Afterburner: 99.5% of light speed"][p], 2);
+  document.getElementById("pace").textContent = ["", "sprint", "afterburner"][p];
+};
 function setHelp(open) {
   if (help.hidden === !open) return;
   sfx.ui();

@@ -13,8 +13,33 @@ export function rng(seed = 1) {
   return () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
 }
 
+// The view is bent at each corner of a shape and drawn straight in between,
+// so long, sparsely-built shapes (a 150 m railing) would peel away from their
+// neighbours at speed. Boxes and posts get corners every couple of metres.
+const SEG = 2;
+const segCache = new Map();
+const segs = (len) => Math.min(64, Math.max(1, Math.ceil(len / SEG)));
+function segmented(geo, s) {
+  if (geo === G.box) {
+    const n = [segs(s[0]), segs(s[1]), segs(s[2])];
+    if (n.every((v) => v <= 4)) return geo;
+    const key = "box" + n.join(",");
+    if (!segCache.has(key)) segCache.set(key, new THREE.BoxGeometry(1, 1, 1, ...n));
+    return segCache.get(key);
+  }
+  if (geo === G.cyl) {
+    const n = segs(s[1]);
+    if (n <= 4) return geo;
+    const key = "cyl" + n;
+    if (!segCache.has(key)) segCache.set(key, new THREE.CylinderGeometry(1, 1, 1, 24, n));
+    return segCache.get(key);
+  }
+  return geo;
+}
+
 export function mesh(geo, material, { pos = [0, 0, 0], scale = 1, rot = [0, 0, 0] } = {}) {
-  const m = new THREE.Mesh(geo, material);
+  const sc = typeof scale === "number" ? [scale, scale, scale] : scale;
+  const m = new THREE.Mesh(segmented(geo, sc), material);
   m.position.set(...pos);
   if (typeof scale === "number") m.scale.setScalar(scale);
   else m.scale.set(...scale);
