@@ -273,11 +273,11 @@ export default {
     };
 
     const goals = [
-      { group: "Light delay", text: "From the far edge of the village, read the church clock: it's behind your watch", done: false },
-      { group: "Light delay", text: "Hear the steam train where it is, see it where it was", done: false },
-      { group: "Time dilation", text: "Ride the carousel (E) until you're 3 seconds younger than the village", done: false },
-      { group: "Aberration", text: "Sprint through the snowfall: the flakes stream at you like stars", done: false },
-      { group: "Aberration", text: "Ride the steam train round the valley (E at the little station)", done: false },
+      { group: "Light delay", text: "From the far edge of the village, read the church clock: it's behind your watch", done: false, at: [-30, 60, -0.33, 0.15] },
+      { group: "Light delay", text: "Hear the steam train where it is, see it where it was", done: false, at: [8, 66, 1.4, 0] },
+      { group: "Time dilation", text: "Ride the carousel (E) until you're 3 seconds younger than the village", done: false, at: [-17, -22, 0, 0] },
+      { group: "Aberration", text: "Sprint through the snowfall: the flakes stream at you like stars", done: false, at: [-60, 40, 0, 0] },
+      { group: "Aberration", text: "Ride the steam train round the valley (E at the little station)", done: false, at: [4, 74, Math.PI, 0] },
     ];
     let note = "Light here moves at 7 m/s. The church bell rings every 30 seconds: you'll hear it at once, and see it swing a moment later.";
     let lastBell = 0, sprintSnow = 0, lastTwinkle = -1;

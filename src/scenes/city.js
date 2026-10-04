@@ -80,7 +80,7 @@ export default {
       group.add(box(140 - outer, 0.18, WALK, curb, [sx * (outer + (140 - outer) / 2), 0.09, sz * (AVE + WALK / 2)]));
     }
     // Lane markings and crosswalks.
-    const paint = { color: "#d8d2c0", emissive: 0.12, ir: 0.3 };
+    const paint = { color: "#9c988e", emissive: 0.08, ir: 0.3 };
     for (let z = -LEN; z < LEN; z += 6) if (Math.abs(z) > AVE + 3) group.add(box(0.15, 0.02, 3, paint, [0, 0.01, z + 1.5]));
     for (const s of [-1, 1]) for (let k = -6; k <= 6; k++) {
       group.add(box(0.8, 0.02, 3, paint, [k * 1.1, 0.012, s * (AVE + 1.8)]));
@@ -124,7 +124,7 @@ export default {
     const lamps = [];
     for (let z = -LEN + 10; z < LEN; z += 16) {
       for (const sx of [-1, 1]) {
-        const p = lampPost(sx * (AVE + 0.6), z + (sx > 0 ? 8 : 0), { h: 6, color: "#ffd9a0", range: 9, power: 1.3 });
+        const p = lampPost(sx * (AVE + 0.6), z + (sx > 0 ? 8 : 0), { h: 6, color: "#ffd9a0", range: 8, power: 0.85 });
         const bulb = p.children[1];
         bulb.material = mat({ color: "#ffd9a0", emissive: 1, ir: 1.2, uv: 0.2, unique: true });
         lights.add(p);
@@ -219,11 +219,11 @@ export default {
     ride.dispatch(0, new THREE.Vector3(3.6, 0, 1e5));
 
     const goals = [
-      { group: "Light delay", text: "Stand in the middle of the crossroads: all four signals change together", done: false },
-      { group: "Light delay", text: "Look down the avenue during a power flicker: it rolls toward you", done: false },
-      { group: "Moving lights", text: "Watch a taxi come at you: it seems to outrun light. Then watch it crawl away", done: false },
-      { group: "Moving lights", text: "Watch a taxi's taillights fade out as it leaves: redshifted into infrared", done: false },
-      { group: "Ride", text: "Hail a taxi (E at the yellow TAXI sign) and ride up the avenue", done: false },
+      { group: "Light delay", text: "Stand in the middle of the crossroads: all four signals change together", done: false, at: [0, 0, 0, 0.1] },
+      { group: "Light delay", text: "Look down the avenue during a power flicker: it rolls toward you", done: false, at: [1, 40, 0, 0] },
+      { group: "Moving lights", text: "Watch a taxi come at you: it seems to outrun light. Then watch it crawl away", done: false, at: [1.5, -20, Math.PI, 0] },
+      { group: "Moving lights", text: "Watch a taxi's taillights fade out as it leaves: redshifted into infrared", done: false, at: [1.5, -20, Math.PI, 0] },
+      { group: "Ride", text: "Hail a taxi (E at the yellow TAXI sign) and ride up the avenue", done: false, at: [-7.6, 12, 0, 0] },
     ];
     let note = "Light here moves at 10 m/s, slower than a sprinter. The taxis do 8.5 m/s, so you see them where they were seconds ago.";
     let lastSignal = null, lastSurge = false, cabWatch = { near: false, far: false };
@@ -319,7 +319,7 @@ export default {
         for (const l of lamps) {
           const off = surgeAt(retardedTime(eye, l.pos));
           l.bulb.material.uniforms.uSpec.value.z = off ? 0.03 : 1;
-          l.light.power = off ? 0 : 1.3;
+          l.light.power = off ? 0 : 0.85;
           l.bulb.material.uniforms.uColor.value.set(off ? "#2a2018" : "#ffd9a0");
         }
         const surging = surgeAt(retardedTime(eye, new THREE.Vector3(eye.x, 6, eye.z - 40)));

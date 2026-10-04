@@ -24,7 +24,7 @@ for (const { name, code, out } of results) {
   const good = code === 0 && !fails.length;
   ok &&= good;
   console.log(`${good ? "PASS" : "FAIL"} ${name}${fails.length ? "\n  " + fails.join("\n  ") : ""}`);
-  if (!good || process.env.VERBOSE) console.log(out.split("\n").map((l) => "    " + l).join("\n"));
+  if (!good || process.env.VERBOSE === "1") console.log(out.split("\n").map((l) => "    " + l).join("\n"));
   void todo, void errs;
 }
 console.log(`${ok ? "all passed" : "failures"} in ${((Date.now() - t0) / 1000).toFixed(0)} s`);

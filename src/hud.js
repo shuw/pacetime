@@ -62,6 +62,22 @@ export function toast(msg, seconds = 6) {
 
 let lastGoals = "", lastLog = 0, logRef = null;
 
+export function initBrief() {
+  // On phones, tapping the panel folds and unfolds the goal list.
+  document.querySelector(".brief").addEventListener("click", (e) => {
+    if (matchMedia("(max-width: 760px)").matches && !e.target.closest("li.go.expanded-only")) {
+      document.querySelector(".brief").classList.toggle("expanded");
+    }
+  });
+}
+
+export function onGoalClick(fn) {
+  $("goals").addEventListener("click", (e) => {
+    const li = e.target.closest("li[data-i]");
+    if (li) fn(Number(li.dataset.i));
+  });
+}
+
 export function showScene(scene, index) {
   $("kicker").textContent = `${index + 1} · ${scene.tag}`;
   $("scene-title").textContent = scene.title;
@@ -90,9 +106,11 @@ export function updateHud({ player, instance, locked, prompt }) {
     const prev = lastGoals.split("|");
     $("goals").innerHTML = goals
       .map((g, i) => (g.group && g.group !== goals[i - 1]?.group ? `<li class="group">${g.group}</li>` : "") +
-        `<li class="${g.done ? "done" : ""} ${g.done && lastGoals && !prev[i]?.endsWith("true") ? "just" : ""}">${g.text}</li>`)
+        `<li data-i="${i}" class="${g.done ? "done" : ""} ${g.done && lastGoals && !prev[i]?.endsWith("true") ? "just" : ""} ${g.at ? "go" : ""}" ${g.at ? 'title="Take me there"' : ""}>${g.text}</li>`)
       .join("");
     lastGoals = sig;
+    const next = $("goals").querySelector("li[data-i]:not(.done)");
+    next?.classList.add("next");
   }
   const note = instance.note ?? "";
   if ($("note").textContent !== note) $("note").textContent = note;

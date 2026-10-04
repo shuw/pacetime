@@ -187,14 +187,33 @@ const FIREWORK_COLORS = ["#ff5a7a", "#ffd166", "#7bdcff", "#b98cff", "#7dffb0", 
 // surfaces, and bang. The bang reaches you at the speed of sound, long before
 // the light does.
 export class Fireworks {
-  constructor(group, flashes, { capacity = 4000, seed = 3 } = {}) {
-    this.sparks = sparkField(capacity, { gravity: 1.6, intensity: 5 });
+  constructor(group, flashes, { capacity = 4000, seed = 3, mirrorY = null, scale = 1 } = {}) {
+    this.scale = scale;
+    // Each spark is a glowing head and a streak behind it.
+    this.sparks = sparkField(capacity, { gravity: 1.6, intensity: 6, uv: 1 });
+    this.streaks = sparkField(capacity, { gravity: 1.6, intensity: 2.2, lines: true, uv: 1 });
     this.trails = sparkField(800, { intensity: 3 });
-    group.add(this.sparks, this.trails);
+    group.add(this.sparks, this.streaks, this.trails);
+    // Reflections in still water: the same sparks, mirrored (gravity pulls them "up").
+    this.mirrorY = mirrorY;
+    if (mirrorY !== null) {
+      this.mSparks = sparkField(capacity, { gravity: -1.6, intensity: 1.8, uv: 1 });
+      this.mStreaks = sparkField(capacity, { gravity: -1.6, intensity: 0.8, lines: true, uv: 1 });
+      this.mTrails = sparkField(800, { intensity: 1 });
+      group.add(this.mSparks, this.mStreaks, this.mTrails);
+    }
     this.flashes = flashes;
     this.rand = rng(seed);
     this.bangs = []; // { at (world pos), t (burst time), heard }
     this.bursts = []; // for logging and goals
+  }
+
+  #put(field, mirror, p) {
+    field.set(p);
+    if (mirror && this.mirrorY !== null) {
+      const y0 = this.mirrorY;
+      mirror.set({ ...p, origin: new THREE.Vector3(p.origin.x, 2 * y0 - p.origin.y, p.origin.z), vel: new THREE.Vector3(p.vel.x, -p.vel.y, p.vel.z) });
+    }
   }
 
   // Launch from `from` to burst at `at` (world time tBurst).
@@ -206,18 +225,20 @@ export class Fireworks {
     const climb = rise.length() / climbSpeed;
     const t0 = tBurst - climb;
     const vRise = rise.clone().divideScalar(climb);
-    this.trails.set({ origin: from, vel: vRise, birth: t0, life: climb, color: new THREE.Color("#ffd9a0"), size: 0.5 });
+    this.#put(this.trails, this.mTrails, { origin: from, vel: vRise, birth: t0, life: climb, color: new THREE.Color("#ffd9a0"), size: 0.5 });
     for (let k = 1; k < 8; k++) {
       const p = from.clone().addScaledVector(vRise, (climb * k) / 8);
-      this.trails.set({ origin: p, vel: new THREE.Vector3(0, -0.3, 0), birth: t0 + (climb * k) / 8, life: 1.4, color: new THREE.Color("#ff9a50"), size: 0.3 });
+      this.#put(this.trails, this.mTrails, { origin: p, vel: new THREE.Vector3(0, -0.3, 0), birth: t0 + (climb * k) / 8, life: 1.4, color: new THREE.Color("#ff9a50"), size: 0.3 });
     }
     const col = new THREE.Color(color ?? FIREWORK_COLORS[Math.floor(rand() * FIREWORK_COLORS.length)]);
-    const v = (speed ?? 0.62) * c;
+    const v = (speed ?? 0.75) * c * this.scale;
     for (let i = 0; i < count; i++) {
       const dir = new THREE.Vector3(rand() * 2 - 1, rand() * 2 - 1, rand() * 2 - 1);
       if (dir.lengthSq() > 1 || dir.lengthSq() < 0.05) { i--; continue; }
       dir.normalize().multiplyScalar(v * (0.85 + 0.15 * rand()));
-      this.sparks.set({ origin: at, vel: dir, birth: tBurst, life: 3 + rand() * 1.2, color: i % 5 === 0 ? new THREE.Color("#ffffff") : col, size: 0.55 });
+      const p = { origin: at, vel: dir, birth: tBurst, life: 3.6 + rand() * 1.4, color: i % 5 === 0 ? new THREE.Color("#ffffff") : col, size: 1.1 * this.scale, tail: 0.35 };
+      this.#put(this.sparks, this.mSparks, p);
+      this.#put(this.streaks, this.mStreaks, p);
     }
     this.bangs.push({ at: at.clone(), t: tBurst, heard: false, flashed: false, color: col });
   }

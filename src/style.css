@@ -49,6 +49,8 @@ canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: blo
 #goals li { display: grid; grid-template-columns: 14px 1fr; gap: 8px; }
 #goals li::before { content: ""; width: 9px; height: 9px; margin-top: 4px; border: 1px solid var(--accent); border-radius: 50%; }
 #goals li.done { color: var(--muted); }
+#goals li.go { cursor: pointer; border-radius: 3px; }
+#goals li.go:hover { background: rgba(159, 180, 255, 0.1); }
 #goals li.group { display: block; margin-top: 6px; font: 10px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
 #goals li.group::before { display: none; }
 #goals li.group:first-child { margin-top: 0; }
@@ -180,6 +182,12 @@ kbd { font: 500 11px var(--mono); border: 1px solid currentColor; border-radius:
 @media (max-width: 760px) {
   .brief { padding: 10px 12px; }
   .brief h2 { font-size: 24px; }
+  /* Collapsed: just the title and the next thing to look for. Tap to expand. */
+  .brief:not(.expanded) #goals li:not(.next) { display: none; }
+  .brief:not(.expanded) #goals li.next { display: grid; }
+  .brief:not(.expanded) .kicker { display: none; }
+  .brief::after { content: "tap for all"; font: 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .brief.expanded::after { content: "tap to fold"; }
   #note, .log, .readouts { display: none; }
   .top-right { top: auto; bottom: 150px; width: auto; }
   #look-hint { display: none; }

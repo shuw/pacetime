@@ -47,9 +47,9 @@ export default {
     const beams = [out, inn];
 
     const goals = [
-      { text: "From the ring, watch a pulse leave: its glow seems to crawl away at half speed", done: false },
-      { text: "Face east as an inbound pulse comes at you: it arrives with no warning", done: false },
-      { text: "Sprint after an outbound pulse above 90% of light speed", done: false },
+      { text: "From the ring, watch a pulse leave: its glow seems to crawl away at half speed", done: false, at: [4, 0, -Math.PI / 2, 0] },
+      { text: "Face east as an inbound pulse comes at you: it arrives with no warning", done: false, at: [4, 0, -Math.PI / 2, 0] },
+      { text: "Sprint after an outbound pulse above 90% of light speed", done: false, at: [8, 0, -Math.PI / 2, 0] },
     ];
     let note = "Gold pulses run east, away from the ring. Blue pulses run west, toward it.";
     let watchedOut = 0, chase = 0, lastFired = [-1, -1], lastHeard = [-1, -1], lastPassOut = null;

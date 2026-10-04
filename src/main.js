@@ -8,7 +8,7 @@ import { Player } from "./player.js";
 import { bake } from "./geo.js";
 import { shared, skyMaterial } from "./shaders.js";
 import { effects, world } from "./relativity.js";
-import { clearToast, initLab, showScene, syncLab, toast, toggleLab, updateHud } from "./hud.js";
+import { clearToast, initBrief, initLab, onGoalClick, showScene, syncLab, toast, toggleLab, updateHud } from "./hud.js";
 import { addVelocity } from "./relativity.js";
 import { sparkField } from "./shaders.js";
 import { isMuted, setAmbience, setListener, setMuted, sfx, unlockAudio, updateAudio } from "./audio.js";
@@ -264,7 +264,19 @@ addEventListener("keydown", (e) => {
 });
 
 initLab();
+initBrief();
 buildMenu();
+// Clicking a goal takes you to a good spot for it.
+onGoalClick((i) => {
+  const at = current?.instance.goals?.[i]?.at;
+  if (!at) return;
+  // On phones a tap on the folded panel only unfolds it.
+  if (matchMedia("(max-width: 760px)").matches && !document.querySelector(".brief").classList.contains("expanded")) return;
+  player.alight();
+  player.place(at[0], at[1], at[2] ?? 0);
+  player.pitch = at[3] ?? 0;
+  sfx.ui();
+});
 
 function resize() {
   const w = innerWidth, h = innerHeight;

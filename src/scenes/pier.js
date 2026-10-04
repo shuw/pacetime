@@ -12,7 +12,7 @@ const SEA = -2.4;
 const WHEEL = new THREE.Vector3(-16, 14.5, -146), WHEEL_R = 12;
 const LIGHTHOUSE = new THREE.Vector3(70, 0, -250), LAMP_Y = 22, BEAM_OMEGA = 0.6;
 const BARGE = new THREE.Vector3(0, SEA, -228);
-const TWIN = [new THREE.Vector3(-36, 24, -224), new THREE.Vector3(36, 24, -224)];
+const TWIN = [new THREE.Vector3(-36, 30, -224), new THREE.Vector3(36, 30, -224)];
 
 const DUSK = {
   env: {
@@ -215,13 +215,15 @@ export default {
     lights.add(lamp);
     group.add(mesh(new THREE.ConeGeometry(1.4, 1.4, 12), mat({ color: "#22252c" }), { pos: [LIGHTHOUSE.x, LAMP_Y + 1.4, LIGHTHOUSE.z] }));
     const spiral = { uSpiral: { value: new THREE.Vector4(LIGHTHOUSE.x, LIGHTHOUSE.z, BEAM_OMEGA, 0.07) }, uSpiralColor: { value: new THREE.Color("#fff0c0") } };
+    // The beam lies in a thin layer of sea mist at the lamp's height. From the
+    // pier you see it edge-on as arcs; from the top of the Ferris wheel, as a spiral.
     const mist = mesh(new THREE.RingGeometry(2, 320, 360, 120), mat({ color: "#000000", unlit: true, additive: true, doubleSided: true, ir: 0, uv: 0, spiral }), { pos: [LIGHTHOUSE.x, LAMP_Y, LIGHTHOUSE.z], rot: [-Math.PI / 2, 0, 0] });
     mist.renderOrder = 4;
     group.add(mist);
 
     // Fireworks barge.
     group.add(box(10, 1, 6, { color: "#2b2d33", ir: 0.3 }, [BARGE.x, SEA + 0.4, BARGE.z]));
-    const fw = new Fireworks(group, flashes);
+    const fw = new Fireworks(group, flashes, { mirrorY: SEA });
     const log = new EventLog();
     let nextShell = 3, nextTwin = 14;
     const twins = [];
@@ -235,13 +237,13 @@ export default {
     }
 
     const goals = [
-      { group: "Fireworks", text: "From the middle of the pier, watch the twin shells burst together", done: false },
-      { group: "Fireworks", text: "Move to one side: now the nearer shell flashes first", done: false },
-      { group: "Fireworks", text: "Notice the bang arrives long before the flash", done: false },
-      { group: "Rides", text: "Stand before the Ferris wheel: bent spokes, one side bluer, one redder", done: false },
-      { group: "Rides", text: "Ride the roller coaster (E at its station, right of the stalls)", done: false },
-      { group: "Rides", text: "Ride the Ferris wheel (E under it) and come off younger", done: false },
-      { group: "Lighthouse", text: "Watch the lighthouse beam curl into a spiral over the sea", done: false },
+      { group: "Fireworks", text: "From the middle of the pier, watch the twin shells burst together", done: false, at: [0, -118, 0, 0.25] },
+      { group: "Fireworks", text: "Move to one side: now the nearer shell flashes first", done: false, at: [-26, -160, 0, 0.25] },
+      { group: "Fireworks", text: "Notice the bang arrives long before the flash", done: false, at: [0, -166, 0, 0.3] },
+      { group: "Rides", text: "Stand before the Ferris wheel: bent spokes, one side bluer, one redder", done: false, at: [-16, -122, 0, 0.12] },
+      { group: "Rides", text: "Ride the roller coaster (E at its station, right of the stalls)", done: false, at: [24.4, -128, Math.PI, 0] },
+      { group: "Rides", text: "Ride the Ferris wheel (E under it) and come off younger", done: false, at: [-16, -142, 0, 0] },
+      { group: "Lighthouse", text: "Watch the lighthouse beam curl into a spiral over the sea", done: false, at: [10, -165, -0.61, 0.15] },
     ];
     let note = "Light here moves at 6 m/s, about a jog. Sound still moves at 343 m/s, so it wins every race.";
     let wheelWatch = 0, beamWatch = 0, lastLapS = 0, ridingLap = 0;
@@ -401,7 +403,7 @@ export default {
 
         // Fireworks: a steady show, with twin shells now and then.
         while (t + 12 > nextShell) {
-          const at = new THREE.Vector3(BARGE.x + (fw.rand() - 0.5) * 50, 20 + fw.rand() * 12, BARGE.z + (fw.rand() - 0.5) * 16);
+          const at = new THREE.Vector3(BARGE.x + (fw.rand() - 0.5) * 60, 28 + fw.rand() * 16, BARGE.z + (fw.rand() - 0.5) * 16);
           fw.shell(BARGE.clone().setY(SEA + 1), at, nextShell);
           nextShell += 3 + fw.rand() * 3;
         }

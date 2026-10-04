@@ -110,12 +110,12 @@ export default {
     const log = new EventLog();
     const passes = []; // per run: strike and door times, and their logged events
     const goals = [
-      { group: "Simultaneity", text: "From the gold ring, watch lightning hit a passing train", done: false },
-      { group: "Simultaneity", text: "Ride a train (E) through the strikes, standing in the middle car", done: false },
-      { group: "Length contraction", text: "From the red ring, see the whole train inside the tunnel, both doors shut", done: false },
-      { group: "Length contraction", text: "Ride through the tunnel: on board, the exit opens before the entry shuts", done: false },
-      { group: "Time dilation", text: "Near the blue ring, watch a train's clock tick slower than the platform's", done: false },
-      { group: "Time dilation", text: "Ride past the platform clock: now it's the slow one", done: false },
+      { group: "Simultaneity", text: "From the gold ring, watch lightning hit a passing train", done: false, at: [-90, 6.5, 0, 0.1] },
+      { group: "Simultaneity", text: "Ride a train (E) through the strikes, standing in the middle car", done: false, at: [-150, 4.8, -Math.PI / 2, 0] },
+      { group: "Length contraction", text: "From the red ring, see the whole train inside the tunnel, both doors shut", done: false, at: [-10, 17, 0, 0.05] },
+      { group: "Length contraction", text: "Ride through the tunnel: on board, the exit opens before the entry shuts", done: false, at: [-150, 4.8, -Math.PI / 2, 0] },
+      { group: "Time dilation", text: "Near the blue ring, watch a train's clock tick slower than the platform's", done: false, at: [54, 12, -0.3, 0] },
+      { group: "Time dilation", text: "Ride past the platform clock: now it's the slow one", done: false, at: [-150, 4.8, -Math.PI / 2, 0] },
     ];
     let note = "Trains leave every 45 seconds. Watch from a ring, or board one at the start of the platform.";
 
