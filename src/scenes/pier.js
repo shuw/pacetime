@@ -3,7 +3,8 @@ import { box, G, mesh, rng } from "../geo.js";
 import { mat } from "../shaders.js";
 import { EventLog } from "../events.js";
 import { Flashes } from "../world.js";
-import { building, Fireworks, lampPost, orbiting, reflection, rotor, SOUND_SPEED, stringLights, surface } from "../earth.js";
+import { birdGeometry, building, Fireworks, lampPost, orbiting, reflection, rotor, SOUND_SPEED, stringLights, surface } from "../earth.js";
+import { Mover } from "../movers.js";
 import { gammaOf, retardedTime, seenTimeOf, world } from "../relativity.js";
 import { sfx } from "../audio.js";
 import { Gallery } from "../gallery.js";
@@ -227,6 +228,37 @@ export default {
     const gallery = new Gallery(group, { origin: new THREE.Vector3(-20, 0, -132), width: 16, depth: 8, c: C, toast });
     const GALLERY_LINE = new THREE.Vector3(-20, 0, -130.8);
 
+    // Gulls circling over the pier, fast enough to look a little bent.
+    const bird = birdGeometry(1.1);
+    for (let i = 0; i < 9; i++) {
+      const center = [(rand() - 0.5) * 60, 12 + rand() * 14, -60 - rand() * 120];
+      const r = 8 + rand() * 14, speed = (0.25 + rand() * 0.25) * C * (i % 2 ? 1 : -1);
+      const br = rotor(center, [0, 1, 0], speed / r);
+      const a = rand() * Math.PI * 2;
+      const pos = new THREE.Vector3(center[0] + Math.cos(a) * r, center[1], center[2] - Math.sin(a) * r);
+      const gull = mesh(bird, mat({ color: "#e8e4dc", ir: 0.6, uv: 0.3, doubleSided: true, rotor: br }), { pos: pos.toArray() });
+      gull.rotation.y = a + (speed > 0 ? 0 : Math.PI);
+      group.add(gull);
+    }
+
+    // Little boats crossing the bay with their lights on.
+    const boats = [];
+    for (let i = 0; i < 4; i++) {
+      const dir = i % 2 ? -1 : 1;
+      const m = new Mover(new THREE.Vector3(dir * (0.12 + 0.05 * i) * C, 0, 0));
+      m.add(G.box, { color: "#f2efe8", ir: 0.5 }, { pos: [0, SEA + 0.3, 0], scale: [5, 0.8, 1.8] });
+      m.add(G.box, { color: "#2a3a5a", ir: 0.4 }, { pos: [-0.6, SEA + 1.1, 0], scale: [2, 0.8, 1.4] });
+      m.add(G.box, { color: "#ffd38a", emissive: 1, ir: 1, uv: 1 }, { pos: [-0.6, SEA + 1.15, 0.71], scale: [1.6, 0.3, 0.02] });
+      m.add(G.ball, { color: dir > 0 ? "#30ff60" : "#ff3030", emissive: 1, ir: 1, uv: 0.4 }, { pos: [2.4, SEA + 1.6, 0], scale: 0.12 });
+      m.add(G.cyl, { color: "#e8e4dc", ir: 0.4 }, { pos: [0.5, SEA + 2.2, 0], scale: [0.05, 3.2, 0.05] });
+      m.withGhost();
+      m.group.userData.dynamic = true;
+      group.add(m.group);
+      const z = -200 - i * 30;
+      m.dispatch(0, new THREE.Vector3(-150 + i * 70, 0, z));
+      boats.push({ m, dir, z });
+    }
+
     // Fireworks barge.
     group.add(box(10, 1, 6, { color: "#2b2d33", ir: 0.3 }, [BARGE.x, SEA + 0.4, BARGE.z]));
     const fw = new Fireworks(group, flashes, { mirrorY: SEA, c: C });
@@ -393,6 +425,10 @@ export default {
         return null;
       },
       update({ eye, camera, t, dTau }) {
+        for (const b of boats) {
+          const x = b.m.at(t).x;
+          if (b.dir > 0 ? x > 180 : x < -180) b.m.dispatch(t, new THREE.Vector3(b.dir > 0 ? -180 : 180, 0, b.z));
+        }
         // Coaster cars, each drawn where you see it.
         cars.forEach((car, k) => {
           const path = carPath(k);

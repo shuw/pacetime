@@ -317,3 +317,36 @@ export function clockFace(radius = 1.2, { face = "#f4ead2", rim = "#2b2622", glo
   };
   return g;
 }
+
+// Wisps rising from fixed spots (chimneys, manholes), spawned as time passes.
+export class Emitter {
+  constructor(group, spots, { every = 0.35, rise = 0.9, drift = [0.3, 0, 0.1], life = 6, color = "#9aa0ad", size = 0.9, spread = 0.25, intensity = 0.35, seed = 5 } = {}) {
+    this.field = sparkField(Math.ceil((spots.length * life) / every) + 20, { intensity, ir: 0.1, uv: 0.1 });
+    group.add(this.field);
+    this.spots = spots.map((p) => new THREE.Vector3(...p));
+    Object.assign(this, { every, rise, drift: new THREE.Vector3(...drift), life, color: new THREE.Color(color), size, spread });
+    this.rand = rng(seed);
+    this.next = 0;
+  }
+
+  update(t) {
+    while (this.next < t) {
+      for (const p of this.spots) {
+        const r = this.rand;
+        const vel = new THREE.Vector3((r() - 0.5) * this.spread, this.rise * (0.8 + 0.4 * r()), (r() - 0.5) * this.spread).add(this.drift);
+        this.field.set({ origin: p, vel, birth: this.next + r() * this.every, life: this.life * (0.7 + 0.6 * r()), color: this.color, size: this.size * (0.7 + 0.6 * r()) });
+      }
+      this.next += this.every;
+    }
+  }
+}
+
+// A simple flying bird, built facing along +x around the origin.
+export function birdGeometry(span = 0.9) {
+  const g = new THREE.BufferGeometry();
+  const s = span / 2;
+  const v = [0, 0, 0, -0.25, 0.08, -s, 0.15, 0.02, 0, 0, 0, 0, 0.15, 0.02, 0, -0.25, 0.08, s, -0.1, 0, -0.05, 0.3, 0.01, 0, -0.1, 0, 0.05];
+  g.setAttribute("position", new THREE.Float32BufferAttribute(v, 3));
+  g.computeVertexNormals();
+  return g;
+}

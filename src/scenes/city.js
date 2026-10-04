@@ -5,7 +5,7 @@ import { bolt, Flashes } from "../world.js";
 import { SOUND_SPEED } from "../earth.js";
 import { Mover, taxi } from "../movers.js";
 import { Train } from "../rail.js";
-import { building, lampPost, neon, reflection, surface } from "../earth.js";
+import { building, Emitter, lampPost, neon, reflection, surface } from "../earth.js";
 import { dopplerFactor } from "../relativity.js";
 import { retardedTime, world } from "../relativity.js";
 import { sfx } from "../audio.js";
@@ -76,6 +76,8 @@ export default {
 
     // Wet asphalt mirrors every light, sidewalks are dry-ish concrete.
     const flashes = new Flashes();
+    const walkers = [];
+    const coatsW = ["#3a4a6a", "#6a3a3a", "#2f4f3f", "#5a4a3a"];
     group.add(surface({ color: "#0b0c10", water: 0.12, ir: 0.15, uv: 0.1, flashes }, { y: 0, reflective: true }));
 
     // A thunderstorm: strikes land out among the towers. Thunder (at 343 m/s)
@@ -151,6 +153,26 @@ export default {
       signalHead(lights, AVE + 0.8, AVE + 0.8, 0), signalHead(lights, -(AVE + 0.8), -(AVE + 0.8), Math.PI),
       signalHead(lights, -(AVE + 0.8), AVE + 0.8, -Math.PI / 2), signalHead(lights, AVE + 0.8, -(AVE + 0.8), Math.PI / 2),
     ];
+
+    // Steam rising from manholes.
+    const holes = [[-2, 0.05, -26], [3, 0.05, 34], [-1.5, 0.05, 78], [2, 0.05, -95], [-30, 0.05, 1.5], [44, 0.05, -2]];
+    for (const [x, , z] of holes) group.add(mesh(G.cyl, mat({ color: "#1c1d22", ir: 0.2 }), { pos: [x, 0.02, z], scale: [0.6, 0.04, 0.6] }));
+    const steamVents = new Emitter(group, holes, { every: 0.25, rise: 1.2, drift: [0.4, 0, 0.1], life: 5, color: "#8890a0", size: 1.2, intensity: 0.22 });
+
+    // People walking under umbrellas, out for the night.
+    for (let i = 0; i < 8; i++) {
+      const north = i % 2 === 0;
+      const m = new Mover(new THREE.Vector3(0, 0, (north ? -1 : 1) * (0.12 + 0.03 * (i % 3)) * C), { clip: [-60, -LEN, 60, LEN] });
+      const x = (north ? 1 : -1) * (AVE + 1.2 + (i % 3) * 0.8);
+      m.add(G.box, { color: coatsW[i % 4], ir: 0.4 }, { pos: [0, 0.95, 0], scale: [0.5, 1.5, 0.35] });
+      m.add(G.sphere, { color: "#e0b898" }, { pos: [0, 1.85, 0], scale: 0.2 });
+      m.add(G.box, { color: "#222" }, { pos: [0, 2.2, 0], scale: [0.03, 0.9, 0.03] });
+      m.add(new THREE.ConeGeometry(0.85, 0.4, 12), { color: ["#e8423f", "#2a2a33", "#f2c14e", "#4a8fe8"][(i + 1) % 4], ir: 0.4 }, { pos: [0, 2.65, 0] });
+      m.group.userData.dynamic = true;
+      group.add(m.group);
+      m.dispatch(0, new THREE.Vector3(x, 0, (rand() - 0.5) * LEN * 1.6));
+      walkers.push({ m, north, x });
+    }
 
     // People waiting under umbrellas.
     const coats = ["#3a4a6a", "#6a3a3a", "#2f4f3f", "#5a4a3a"];
@@ -320,6 +342,11 @@ export default {
         return null;
       },
       update({ eye, camera, t }) {
+        steamVents.update(t);
+        for (const w of walkers) {
+          const z = w.m.at(t).z;
+          if (w.north ? z < -LEN + 5 : z > LEN - 5) w.m.dispatch(t, new THREE.Vector3(w.x, 0, w.north ? LEN - 5 : -LEN + 5));
+        }
         // Thunderstorm.
         if (t > nextStrike) {
           const b = bolts[strikeN++ % bolts.length];

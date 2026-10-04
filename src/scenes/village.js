@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { box, G, mesh, rng } from "../geo.js";
 import { mat, sparkField } from "../shaders.js";
 import { Flashes } from "../world.js";
-import { clockFace, cottage, Fireworks, forest, lampPost, mountain, orbiting, reflection, rotor, SOUND_SPEED, stringLights, surface } from "../earth.js";
+import { clockFace, cottage, Emitter, Fireworks, forest, lampPost, mountain, orbiting, reflection, rotor, SOUND_SPEED, stringLights, surface } from "../earth.js";
 import { gammaOf, retardedTime, seenTimeOf, world } from "../relativity.js";
 import { sfx } from "../audio.js";
 
@@ -40,6 +40,7 @@ export default {
     const flashes = new Flashes();
     const rand = rng(41);
     const colliders = [];
+    const chimneys = [];
 
     group.add(surface({ color: "#dfe6f0", ir: 0.6, uv: 0.5, flashes, snow: true }, { radius: 1500 }));
     for (const [x, z, r, h] of [[-420, -520, 220, 260], [-150, -650, 260, 330], [180, -600, 240, 300], [470, -420, 230, 250], [620, 60, 260, 230], [-600, -60, 250, 240], [-380, 420, 220, 200], [300, 520, 240, 220], [40, 700, 260, 260]]) {
@@ -62,7 +63,10 @@ export default {
       const a = (i / 18) * Math.PI * 2 + 0.17, r = 30 + (i % 3) * 9 + rand() * 4;
       const x = SQUARE.x + Math.cos(a) * r, z = SQUARE.z + Math.sin(a) * r;
       if (Math.hypot(x - CHURCH.x, z - CHURCH.z) < 18 || Math.hypot(x - POND.x, z - POND.z) < POND_R + 6 || Math.abs(x) < 5 && z > SQUARE.z) continue;
-      group.add(cottage(x, z, -a - Math.PI / 2, { snow: true, color: ["#6b4a3a", "#8a5a44", "#5a4a5a", "#7a6a50"][i % 4], seed: i * 3 }));
+      const ry = -a - Math.PI / 2;
+      group.add(cottage(x, z, ry, { snow: true, color: ["#6b4a3a", "#8a5a44", "#5a4a5a", "#7a6a50"][i % 4], seed: i * 3 }));
+      // Chimney top, in the cottage's own frame at (1.5, 5.4, 0.75).
+      chimneys.push([x + 1.5 * Math.cos(ry) + 0.75 * Math.sin(ry), 5.5, z - 1.5 * Math.sin(ry) + 0.75 * Math.cos(ry)]);
       colliders.push({ x, z, r: 3.6 });
     }
     for (const [x, z] of [[-6, -10], [6, -10], [-6, 10], [6, 10], [-6, 30], [6, 30], [-12, -48], [12, -48], [26, -30], [-28, -12]]) lights.add(lampPost(x, z, { h: 3.6, color: "#ffc070", pole: "#1c1a18", range: 5, power: 0.4 }));
@@ -78,7 +82,7 @@ export default {
     group.add(mesh(new THREE.ConeGeometry(4.4, 12, 4), mat({ color: "#2e3b52", ir: 0.4 }), { pos: [CHURCH.x, 30, CHURCH.z], rot: [0, Math.PI / 4, 0] }));
     group.add(mesh(G.sphere, mat({ color: "#ffd77a", emissive: 1, ir: 1 }), { pos: [CHURCH.x, 36.4, CHURCH.z], scale: 0.4 }));
     const faces = [0, 1, 2, 3].map((i) => {
-      const f = clockFace(1.9);
+      const f = clockFace(1.9, { glow: 0.3 });
       const a = (i * Math.PI) / 2;
       f.position.set(CHURCH.x + Math.sin(a) * 3.05, CLOCK_Y, CHURCH.z + Math.cos(a) * 3.05);
       f.rotation.y = a;
@@ -242,6 +246,7 @@ export default {
     group.add(snow);
 
     const fw = new Fireworks(group, flashes, { seed: 9, c: C });
+    const smokeStacks = new Emitter(group, chimneys, { every: 0.3, rise: 0.9, drift: [0.35, 0, 0.12], life: 9, color: "#c0c8dc", size: 2.2, intensity: 0.3, seed: 12 });
     let nextShell = 20;
 
     group.add(lights);
@@ -379,6 +384,7 @@ export default {
         return null;
       },
       update({ eye, camera, t, dTau }) {
+        smokeStacks.update(t);
         const seenClock = retardedTime(eye, clockPos);
         faces.forEach((f) => f.set(seenClock));
         // The bell swings for a few seconds after each hour, seen with delay; heard at once.
