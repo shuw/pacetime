@@ -125,15 +125,23 @@ void main() {
     float tau = 0.0;
     vec3 pr = rotateAbout(r0, uRotAxis, uPhase);
     if (uDelay > 0.5) {
-      tau = length(uRotCenter + pr + offset - uCam) / uC;
-      for (int i = 0; i < 5; i++) {
+      // Solve f(tau) = |p(T - tau) - eye| - c tau = 0. f falls steadily (the
+      // point moves slower than light), so keep a bracket [lo, hi] and take
+      // Newton steps that stay inside it, bisecting when they don't. Plain
+      // Newton fails for points heading straight at you near light speed.
+      float lo = 0.0;
+      float hi = (length(uRotCenter - uCam) + length(r0) + length(offset)) / uC + 0.01;
+      tau = clamp(length(uRotCenter + pr + offset - uCam) / uC, lo, hi);
+      for (int i = 0; i < 10; i++) {
         vec3 ri = rotateAbout(r0, uRotAxis, uPhase - uOmega * tau);
         vec3 q = uRotCenter + ri + offset - uCam;
         float dq = length(q);
-        vec3 vel = uOmega * cross(uRotAxis, ri);
         float f = dq - uC * tau;
+        if (f > 0.0) lo = tau; else hi = tau;
+        vec3 vel = uOmega * cross(uRotAxis, ri);
         float df = -dot(vel, q) / max(dq, 1e-4) - uC;
-        tau = max(0.0, tau - f / df);
+        float next = tau - f / min(df, -1e-4);
+        tau = (next > lo && next < hi) ? next : 0.5 * (lo + hi);
       }
       pr = rotateAbout(r0, uRotAxis, uPhase - uOmega * tau);
     }
@@ -894,14 +902,16 @@ void main() {
   float tau = 0.0;
   if (uDelay > 0.5) {
     tau = length(posAt(o, flight(T)) - uCam) / uC;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 6; i++) {
       float a = flight(T - tau);
       vec3 q = posAt(o, a) - uCam;
       vec3 vel = V + vec3(0.0, -uGravity * a, 0.0);
       float dq = length(q);
       float f = dq - uC * tau;
       float df = -dot(vel, q) / max(dq, 1e-4) - uC;
-      tau = max(0.0, tau - f / df);
+      // Near light speed head-on, Newton overshoots; fall back to a plain
+      // fixed-point step, which always moves toward the answer.
+      tau = df < -0.15 * uC ? max(0.0, tau - f / df) : dq / uC;
     }
   }
   float a = flight(T - tau);

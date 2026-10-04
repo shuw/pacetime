@@ -11,6 +11,7 @@ import { effects, world } from "./relativity.js";
 import { clearToast, cWord, initLab, onGoalClick, showScene, syncLab, toast, toggleGoals, toggleLab, updateHud } from "./hud.js";
 import { lightSpeed } from "./relativity.js";
 import { motion } from "./motion.js";
+import { Minimap } from "./minimap.js";
 import { addVelocity } from "./relativity.js";
 import { sparkField } from "./shaders.js";
 import { isMuted, setAmbience, setListener, setMuted, sfx, unlockAudio, updateAudio } from "./audio.js";
@@ -126,6 +127,7 @@ composer.addPass(new OutputPass());
 let usePost = false;
 
 const player = new Player(canvas);
+const minimap = new Minimap(document.getElementById("minimap"));
 let current = null; // { scene, instance }
 let paused = true;
 const help = document.getElementById("help");
@@ -161,12 +163,13 @@ function applyPost(post) {
 function load(scene) {
   if (current) root.remove(current.instance.group);
   ghosts.length = 0;
-  if (intro) { intro = null; document.getElementById("intro").hidden = true; }
+  if (intro) { intro = null; document.getElementById("intro").hidden = true; document.getElementById("hud").classList.remove("intro-on"); }
   clearToast();
   player.place(0, 0, 0);
   player.tau = 0;
   world.t = 0;
   motion.reset();
+  minimap.reset();
   const instance = scene.build({ player, toast });
   // Balls glow like embers: plenty of light beyond the violet, so they stay
   // visible (and redden) as they fly away from you.
@@ -267,11 +270,16 @@ function closeMenu() {
 // walking pace, so you watch the world turn strange.
 const REAL_C = 299792458;
 let intro = null;
+// Landmarks on the slowing-down scale, in m/s.
+const SCALE = [[REAL_C, "light"], [2e5, "spacecraft"], [1000, "bullet"], [30, "car"], [3, "jog"]];
+const scaleAt = (c) => Math.log10(REAL_C / c) / Math.log10(REAL_C / 1.5); // 0 at real light, 1 at 1.5 m/s
 function startIntro() {
   intro = { c1: world.c, t: 0, dur: 6 };
   world.c = REAL_C;
+  document.getElementById("intro-ticks").innerHTML = SCALE.map(([v, name]) => `<span style="left:${(scaleAt(v) * 100).toFixed(1)}%">${name}</span>`).join("");
   sfx.slowdown(intro.dur * 0.85);
   document.getElementById("intro").hidden = false;
+  document.getElementById("hud").classList.add("intro-on");
 }
 function runIntro(dt) {
   if (!intro) return;
@@ -281,12 +289,17 @@ function runIntro(dt) {
   const smooth = e * e * (3 - 2 * e);
   world.c = Math.exp(Math.log(REAL_C) + (Math.log(intro.c1) - Math.log(REAL_C)) * smooth);
   const c = world.c;
-  document.getElementById("intro-c").textContent = `${c >= 100 ? Math.round(c).toLocaleString("en-US") : c.toFixed(1)} m/s`;
-  document.getElementById("intro-word").textContent = k < 0.15 ? "as it is in our world" : k < 1 ? "slowing down…" : `about as fast as ${cWord(intro.c1)}. Have a look around.`;
+  const x = Math.min(1, scaleAt(c)) * 100;
+  document.getElementById("intro-dot").style.left = `${x}%`;
+  document.getElementById("intro-fill").style.width = `${x}%`;
+  document.querySelectorAll("#intro-ticks span").forEach((s, i) => s.classList.toggle("passed", c <= SCALE[i][0] * 1.01));
+  const word = k < 0.15 ? "As fast as it is in our world. Now slowing it down…" : k < 1 ? `Now about as fast as ${cWord(c)}…` : `Light here moves about as fast as ${cWord(intro.c1)}. Have a look around.`;
+  if (document.getElementById("intro-word").textContent !== word) document.getElementById("intro-word").textContent = word;
   if (intro.t > intro.dur + 2.5) {
     world.c = intro.c1;
     intro = null;
     document.getElementById("intro").hidden = true;
+    document.getElementById("hud").classList.remove("intro-on");
     syncLab();
   }
 }
@@ -615,6 +628,7 @@ function frame() {
         prompt: current.instance.action?.(eye) ?? null,
       });
       writeHash(dTau);
+      minimap.update(player, current.instance, dTau);
     }
   }
   adaptResolution(dTau);

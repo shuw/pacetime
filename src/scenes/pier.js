@@ -174,9 +174,9 @@ export default {
 
     // The pier: honey boards, white rails, dark pilings.
     const plank = { color: "#b8834f", ir: 0.6, uv: 0.1, planks: true };
-    group.add(box(10, 0.5, 164, plank, [0, -0.25, -38]));
+    group.add(box(10, 0.5, 160, plank, [0, -0.25, -40]));
     group.add(box(64, 0.5, 52, plank, [0, -0.25, -146]));
-    group.add(box(10.4, 0.18, 164, { color: "#f4f1ea", ir: 0.5 }, [0, -0.45, -38]));
+    group.add(box(10.4, 0.18, 160, { color: "#f4f1ea", ir: 0.5 }, [0, -0.45, -40]));
     group.add(box(64.4, 0.18, 52.4, { color: "#f4f1ea", ir: 0.5 }, [0, -0.45, -146]));
     for (let z = 40; z >= -170; z -= 8) {
       for (const x of z > -118 ? [-4.6, 4.6] : [-31, -15, 0, 15, 31]) group.add(box(0.5, 6, 0.5, { color: "#3a2c22", ir: 0.4 }, [x, -3.2, z]));
@@ -520,6 +520,17 @@ export default {
       colliders,
       mirrorY: SEA,
       shadows: true,
+      map: {
+        paths: [
+          { pts: Array.from({ length: 121 }, (_, i) => { const q = curve.getPointAt(i / 120); return [q.x, q.z]; }), color: "rgba(46, 196, 182, 0.9)", closed: true },
+          { pts: [[WHEEL.x - WHEEL_R, WHEEL.z], [WHEEL.x + WHEEL_R, WHEEL.z]], color: "rgba(255, 107, 139, 0.95)" },
+        ],
+        rings: [
+          { x: SWING.x, z: SWING.z, r: SWING_R, color: "rgba(255, 190, 11, 0.9)" },
+          { x: LIGHTHOUSE.x, z: LIGHTHOUSE.z, r: 3, color: "rgba(255, 240, 192, 0.9)", fill: true },
+          { x: BARGE.x, z: BARGE.z, r: 3, color: "rgba(255, 120, 200, 0.8)", fill: true },
+        ],
+      },
       walk: [[-4.6, -120, 4.6, 44], [-31, -170, 31, -120], [-110, 40, 110, 57]],
       spawn: [0, 30, 0],
       env,

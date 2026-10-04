@@ -18,7 +18,7 @@ const $ = (id) => document.getElementById(id);
 
 const C_WORDS = [
   [0.7, "a snail's sprint"], [1.6, "a stroll"], [4, "a brisk walk"], [8, "a run"], [16, "a bicycle"], [45, "a car on the highway"],
-  [120, "a race car"], [Infinity, "an airliner (real light is a million times faster)"],
+  [120, "a race car"], [400, "an airliner"], [3000, "a bullet"], [3e5, "the fastest spacecraft"], [Infinity, "light in our world"],
 ];
 
 const TOGGLES = [

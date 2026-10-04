@@ -51,13 +51,22 @@
         <div class="watch diff" id="younger-row" hidden><span class="label">younger by</span><b id="younger">0.0</b></div>
       </section>
 
+      <canvas id="minimap" aria-label="Map of where you are"></canvas>
       <div id="prompt" hidden><kbd>E</kbd><span id="prompt-text"></span></div>
       <div id="crosshair"></div>
       <div id="look-hint">Click to look around</div>
       <button id="back-btn">Look back</button>
       <button id="throw-btn">Throw</button>
       <div id="slowmo" hidden></div>
-      <div id="intro" hidden><span class="label">speed of light</span><b id="intro-c"></b><span id="intro-word"></span></div>
+      <div id="intro" hidden>
+        <span class="label">the speed of light</span>
+        <div class="scale">
+          <div class="track"><div class="fill" id="intro-fill"></div></div>
+          <div class="ticks" id="intro-ticks"></div>
+          <div class="dot" id="intro-dot"></div>
+        </div>
+        <span id="intro-word"></span>
+      </div>
       <button id="act-btn" hidden></button>
     </div>
 
