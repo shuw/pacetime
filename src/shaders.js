@@ -529,6 +529,9 @@ void main() {
 `;
 
 const cache = new Map();
+const ids = new WeakMap();
+let nextId = 1;
+const idOf = (o) => { if (!ids.has(o)) ids.set(o, nextId++); return ids.get(o); };
 
 // color: css color; ir/uv: how strongly the surface sends out light just
 // beyond either end of the rainbow; emissive: 0..1 self-lit.
@@ -559,9 +562,11 @@ export function mat({
   depthWrite = null,
   vertexColors = false,
 } = {}) {
-  const key = JSON.stringify(arguments[0] ?? {});
-  const special = mover || flashes || beam || wake || sourceVel || rotor || spiral;
-  if (!special && cache.has(key)) return cache.get(key);
+  // Shared uniform objects (a train's motion, a wheel's spin) key by identity,
+  // so every part of one train shares a material and can be merged.
+  const byIdentity = new Set(["mover", "rotor", "flashes", "beam", "spiral", "sourceVel"]);
+  const key = JSON.stringify(arguments[0] ?? {}, (k, v) => (byIdentity.has(k) && v ? `#${idOf(v)}` : v));
+  if (!unique && !wake && cache.has(key)) return cache.get(key);
   const defines = {};
   if (checker) defines.CHECKER = "";
   if (grid) defines.GRID = "";
@@ -614,7 +619,7 @@ export function mat({
     side: doubleSided ? THREE.DoubleSide : THREE.FrontSide,
   });
   m.userData.opts = arguments[0] ?? {};
-  if (!unique && !special) cache.set(key, m);
+  if (!unique && !wake) cache.set(key, m);
   return m;
 }
 

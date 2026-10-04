@@ -100,16 +100,19 @@ export default {
     // City blocks of towers with lit windows, and neon above the shops.
     const towers = ["#2a2d36", "#30303a", "#26272e", "#353a44", "#2c2a33"];
     const winColors = ["#ffcf8a", "#bfe2ff", "#ffe6b0", "#ffd0a0"];
+    // A handful of looks, so towers share materials and draw together.
+    const looks = towers.map((color, i) => ({ color, lit: 0.2 + (i % 3) * 0.1, window: winColors[i % 4], seed: i, cell: [[1.6, 2.8], [2.1, 3.1], [1.8, 2.6]][i % 3] }));
+    const look = (r) => looks[Math.floor(r() * looks.length)];
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       // Along the avenue
       for (let z = AVE + WALK + 2; z < LEN; z += 14 + rand() * 8) {
         const h = 14 + rand() * 46, d = 10 + rand() * 4;
-        group.add(building(sx * (AVE + WALK + 7), sz * (z + d / 2), 12, d, h, { color: towers[(z | 0) % 5], lit: 0.18 + rand() * 0.3, window: winColors[(z | 0) % 4], seed: z * sx + sz, cell: [1.6 + rand() * 0.6, 2.7 + rand() * 0.5] }));
+        group.add(building(sx * (AVE + WALK + 7), sz * (z + d / 2), 12, d, h, look(rand)));
       }
       // Along the cross street
       for (let x = AVE + WALK + 2; x < 140; x += 14 + rand() * 8) {
         const h = 14 + rand() * 40, w = 10 + rand() * 4;
-        group.add(building(sx * (x + w / 2), sz * (AVE + WALK + 7), w, 12, h, { color: towers[(x | 0) % 5], lit: 0.18 + rand() * 0.3, window: winColors[(x | 0) % 4], seed: x * sz - sx, cell: [1.6 + rand() * 0.6, 2.7 + rand() * 0.5] }));
+        group.add(building(sx * (x + w / 2), sz * (AVE + WALK + 7), w, 12, h, look(rand)));
       }
     }
     const signs = [

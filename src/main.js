@@ -449,6 +449,25 @@ function pickLamps(lamps, eye) {
 // Tests can run the world faster than real time.
 let warp = 1;
 
+// Lower the resolution if frames are slow, raise it again when there's room.
+const MAX_RATIO = Math.min(devicePixelRatio, 2);
+let ratio = MAX_RATIO, slowFor = 0, fastFor = 0;
+function adaptResolution(dt) {
+  const n = frameTimes.length - 1;
+  const fps = n > 30 ? (1000 * n) / (frameTimes[n] - frameTimes[0]) : 0;
+  if (fps && fps < 42) { slowFor += dt; fastFor = 0; }
+  else if (fps > 57) { fastFor += dt; slowFor = 0; }
+  else { slowFor = fastFor = 0; }
+  const next = slowFor > 2 ? Math.max(0.75, ratio - 0.25) : fastFor > 6 ? Math.min(MAX_RATIO, ratio + 0.25) : ratio;
+  if (next !== ratio) {
+    ratio = next;
+    slowFor = fastFor = 0;
+    frameTimes = [];
+    renderer.setPixelRatio(ratio);
+    resize();
+  }
+}
+
 let frameTimes = [];
 function frame() {
   const now = performance.now();
@@ -473,6 +492,7 @@ function frame() {
       writeHash(dTau);
     }
   }
+  adaptResolution(dTau);
   renderer.info.reset();
   if (usePost) composer.render();
   else renderer.render(root, camera);
@@ -494,6 +514,7 @@ window.pacetime = {
   get instance() { return current?.instance; },
   get fps() { const n = frameTimes.length - 1; return n > 0 ? (1000 * n) / (frameTimes[n] - frameTimes[0]) : 0; },
   get drawCalls() { return renderer.info.render.calls; },
+  get pixelRatio() { return ratio; },
   get warp() { return warp; },
   set warp(k) { warp = Math.max(0, Math.min(k, 40)); },
   // Jump ahead: run the world for `seconds` of your own time without drawing.

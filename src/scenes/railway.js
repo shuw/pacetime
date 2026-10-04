@@ -89,7 +89,7 @@ export default {
       const clock = lightClockFrame(H, { mover: train.mover, rect: train.clip });
       clock.position.x = ONBOARD;
       train.group.add(clock);
-      const lamps = tickLamps(train.group, () => mat({ color: "#2a2d3c", emissive: 0.2, mover: train.mover, rect: train.clip }), ONBOARD, BASE + H + 0.4, 0);
+      const lamps = tickLamps(train.group, () => mat({ color: "#2a2d3c", emissive: 0.2, mover: train.mover, rect: train.clip, unique: true }), ONBOARD, BASE + H + 0.4, 0);
       const photon = photonBall("#c9e6ff", train.mover.uVel);
       group.add(photon);
       const wake = new Wake("#c9e6ff", { fade: 3 });
