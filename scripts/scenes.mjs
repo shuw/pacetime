@@ -72,8 +72,17 @@ await run("city", async () => {
     });
     if (!shotNear && d > 15 && d < 25) { shotNear = true; console.log("  oncoming taxi:", await t.snap("city-oncoming")); }
   }
+  // The secret billboard: walk at it, then walk away looking back.
+  await t.place(1, -5, 0, 0.25);
+  await t.page.keyboard.down("w"); await t.advance(1); await t.page.keyboard.up("w");
+  await t.place(1, -18, Math.PI, 0);
+  await t.page.keyboard.down("w"); await t.page.keyboard.down("b");
+  await t.advance(0.6);
+  await t.q(() => { pacetime.player.pitch = -0.35; });
+  await t.advance(0.6);
+  await t.page.keyboard.up("w"); await t.page.keyboard.up("b");
   await t.place(0, 0, 0, 0.3);
-  for (let i = 0; i < 120 && !(await t.q(() => pacetime.instance.goals[4].done)); i++) await t.advance(0.5);
+  for (let i = 0; i < 120 && !(await t.q(() => pacetime.instance.goals[5].done)); i++) await t.advance(0.5);
   await t.place(-AVE_FIX(), 12, 0);
   await t.q(() => pacetime.act());
   await t.advance(4);

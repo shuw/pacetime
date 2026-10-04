@@ -122,25 +122,37 @@ const STROKES = {
   U: [[0, 4, 0, 0], [0, 0, 2, 0], [2, 0, 2, 4]],
   X: [[0, 0, 2, 4], [0, 4, 2, 0]],
   Y: [[0, 4, 1, 2], [2, 4, 1, 2], [1, 2, 1, 0]],
+  D: [[0, 0, 0, 4], [0, 4, 1.3, 4], [1.3, 4, 2, 3.2], [2, 3.2, 2, 0.8], [2, 0.8, 1.3, 0], [1.3, 0, 0, 0]],
+  G: [[2, 4, 0, 4], [0, 4, 0, 0], [0, 0, 2, 0], [2, 0, 2, 1.8], [2, 1.8, 1.1, 1.8]],
+  J: [[2, 4, 2, 0], [2, 0, 0, 0], [0, 0, 0, 1.2]],
+  K: [[0, 0, 0, 4], [0, 2, 2, 4], [0, 2, 2, 0]],
+  Q: [[0, 0, 0, 4], [0, 4, 2, 4], [2, 4, 2, 0], [2, 0, 0, 0], [1.2, 0.8, 2.2, -0.3]],
+  V: [[0, 4, 1, 0], [1, 0, 2, 4]],
+  W: [[0, 4, 0.5, 0], [0.5, 0, 1, 2.2], [1, 2.2, 1.5, 0], [1.5, 0, 2, 4]],
+  Z: [[0, 4, 2, 4], [2, 4, 0, 0], [0, 0, 2, 0]],
+  0: [[0, 0, 0, 4], [0, 4, 2, 4], [2, 4, 2, 0], [2, 0, 0, 0], [0, 0, 2, 4]],
+  1: [[1, 0, 1, 4], [1, 4, 0.4, 3.4]],
   2: [[0, 4, 2, 4], [2, 4, 2, 2], [2, 2, 0, 2], [0, 2, 0, 0], [0, 0, 2, 0]],
+  3: [[0, 4, 2, 4], [2, 4, 2, 0], [2, 0, 0, 0], [0.6, 2, 2, 2]],
   4: [[0, 4, 0, 2], [0, 2, 2, 2], [2, 4, 2, 0]],
 };
 
-export function neon(text, { pos = [0, 0, 0], rotY = 0, size = 0.25, color = "#ff4fa3", gap = 0.8 } = {}) {
+export function neon(text, { pos = [0, 0, 0], rotY = 0, size = 0.25, color = "#ff4fa3", gap = 0.8, ir = 0.8, uv = 0.8, additive = false, width = 0.07 } = {}) {
   const g = new THREE.Group();
-  const m = mat({ color, emissive: 1, ir: 0.8, uv: 0.8, unique: true });
+  const m = mat({ color, emissive: 1, ir, uv, additive, unique: true });
   g.glow = m;
   let cx = 0;
   for (const ch of text) {
     for (const [x0, y0, x1, y1] of STROKES[ch] ?? []) {
       const a = new THREE.Vector3((cx + x0) * size, y0 * size, 0), b = new THREE.Vector3((cx + x1) * size, y1 * size, 0);
-      const seg = mesh(G.box, m, { scale: [0.07, a.distanceTo(b) + 0.07, 0.07] });
+      const seg = mesh(G.box, m, { scale: [width, a.distanceTo(b) + width, width] });
       seg.position.copy(a).add(b).multiplyScalar(0.5);
       seg.rotation.z = Math.atan2(-(b.x - a.x), b.y - a.y);
       g.add(seg);
     }
     cx += 2 + gap;
   }
+  g.textWidth = (cx - gap) * size;
   g.position.set(...pos);
   g.rotation.y = rotY;
   g.updateMatrixWorld(true);

@@ -6,6 +6,7 @@ import { SOUND_SPEED } from "../earth.js";
 import { Mover, taxi } from "../movers.js";
 import { Train } from "../rail.js";
 import { building, lampPost, neon, reflection, surface } from "../earth.js";
+import { dopplerFactor } from "../relativity.js";
 import { retardedTime, world } from "../relativity.js";
 import { sfx } from "../audio.js";
 
@@ -166,6 +167,21 @@ export default {
     group.add(box(400, 0.8, 5, { color: "#24262c", ir: 0.2 }, [0, VY - 0.4, VIADUCT_Z]));
     for (let x = -190; x <= 190; x += 14) if (Math.abs(x) > AVE + 1) group.add(box(0.8, VY - 0.8, 0.8, { color: "#2c2e35", ir: 0.2 }, [x, (VY - 0.8) / 2, VIADUCT_Z]));
     for (const s of [-0.75, 0.75]) group.add(box(400, 0.08, 0.08, { color: "#5a6a9a", emissive: 0.3, ir: 0.2, uv: 0.3 }, [0, VY + 0.05, VIADUCT_Z + s]));
+    // A billboard on the bridge, painted in inks you can't see: infrared that
+    // shows when you run toward it, ultraviolet when you run away.
+    const BOARD = new THREE.Vector3(0, VY + 4.2, VIADUCT_Z + 2.6);
+    group.add(box(16, 4.4, 0.3, { color: "#121318", ir: 0.1, uv: 0.05 }, [0, BOARD.y, VIADUCT_Z + 2.4]));
+    group.add(box(16.4, 0.12, 0.12, { color: "#3a3d48", ir: 0.2 }, [0, BOARD.y + 2.25, VIADUCT_Z + 2.6]));
+    group.add(box(16.4, 0.12, 0.12, { color: "#3a3d48", ir: 0.2 }, [0, BOARD.y - 2.25, VIADUCT_Z + 2.6]));
+    for (const [word, ink, dy] of [["FASTER", { ir: 3.2, uv: 0 }, 0.35], ["SLOWER", { ir: 0, uv: 3.2 }, -1.4]]) {
+      const size = 0.42;
+      const n = neon(word, { size, color: "#000000", additive: true, width: 0.16, ...ink });
+      n.position.set(-n.textWidth / 2, BOARD.y + dy - 0.2, VIADUCT_Z + 2.62);
+      n.updateMatrixWorld(true);
+      group.add(n);
+    }
+    let boardNear = false, boardFar = false;
+
     const el = new Train({ cars: 4, fraction: 0.8, z: VIADUCT_Z, clip: [-190, -300, 190, 300] });
     el.group.position.y = VY;
     group.add(el.group);
@@ -236,6 +252,7 @@ export default {
       { group: "Light delay", text: "Look down the avenue during a power flicker: it rolls toward you", done: false, at: [1, 40, 0, 0] },
       { group: "Moving lights", text: "Watch a taxi come at you: it seems to outrun light. Then watch it crawl away", done: false, at: [1.5, -20, Math.PI, 0] },
       { group: "Moving lights", text: "Watch a taxi's taillights fade out as it leaves: redshifted into infrared", done: false, at: [1.5, -20, Math.PI, 0] },
+      { group: "Moving lights", text: "Read the secret billboard on the bridge: run at it, then away and look back", done: false, at: [1, 30, 0, 0.15] },
       { group: "Light delay", text: "Hear thunder, then wait: the lightning comes seconds later", done: false, at: [0, 0, 0, 0.35] },
       { group: "Ride", text: "Hail a taxi (E at the yellow TAXI sign) and ride up the avenue", done: false, at: [-7.6, 12, 0, 0] },
     ];
@@ -291,7 +308,7 @@ export default {
               player.pitch = 0;
               player.board(seat);
               sfx.board();
-              goals[5].done = true;
+              goals[6].done = true;
               toast("Off you go at 85% of light speed. Look ahead: the whole street folds into a bright blue tunnel.", 8);
             },
           };
@@ -322,7 +339,7 @@ export default {
             s.seen = true;
             if (s.heardAt !== undefined && since < 1) {
               note = `Thunder first, then ${(d / world.c - d / SOUND_SPEED).toFixed(1)} s later the flash. Here, sound outruns light by a factor of 34.`;
-              goals[4].done = true;
+              goals[5].done = true;
             }
           }
         }
@@ -380,6 +397,20 @@ export default {
         for (const { s, pos, color } of signMeshes) {
           const off = surgeAt(retardedTime(eye, pos));
           s.glow.uniforms.uColor.value.copy(color).multiplyScalar(off ? 0.05 : 1);
+        }
+
+        // The secret billboard.
+        {
+          const D = dopplerFactor(eye, player.v, BOARD);
+          const toBoard = BOARD.clone().sub(eye).normalize();
+          if (fwd.dot(toBoard) > 0.85 && eye.distanceTo(BOARD) < 90) {
+            if (D > 1.3 && !boardNear) { boardNear = true; note = "Running at the bridge, its infrared ink shifts into view: FASTER."; }
+            if (D < 0.8 && !boardFar) { boardFar = true; note = "Running away, the ultraviolet ink shifts down into view: SLOWER."; }
+          }
+          if (boardNear && boardFar && !goals[4].done) {
+            goals[4].done = true;
+            toast("Two messages in one billboard, painted in light just beyond each end of the rainbow. Your speed decides which one you see.", 9);
+          }
         }
 
         // Taxi watching.

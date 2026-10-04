@@ -141,7 +141,9 @@ function writeHash(dt) {
   if (hashClock < 0.5) return;
   hashClock = 0;
   const h = stateHash();
-  if (h !== location.hash) history.replaceState(null, "", h);
+  if (h !== location.hash) {
+    try { history.replaceState(null, "", h); } catch { /* embedded pages may not allow it */ }
+  }
 }
 addEventListener("hashchange", () => {
   const h = parseHash();
