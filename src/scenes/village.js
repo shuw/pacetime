@@ -281,14 +281,14 @@ export default {
       { group: "Aberration", text: "Ride the steam train round the valley (E at the little station)", done: false, at: [4, 74, Math.PI, 0] },
     ];
     let note = "Light here moves at 7 m/s. The church bell rings every 30 seconds: you'll hear it at once, and see it swing a moment later.";
-    let lastBell = 0, sprintSnow = 0, lastTwinkle = -1;
+    let lastBell = 0, sprintSnow = 0, lastTwinkle = -1, clockWatch = 0;
     const fwd = new THREE.Vector3();
 
     return {
       group,
       colliders,
       walk: [[-210, -260, 210, 160]],
-      spawn: [0, 30, 0],
+      spawn: [-6, 4, 0.15],
       env: DUSK.env,
       ambience: "snow",
       post: DUSK.post,
@@ -304,11 +304,15 @@ export default {
         const seenClock = retardedTime(player.eye, clockPos);
         return [
           ["light speed", `${world.c.toFixed(1)} m/s`],
-          ["church clock (seen)", `${seenClock.toFixed(1)} s`],
+          ["church clock (seen)", seenClock >= 0 ? `${seenClock.toFixed(1)} s` : "from before you came"],
           ["village time now", `${world.t.toFixed(1)} s`],
           ["carousel rim", `${(CAR_SPEED * 100).toFixed(0)}% c`],
           ["steam train", `${(TRAIN_SPEED * 100).toFixed(0)}% c`],
         ];
+      },
+      engineSeen(eye) {
+        const all = engines.map((e) => trainAt(seenTimeOf((tt) => trainAt(tt, e.chimney0), eye, world.t, 200), e.chimney0));
+        return all.sort((a, b) => a.distanceTo(eye) - b.distanceTo(eye))[0];
       },
       sound(eye) {
         // The train's rumble sits where it really is: sound beats light here.
@@ -389,8 +393,10 @@ export default {
         }
         camera.getWorldDirection(fwd);
         const toClock = clockPos.clone().sub(eye).normalize();
-        if (eye.distanceTo(clockPos) > 80 && fwd.dot(toClock) > 0.9) {
+        if (eye.distanceTo(clockPos) > 90 && fwd.dot(toClock) > 0.93) clockWatch += dTau;
+        if (clockWatch > 2 && !goals[0].done) {
           goals[0].done = true;
+          note = `The clock face is ${eye.distanceTo(clockPos).toFixed(0)} m away, so it shows the time ${(eye.distanceTo(clockPos) / C).toFixed(1)} s ago. Walk toward it and it will seem to run fast to catch up.`;
         }
 
         // Tree bulbs twinkle in three sets on one clock.
@@ -413,7 +419,8 @@ export default {
             if (e.chuffN % 60 === 0) sfx.whistle(chim);
           }
           const seenPos = trainAt(seenTimeOf((tt) => trainAt(tt, e.chimney0), eye, t, 200), e.chimney0);
-          if (chim.distanceTo(eye) < 45 && chim.distanceTo(seenPos) > 18 && !goals[1].done) {
+          const lookingAtIt = fwd.dot(seenPos.clone().sub(eye).normalize()) > 0.8;
+          if (lookingAtIt && chim.distanceTo(eye) < 45 && chim.distanceTo(seenPos) > 18 && !goals[1].done) {
             goals[1].done = true;
             note = `The engine is ${chim.distanceTo(seenPos).toFixed(0)} m ahead of where you see it. Its puffing comes from where it really is.`;
           }

@@ -16,8 +16,18 @@ await run("village", async () => {
   // Read the church clock from far away.
   await t.place(-30, 60, 0.3, 0.2);
   await t.q(() => { const c = pacetime.instance; const e = pacetime.player.eye; const toC = { x: 18 - e.x, z: -80 - e.z }; pacetime.player.yaw = Math.atan2(-toC.x, -toC.z); });
-  await t.advance(1);
-  await t.wait(300);
+  await t.advance(3);
+  // Watch for a steam train from beside the track.
+  await t.place(8, 62, 1.4, 0);
+  for (let i = 0; i < 300 && !(await t.q(() => pacetime.instance.goals[1].done)); i++) {
+    await t.advance(0.2);
+    await t.q(() => {
+      // Turn toward the nearer engine as you see it.
+      const e = pacetime.player.eye;
+      const best = pacetime.instance.engineSeen?.(e);
+      if (best) pacetime.player.yaw = Math.atan2(-(best.x - e.x), -(best.z - e.z));
+    });
+  }
   // Ride the carousel for 20 s of your time.
   await t.place(-17, -22, 0);
   await t.q(() => pacetime.act());
