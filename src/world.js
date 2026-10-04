@@ -124,6 +124,7 @@ export function bolt(target, seed, color = PALETTE.strike) {
   const scorch = mesh(new THREE.CircleGeometry(0.9, 40), mat({ color: "#ff8a3d", emissive: 0.9, unlit: true, doubleSided: true, ir: 1.5 }), { pos: [target.x, 0.04, target.z], rot: [-Math.PI / 2, 0, 0] });
   g.add(scorch);
   g.strike = null;
+  g.userData.dynamic = true;
   // Shows the bolt for the world time `t` its light left the strike point.
   g.update = (eye) => {
     const seen = g.strike === null ? -1e9 : retardedTime(eye, target) - g.strike;
@@ -147,6 +148,7 @@ export function door(x, z, width = 5, height = 4.4) {
   g.add(mesh(G.ball, lamp, { pos: [0, height + 1.45, 0], scale: 0.2 }));
   g.add(slab);
   g.position.set(x, 0, z);
+  g.userData.dynamic = true;
   g.amount = 0;
   g.show = (closed) => {
     g.amount += ((closed ? 1 : 0) - g.amount) * 0.5;
@@ -172,6 +174,7 @@ export function lightClockFrame(height, extra = {}) {
 
 export function photonBall(color = "#fff1c9", sourceVel = null) {
   const g = new THREE.Group();
+  g.userData.dynamic = true;
   g.add(mesh(G.sphere, mat({ color, emissive: 1, ir: 1.5, uv: 1.5, sourceVel }), { scale: 0.12 }));
   g.add(mesh(G.sphere, mat({ color, emissive: 1, additive: true, opacity: 0.2, ir: 0.3, uv: 0.3, unique: true, sourceVel }), { scale: 0.28 }));
   return g;

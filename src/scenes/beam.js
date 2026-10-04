@@ -26,7 +26,8 @@ export default {
   id: "beam",
   title: "Chasing the Beam",
   tag: "constancy of c",
-  blurb: "Light here moves at 3 m/s, and you can sprint at 2.85. Chase a pulse and see how much ground you gain.",
+  blurb: "Light here moves at 3 m/s and you can sprint at 2.85. Chase a pulse and see how much ground you gain.",
+  tour: { from: [4, 0, -Math.PI / 2], dir: [1, 0], length: 140 },
 
   build({ player, toast }) {
     world.c = 3;

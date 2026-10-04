@@ -29,7 +29,8 @@ export default {
   id: "village",
   title: "Winter Village",
   tag: "time dilation · aberration · light delay",
-  blurb: "A snowy valley where light moves at 7 m/s. Ride a carousel and come off younger, read a church clock that's always behind, and sprint through snowfall until the flakes turn into hyperspace.",
+  blurb: "A snowy valley. A carousel that leaves you younger, a church clock that's always behind, and snowfall that turns to hyperspace.",
+  tour: { from: [-40, 80, 0.35], dir: [0.34, -0.94], length: 160 },
 
   build({ player, toast }) {
     world.c = C;
@@ -63,7 +64,7 @@ export default {
       group.add(cottage(x, z, -a - Math.PI / 2, { snow: true, color: ["#6b4a3a", "#8a5a44", "#5a4a5a", "#7a6a50"][i % 4], seed: i * 3 }));
       colliders.push({ x, z, r: 3.6 });
     }
-    for (const [x, z] of [[-6, -10], [6, -10], [-6, 10], [6, 10], [-6, 30], [6, 30], [-12, -48], [12, -48], [26, -30], [-28, -12]]) lights.add(lampPost(x, z + SQUARE.z + 30 - 30, { h: 3.6, color: "#ffc070", pole: "#1c1a18" }));
+    for (const [x, z] of [[-6, -10], [6, -10], [-6, 10], [6, 10], [-6, 30], [6, 30], [-12, -48], [12, -48], [26, -30], [-28, -12]]) lights.add(lampPost(x, z, { h: 3.6, color: "#ffc070", pole: "#1c1a18", range: 5, power: 0.4 }));
 
     // The church, its tower clock showing whatever time its light left it.
     group.add(box(10, 8, 18, { color: "#cfc6b8", ir: 0.6, windows: { size: [2.6, 4], lit: 1, color: "#ffb860", seed: 2 } }, [CHURCH.x, 4, CHURCH.z - 12]));
@@ -84,6 +85,7 @@ export default {
       return f;
     });
     const bell = mesh(new THREE.CylinderGeometry(0.5, 1.1, 1.6, 20, 1, true), mat({ color: "#c9a24a", ir: 0.6, doubleSided: true }), { pos: [CHURCH.x, 22.4, CHURCH.z] });
+    bell.userData.dynamic = true;
     group.add(bell);
     lights.add(box(2.4, 3, 0.1, { color: "#ffb860", emissive: 0.8, ir: 1 }, [CHURCH.x, 1.5, CHURCH.z + 3.05]));
     colliders.push({ x: CHURCH.x, z: CHURCH.z, r: 4.4 }, { x: CHURCH.x, z: CHURCH.z - 8, r: 5.5 }, { x: CHURCH.x, z: CHURCH.z - 16, r: 5.5 });
@@ -199,8 +201,18 @@ export default {
     loco.forEach((m) => steam.add(m));
     for (let k = 1; k <= 4; k++) {
       const cars = placeOnLoop(PHI0 - k * 0.075, (g) => {
-        g.add(mesh(G.box, onTrain({ color: k % 2 ? "#2a4a3a" : "#5a1a1e", ir: 0.5, windows: { size: [1.3, 2.2], lit: 0.9, color: "#ffc070", seed: k } }), { pos: [0, 1.9, 0], scale: [7.2, 2.4, 2.4] }));
-        g.add(mesh(G.box, onTrain({ color: "#e6eef6", ir: 0.6, uv: 0.4 }), { pos: [0, 3.2, 0], scale: [7.4, 0.25, 2.6] }));
+        if (k === 4) {
+          // An open observation car at the back, for riders.
+          g.add(mesh(G.box, onTrain({ color: "#5a1a1e", ir: 0.5 }), { pos: [0, 0.95, 0], scale: [7.2, 0.3, 2.4] }));
+          for (const s of [-1, 1]) {
+            g.add(mesh(G.box, onTrain({ color: "#b8902a", ir: 0.6 }), { pos: [0, 1.75, s * 1.15], scale: [7.2, 0.08, 0.08] }));
+            for (let x = -3.4; x <= 3.4; x += 0.85) g.add(mesh(G.box, onTrain({ color: "#b8902a", ir: 0.6 }), { pos: [x, 1.4, s * 1.15], scale: [0.06, 0.7, 0.06] }));
+          }
+          for (const x of [-3, 3]) g.add(mesh(G.ball, onTrain({ color: "#ffc070", emissive: 1, ir: 1.2 }), { pos: [x, 2.0, 1.15], scale: 0.12 }));
+        } else {
+          g.add(mesh(G.box, onTrain({ color: k % 2 ? "#2a4a3a" : "#5a1a1e", ir: 0.5, windows: { size: [1.3, 2.2], lit: 0.9, color: "#ffc070", seed: k } }), { pos: [0, 1.9, 0], scale: [7.2, 2.4, 2.4] }));
+          g.add(mesh(G.box, onTrain({ color: "#e6eef6", ir: 0.6, uv: 0.4 }), { pos: [0, 3.2, 0], scale: [7.4, 0.25, 2.6] }));
+        }
         g.add(mesh(G.box, onTrain({ color: "#2a2d34" }), { pos: [0, 0.6, 0], scale: [6.6, 0.4, 2] }));
       });
       cars.forEach((m) => steam.add(m));
@@ -216,7 +228,7 @@ export default {
     group.add(box(16, 0.6, 4, { color: "#6a5a4a", ir: 0.5 }, [station.x, 0.3, station.z + 3.4]));
     group.add(box(16, 0.3, 4.6, { color: "#e6eef6", ir: 0.6, uv: 0.4 }, [station.x, 3.6, station.z + 3.6]));
     for (const dx of [-7, 0, 7]) group.add(box(0.18, 3.1, 0.18, { color: "#3a2e26" }, [station.x + dx, 2.1, station.z + 5.2]));
-    lights.add(lampPost(station.x - 6, station.z + 4.6, { h: 3.4, color: "#ffc070" }), lampPost(station.x + 6, station.z + 4.6, { h: 3.4, color: "#ffc070" }));
+    lights.add(lampPost(station.x - 6, station.z + 4.6, { h: 3.4, color: "#ffc070", power: 0.4 }), lampPost(station.x + 6, station.z + 4.6, { h: 3.4, color: "#ffc070", power: 0.4 }));
 
     // Snowfall, wrapped around you.
     const SNOW_V = 0.1 * C;
@@ -252,7 +264,7 @@ export default {
       r0: null,
       carry(p, t) {
         const r = spin(this.r0, omegaTrain * t);
-        p.set(LOOP.x + r.x, 0.9, LOOP.z + r.z);
+        p.set(LOOP.x + r.x, 1.1, LOOP.z + r.z);
         this.velocity.set(0, 1, 0).cross(r).multiplyScalar(omegaTrain);
         const a = omegaTrain * t;
         player.yaw += a - lastAngle;
@@ -325,9 +337,13 @@ export default {
           return {
             label: "Ride the carousel",
             run: () => {
-              const out = player.pos.clone().sub(CAROUSEL).setY(0).setLength(4.7);
+              const out = player.pos.clone().sub(CAROUSEL).setY(0).setLength(CAR_R - 0.3);
               carouselSeat.r0 = spin(out, -omegaCar * world.t);
               lastAngle = omegaCar * world.t;
+              // Face the way the rim is going.
+              const tangent = new THREE.Vector3(0, 1, 0).cross(out).normalize();
+              player.yaw = Math.atan2(-tangent.x, -tangent.z);
+              player.pitch = -0.05;
               riding = carouselSeat;
               rideStart = { tau: player.tau, t: world.t };
               player.board(carouselSeat);
@@ -343,7 +359,7 @@ export default {
           return {
             label: "Board the steam train",
             run: () => {
-              const coach = spin(chimney0.clone().sub(LOOP), -0.15 + omegaTrain * world.t).setY(0).setLength(LOOP_R);
+              const coach = spin(chimney0.clone().sub(LOOP), -0.32 + omegaTrain * world.t).setY(0).setLength(LOOP_R);
               trainSeat.r0 = spin(coach, -omegaTrain * world.t);
               lastAngle = omegaTrain * world.t;
               riding = trainSeat;

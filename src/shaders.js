@@ -18,6 +18,8 @@ export const shared = {
   uNight: { value: 0 },
   uSpace: { value: 0 },
   uStars: { value: 1 },
+  uLampPos: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, -1000, 0, 1)) },
+  uLampColor: { value: Array.from({ length: 8 }, () => new THREE.Color(0, 0, 0)) },
   uPointScale: { value: 600 },
   uExposure: { value: 1 },
   uGrain: { value: 0 },
@@ -236,6 +238,8 @@ uniform vec3 uVel;
 #endif
 uniform vec3 uGridColor;
 uniform vec3 uGrid; // spacing, line width in pixels, glow
+uniform vec4 uLampPos[8];   // xyz, range
+uniform vec3 uLampColor[8];
 #ifdef ROTOR
 varying vec3 vSrcVel;
 #endif
@@ -320,6 +324,13 @@ void main() {
     ndl = smoothstep(0.05, 0.12, ndl) * 0.85 + smoothstep(0.55, 0.62, ndl) * 0.15;
   #endif
   vec3 light = mix(uGround, uSky, N.y * 0.5 + 0.5) + uSunColor * ndl;
+  // Nearby lamps.
+  for (int i = 0; i < 8; i++) {
+    vec3 L = uLampPos[i].xyz - vWorld;
+    float d2 = dot(L, L), r = uLampPos[i].w;
+    float fall = r * r / (r * r + d2 * 1.6) * (1.0 - smoothstep(r * 2.0, r * 3.0, sqrt(d2)));
+    light += uLampColor[i] * fall * (0.35 + 0.65 * max(dot(N, L * inversesqrt(max(d2, 1e-4))), 0.0));
+  }
   #ifdef UNLIT
     light = vec3(1.0);
   #endif

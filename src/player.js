@@ -25,6 +25,7 @@ export class Player {
     this.touchSprint = false;
     this.vehicle = null; // a train you're riding, if any
     this.legs = 3; // the light speed your stride is sized for, m/s
+    this.autopilot = null; // a proper velocity to hold, for the title screen
     this.bindInput();
   }
 
@@ -150,7 +151,7 @@ export class Player {
     // Steer proper velocity toward the target. Proper velocity has no ceiling,
     // so however hard you push you never reach c.
     const c = world.c;
-    const target = dir.multiplyScalar((sprint ? SPRINT_U : WALK_U) * this.legs);
+    const target = this.autopilot ? this.autopilot.clone() : dir.multiplyScalar((sprint ? SPRINT_U : WALK_U) * this.legs);
     // Slowing down is quick, so letting go of the keys doesn't coast you far.
     const braking = target.lengthSq() < this.u.lengthSq();
     const rate = (braking ? 7 : sprint ? 2.7 : 2) * this.legs * dTau;

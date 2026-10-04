@@ -77,6 +77,7 @@ function coasterCar(color) {
   g.add(mesh(G.box, m({ color: "#fff2c8", emissive: 1, ir: 1, uv: 0.4 }), { pos: [0, 0.6, -1.02], scale: [1.2, 0.12, 0.05] }));
   g.add(mesh(G.box, m({ color: "#ff3030", emissive: 1, ir: 1 }), { pos: [0, 0.6, 1.02], scale: [1.2, 0.1, 0.05] }));
   g.sv = sv;
+  g.userData.dynamic = true;
   return g;
 }
 
@@ -84,7 +85,8 @@ export default {
   id: "pier",
   title: "Seaside Funfair",
   tag: "light delay · Doppler",
-  blurb: "A pier at dusk where light moves at 6 m/s. A Ferris wheel whose rim nears light speed, a coaster to ride, a lighthouse beam that spirals, and fireworks you hear long before you see.",
+  blurb: "A pier at dusk. A Ferris wheel near light speed, a coaster, a spiralling lighthouse beam, and fireworks you hear before you see.",
+  tour: { from: [0, 30, 0], dir: [0, -1], length: 150 },
 
   build({ player, toast }) {
     world.c = C;
@@ -208,6 +210,7 @@ export default {
     group.add(mesh(G.cyl, mat({ color: "#22252c" }), { pos: [LIGHTHOUSE.x, LAMP_Y - 1.2, LIGHTHOUSE.z], scale: [2.2, 0.3, 2.2] }));
     const lampMat = mat({ color: "#fff3c4", emissive: 1, ir: 1.2, uv: 0.6, unique: true });
     const lamp = mesh(G.sphere, lampMat, { pos: [LIGHTHOUSE.x, LAMP_Y, LIGHTHOUSE.z], scale: 0.9 });
+    lamp.userData.dynamic = true;
     group.add(lamp);
     lights.add(lamp);
     group.add(mesh(new THREE.ConeGeometry(1.4, 1.4, 12), mat({ color: "#22252c" }), { pos: [LIGHTHOUSE.x, LAMP_Y + 1.4, LIGHTHOUSE.z] }));

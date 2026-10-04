@@ -61,7 +61,8 @@ export default {
   id: "city",
   title: "Neon Crossroads",
   tag: "light delay · Doppler · aberration",
-  blurb: "A rainy night where light moves at 10 m/s. Taxis at 85% of light speed seem to race faster than light toward you and crawl away. Ride one and watch the city fold.",
+  blurb: "Rain, neon and taxis at 85% of light speed that seem to outrun light coming toward you. Hail one and watch the city fold.",
+  tour: { from: [-2, 120, 0], dir: [0, -1], length: 220 },
 
   build({ player, toast }) {
     world.c = C;
@@ -123,11 +124,11 @@ export default {
     const lamps = [];
     for (let z = -LEN + 10; z < LEN; z += 16) {
       for (const sx of [-1, 1]) {
-        const p = lampPost(sx * (AVE + 0.6), z + (sx > 0 ? 8 : 0), { h: 6, color: "#ffd9a0" });
+        const p = lampPost(sx * (AVE + 0.6), z + (sx > 0 ? 8 : 0), { h: 6, color: "#ffd9a0", range: 9, power: 1.3 });
         const bulb = p.children[1];
         bulb.material = mat({ color: "#ffd9a0", emissive: 1, ir: 1.2, uv: 0.2, unique: true });
         lights.add(p);
-        lamps.push({ bulb, pos: new THREE.Vector3(sx * (AVE + 0.6), 6.2, z + (sx > 0 ? 8 : 0)) });
+        lamps.push({ bulb, pos: new THREE.Vector3(sx * (AVE + 0.6), 6.2, z + (sx > 0 ? 8 : 0)), light: p.userData.lamp });
       }
     }
 
@@ -303,6 +304,7 @@ export default {
         for (const l of lamps) {
           const off = surgeAt(retardedTime(eye, l.pos));
           l.bulb.material.uniforms.uSpec.value.z = off ? 0.03 : 1;
+          l.light.power = off ? 0 : 1.3;
           l.bulb.material.uniforms.uColor.value.set(off ? "#2a2018" : "#ffd9a0");
         }
         const surging = surgeAt(retardedTime(eye, new THREE.Vector3(eye.x, 6, eye.z - 40)));

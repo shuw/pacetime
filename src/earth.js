@@ -41,6 +41,7 @@ export function reflection(obj, y0 = 0, strength = 0.45, { stretch = 1 } = {}) {
     .multiply(new THREE.Matrix4().makeScale(1, -stretch, 1))
     .multiply(new THREE.Matrix4().makeTranslation(0, -y0, 0));
   const rotors = new Map();
+  const mats = new Map(); // one mirrored material per source material
   obj.updateMatrixWorld(true);
   obj.traverse((m) => {
     if (!m.isMesh || !m.material.userData?.opts) return;
@@ -59,10 +60,15 @@ export function reflection(obj, y0 = 0, strength = 0.45, { stretch = 1 } = {}) {
       const p = o.rotor.uPivot.value;
       r = { ...rotors.get(o.rotor.uRotCenter), uPivot: { value: new THREE.Vector4(p.x, 2 * y0 - p.y, p.z, p.w) } };
     }
-    const copy = new THREE.Mesh(m.geometry, mat({ ...o, rotor: r, additive: true, opacity: strength, unique: true, doubleSided: true }));
-    // Share the live color and glow, so lamps switching on and off show in the reflection.
-    copy.material.uniforms.uColor = m.material.uniforms.uColor;
-    copy.material.uniforms.uSpec = m.material.uniforms.uSpec;
+    const key = m.material.uuid + (r ? r.uPivot.value.toArray().join() : "");
+    if (!mats.has(key)) {
+      const mm = mat({ ...o, rotor: r, additive: true, opacity: strength, unique: true, doubleSided: true });
+      // Share the live color and glow, so lamps switching on and off show in the reflection.
+      mm.uniforms.uColor = m.material.uniforms.uColor;
+      mm.uniforms.uSpec = m.material.uniforms.uSpec;
+      mats.set(key, mm);
+    }
+    const copy = new THREE.Mesh(m.geometry, mats.get(key));
     copy.matrixAutoUpdate = false;
     copy.matrix.copy(flip).multiply(m.matrixWorld);
     copy.frustumCulled = false;
@@ -72,8 +78,9 @@ export function reflection(obj, y0 = 0, strength = 0.45, { stretch = 1 } = {}) {
   return out;
 }
 
-export function lampPost(x, z, { h = 4, color = "#ffcf8a", pole = "#2a2622" } = {}) {
+export function lampPost(x, z, { h = 4, color = "#ffcf8a", pole = "#2a2622", range = 6, power = 1 } = {}) {
   const g = new THREE.Group();
+  g.userData.lamp = { pos: new THREE.Vector3(x, h + 0.2, z), color: new THREE.Color(color), range, power };
   g.add(box(0.12, h, 0.12, { color: pole, ir: 0.2 }, [x, h / 2, z]));
   g.add(mesh(G.sphere, mat({ color, emissive: 1, ir: 1.2, uv: 0.2 }), { pos: [x, h + 0.2, z], scale: 0.28 }));
   return g;
@@ -279,6 +286,7 @@ export function clockFace(radius = 1.2, { face = "#f4ead2", rim = "#2b2622", glo
   const big = hand(radius * 0.78, 0.07, "#2b2622");
   const small = hand(radius * 0.5, 0.11, "#2b2622");
   const sec = hand(radius * 0.85, 0.03, "#c0392b");
+  g.userData.dynamic = true;
   g.set = (t) => {
     sec.rotation.z = -(t % 10) / 10 * Math.PI * 2; // a fast hand, one lap per 10 s
     big.rotation.z = -(t / 60) * Math.PI * 2;

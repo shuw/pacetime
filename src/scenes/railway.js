@@ -41,7 +41,8 @@ export default {
   id: "railway",
   title: "Einstein's Railway",
   tag: "simultaneity · contraction · dilation",
-  blurb: "Glass trains at 87% of light speed. Lightning strikes, a tunnel too short for the train, and a clock made of light. Watch from the platform, then ride.",
+  blurb: "Glass trains at 87% of light speed: lightning, a tunnel too short for the train, and a clock made of light.",
+  tour: { from: [-150, 10, -Math.PI / 2], dir: [1, 0], length: 260 },
 
   build({ player, toast }) {
     world.c = 5;

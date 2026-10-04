@@ -5,6 +5,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { Player } from "./player.js";
+import { bake } from "./geo.js";
 import { shared, skyMaterial } from "./shaders.js";
 import { effects, world } from "./relativity.js";
 import { initLab, showScene, syncLab, toast, toggleLab, updateHud } from "./hud.js";
@@ -20,6 +21,7 @@ const SCENES = [pier, city, village, railway, beam];
 const canvas = document.getElementById("view");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.info.autoReset = false;
 // Things ahead appear up to several times farther away at speed, sky included.
 const camera = new THREE.PerspectiveCamera(72, 1, 0.1, 12000);
 const root = new THREE.Scene();
@@ -72,6 +74,9 @@ function load(scene) {
   player.tau = 0;
   world.t = 0;
   const instance = scene.build({ player, toast });
+  instance.lamps = [];
+  instance.group.traverse((o) => o.userData.lamp && instance.lamps.push(o.userData.lamp));
+  bake(instance.group);
   root.add(instance.group);
   current = { scene, instance };
   applyEnv(instance.env);
@@ -159,7 +164,8 @@ function closeMenu() {
 function startScene(scene) {
   unlockAudio();
   sfx.ui();
-  if (current?.scene !== scene || current.instance.started) load(scene);
+  player.autopilot = null;
+  load(scene);
   current.instance.started = true;
   closeMenu();
   if (matchMedia("(pointer: fine)").matches) canvas.requestPointerLock?.();
@@ -297,6 +303,7 @@ function simulate(dTau, { realtime = true } = {}) {
   sky.position.copy(eye);
 
   instance.update({ player, eye, camera, t: world.t, dT, dTau });
+  if (realtime) pickLamps(instance.lamps, eye);
   instance.group.traverse((c) => { if (c.follow) c.position.set(eye.x, c.followY ?? 0, eye.z); });
   if (!realtime) return;
 
@@ -317,16 +324,57 @@ function simulate(dTau, { realtime = true } = {}) {
   }
 }
 
+// On the title screen the camera glides through the scene: a few seconds at
+// 92% of light speed, a slow-down to look around, then back to the start.
+let tourClock = 0;
+function tour(dt) {
+  const tr = current?.scene.tour;
+  if (!tr || !paused || current.instance.started) { player.autopilot = null; return; }
+  tourClock += dt;
+  const [x, z, yaw] = tr.from;
+  const cycle = 14;
+  // Show each scene for two glides, then move on to the next.
+  if (tourClock > cycle * 2) {
+    tourClock = 0;
+    load(SCENES[(SCENES.indexOf(current.scene) + 1) % SCENES.length]);
+    return;
+  }
+  const k = tourClock % cycle;
+  if (k < dt * 1.5 || player.pos.distanceTo(new THREE.Vector3(x, 0, z)) > tr.length) {
+    player.place(x, z, yaw);
+    player.pitch = 0.04;
+    tourClock = Math.floor(tourClock / cycle) * cycle + dt * 2;
+  }
+  const u = (k < 9 ? 2.4 : 0) * player.legs; // proper speed: 0.92 c
+  player.autopilot = new THREE.Vector3(tr.dir[0], 0, tr.dir[1]).normalize().multiplyScalar(u);
+}
+
+// The eight lamps nearest you light their surroundings.
+function pickLamps(lamps, eye) {
+  const near = lamps.length > 8 ? [...lamps].sort((a, b) => a.pos.distanceToSquared(eye) - b.pos.distanceToSquared(eye)).slice(0, 8) : lamps;
+  for (let i = 0; i < 8; i++) {
+    const l = near[i];
+    if (l) {
+      shared.uLampPos.value[i].set(l.pos.x, l.pos.y, l.pos.z, l.range);
+      shared.uLampColor.value[i].copy(l.color).multiplyScalar(l.power);
+    } else shared.uLampColor.value[i].setRGB(0, 0, 0);
+  }
+}
+
 // Tests can run the world faster than real time.
 let warp = 1;
 
+let frameTimes = [];
 function frame() {
   const now = performance.now();
+  frameTimes.push(now);
+  if (frameTimes.length > 120) frameTimes.shift();
   const dTau = Math.min((now - last) / 1000, 0.05);
   last = now;
   if (current) {
     // Behind the title screen the world keeps running so the menu has a live backdrop.
     const frozen = (paused || !help.hidden) && current.instance.started;
+    tour(dTau);
     const total = frozen ? 0 : dTau * warp;
     const n = Math.max(1, Math.ceil(total / 0.05));
     for (let i = 0; i < n; i++) simulate(total / n, { realtime: i === n - 1 });
@@ -339,6 +387,7 @@ function frame() {
       writeHash(dTau);
     }
   }
+  renderer.info.reset();
   if (usePost) composer.render();
   else renderer.render(root, camera);
   requestAnimationFrame(frame);
@@ -357,6 +406,8 @@ frame();
 window.pacetime = {
   player, world, effects, closeMenu, act, shared, bloom,
   get instance() { return current?.instance; },
+  get fps() { const n = frameTimes.length - 1; return n > 0 ? (1000 * n) / (frameTimes[n] - frameTimes[0]) : 0; },
+  get drawCalls() { return renderer.info.render.calls; },
   get warp() { return warp; },
   set warp(k) { warp = Math.max(0, Math.min(k, 40)); },
   // Jump ahead: run the world for `seconds` of your own time without drawing.

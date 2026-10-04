@@ -111,3 +111,41 @@ export class Wake {
     this.geo.setDrawRange(0, 0);
   }
 }
+
+// Merge every static mesh in `root` that shares a material into one mesh.
+// Anything under an object flagged userData.dynamic (moved, spun or hidden at
+// run time) is left alone.
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+
+export function bake(root) {
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const buckets = new Map();
+  const isDynamic = (o) => { for (let p = o; p && p !== root; p = p.parent) if (p.userData.dynamic) return true; return false; };
+  root.traverse((m) => {
+    if (!m.isMesh || m.isInstancedMesh || isDynamic(m)) return;
+    const key = m.material.uuid + ":" + m.renderOrder;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(m);
+  });
+  let merged = 0;
+  for (const meshes of buckets.values()) {
+    if (meshes.length < 2) continue;
+    const geos = meshes.map((m) => {
+      let g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+      for (const name of Object.keys(g.attributes)) if (name !== "position" && name !== "normal") g.deleteAttribute(name);
+      if (!g.attributes.normal) g.computeVertexNormals();
+      g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld));
+      return g;
+    });
+    const geo = mergeGeometries(geos, false);
+    if (!geo) continue;
+    const big = new THREE.Mesh(geo, meshes[0].material);
+    big.frustumCulled = false;
+    big.renderOrder = meshes[0].renderOrder;
+    root.add(big);
+    for (const m of meshes) m.removeFromParent();
+    merged += meshes.length;
+  }
+  return merged;
+}
