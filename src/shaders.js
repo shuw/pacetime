@@ -715,6 +715,7 @@ uniform vec3 uCam;
 uniform float uC;
 uniform float uIntensity;
 uniform float uRound;
+uniform vec2 uBeyond; // infrared and ultraviolet, relative to visible
 varying vec3 vColor;
 varying float vAgeK;
 varying vec3 vSrc;
@@ -734,14 +735,14 @@ void main() {
   float fade = (1.0 - vAgeK) * (1.0 - vAgeK);
   vec3 rgb = vColor * uIntensity * fade * shape;
   float k = dot(vColor, vec3(0.33)) * uIntensity * fade * shape;
-  vec3 col = searchlight(spectralShift(rgb, k * 0.35, k * 0.35, D), D);
+  vec3 col = searchlight(spectralShift(rgb, k * uBeyond.x, k * uBeyond.y, D), D);
   gl_FragColor = vec4(softClip(col), 1.0);
   #include <colorspace_fragment>
 }
 `;
 
 // particles: { origin, vel, birth, life, color, size, tail }[]; as "points" or "lines".
-export function sparkField(count, { lines = false, gravity = 0, periodic = false, wrap = [60, 0, 60], intensity = 1.5, round = true } = {}) {
+export function sparkField(count, { lines = false, gravity = 0, periodic = false, wrap = [60, 0, 60], intensity = 1.5, round = true, ir = 0.35, uv = 0.35 } = {}) {
   const n = lines ? count * 2 : count;
   const geo = new THREE.BufferGeometry();
   const attr = (name, size) => {
@@ -766,6 +767,7 @@ export function sparkField(count, { lines = false, gravity = 0, periodic = false
       uWrap: { value: new THREE.Vector3(...wrap) },
       uIntensity: { value: intensity },
       uRound: { value: round && !lines ? 1 : 0 },
+      uBeyond: { value: new THREE.Vector2(ir, uv) },
     },
     transparent: true,
     depthWrite: false,

@@ -23,6 +23,7 @@ export function unlockAudio() {
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     startLoops();
+    if (pendingAmbience) setAmbience(pendingAmbience);
   }
   if (ctx.state === "suspended") ctx.resume();
 }
@@ -157,12 +158,40 @@ function startLoops() {
     return { o, k };
   });
   loops.train = { g: trainG, p: trainP, f: trainF, oscs };
+
+  // Weather and place: rain hiss, sea wash, mountain wind. One plays at a time.
+  const amb = (type, freq, q) => {
+    const s = noiseSource(true);
+    const f = ctx.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = freq;
+    f.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    s.connect(f).connect(g).connect(master);
+    s.start(0, Math.random() * 2);
+    return { f, g };
+  };
+  loops.amb = { rain: amb("highpass", 1800, 0.4), sea: amb("lowpass", 500, 0.7), snow: amb("bandpass", 380, 0.6) };
+  loops.ambState = { kind: null, t: 0 };
 }
+
+// Choose the background sound for the current place.
+export function setAmbience(kind) {
+  if (!ctx) { pendingAmbience = kind; return; }
+  const now = ctx.currentTime;
+  for (const [k, { g }] of Object.entries(loops.amb)) g.gain.setTargetAtTime(k === kind ? { rain: 0.07, sea: 0.12, snow: 0.06 }[k] : 0, now, 0.8);
+  loops.ambState.kind = kind;
+}
+let pendingAmbience = null;
 
 // Called every frame. `train` is { pos (where you see it), D (Doppler factor), riding } or null.
 export function updateAudio({ beta, train, dt }) {
   if (!ctx) return;
   const now = ctx.currentTime;
+  // The sea breathes: waves wash in and out.
+  if (loops.ambState.kind === "sea") loops.amb.sea.f.frequency.setTargetAtTime(380 + 260 * (0.5 + 0.5 * Math.sin(now * 0.7)) ** 2, now, 0.3);
+  if (loops.ambState.kind === "snow") loops.amb.snow.g.gain.setTargetAtTime(0.04 + 0.04 * (0.5 + 0.5 * Math.sin(now * 0.23) * Math.sin(now * 0.61)), now, 0.5);
   const w = loops.wind;
   w.g.gain.setTargetAtTime(0.22 * beta * beta, now, 0.15);
   w.f.frequency.setTargetAtTime(250 + 2600 * beta * beta, now, 0.15);
@@ -264,6 +293,10 @@ export const sfx = {
     const { pan, gain } = placed(pos, 40);
     tone(415, 0, 0.35, { type: "square", gain: 0.03 * gain, pan, attack: 0.01 });
     tone(523, 0, 0.35, { type: "square", gain: 0.025 * gain, pan, attack: 0.01 });
+  },
+  toss() {
+    tone(320, 0, 0.35, { type: "sine", gain: 0.08, slide: 2.4 });
+    burst(0.2, { gain: 0.06, from: 2500, to: 800, type: "bandpass", q: 2 });
   },
   step(soft = 1) {
     burst(0.07, { gain: 0.05 * soft, from: 900, to: 300, q: 1 });

@@ -29,6 +29,7 @@ async function boardWhenPassing(atX) {
 }
 
 await page.evaluate((id) => { pacetime.load(id); pacetime.closeMenu(); }, which);
+await page.evaluate((w) => (pacetime.warp = w), Number(process.env.WARP ?? 6));
 
 if (which === "railway") {
   const strikes = () => page.evaluate(() => pacetime.instance.log.seen.filter((e) => e.tag === "strike").length);

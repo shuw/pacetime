@@ -47,12 +47,20 @@ await run("city", async () => {
   for (let i = 0; i < 60 && !(await t.q(() => pacetime.instance.goals[1].done)); i++) await t.advance(0.5);
   // Face south... watch taxis coming north toward us on the east lane.
   await t.place(1.5, -20, Math.PI);
-  for (let i = 0; i < 200 && !(await t.q(() => pacetime.instance.goals[2].done)); i++) {
-    await t.advance(0.25);
-    const facing = await t.q(() => {
-      // Turn to face the nearest seen taxi.
-      return true;
+  // Keep looking at the nearest taxi we can see.
+  let shotNear = false;
+  for (let i = 0; i < 400 && !(await t.q(() => pacetime.instance.goals[3].done)); i++) {
+    await t.advance(0.1);
+    const d = await t.q(() => {
+      const eye = pacetime.player.eye;
+      const near = pacetime.instance.cabs.map((c) => ({ c, s: c.m.seen(eye) })).filter((x) => x.s.pos.distanceTo(eye) > 6).sort((a, b) => a.s.pos.distanceTo(eye) - b.s.pos.distanceTo(eye))[0];
+      const p = near.s.pos;
+      pacetime.player.yaw = Math.atan2(-(p.x - eye.x), -(p.z - eye.z));
+      pacetime.player.pitch = -0.05;
+      const toward = near.c.m.vel.clone().normalize().dot(eye.clone().sub(p).normalize());
+      return toward > 0 ? p.distanceTo(eye) : -p.distanceTo(eye);
     });
+    if (!shotNear && d > 15 && d < 25) { shotNear = true; console.log("  oncoming taxi:", await t.snap("city-oncoming")); }
   }
   await t.place(-AVE_FIX(), 12, 0);
   await t.q(() => pacetime.act());
@@ -63,14 +71,24 @@ await run("city", async () => {
 function AVE_FIX() { return 7.6; }
 
 await run("pier", async () => {
+  await t.place(-16, -143, 0);
+  await t.q(() => pacetime.act());
+  await t.advance(5);
+  console.log("  wheel:", await t.q(() => !!pacetime.player.vehicle), await t.snap("pier-wheel-ride"));
+  await t.advance(9);
+  await t.q(() => pacetime.act());
   await t.place(0, -118, 0, 0.25);
   for (let i = 0; i < 80 && !(await t.q(() => pacetime.instance.goals[0].done)); i++) await t.advance(0.5);
   await t.place(-16, -122, 0);
   await t.advance(4);
   await t.place(24.4, -131, Math.PI);
-  for (let i = 0; i < 120 && (await t.q(() => pacetime.instance.action()?.label)) !== "Board the coaster"; i++) await t.advance(0.25);
+  for (let i = 0; i < 800 && (await t.q(() => pacetime.instance.action()?.label)) !== "Board the coaster"; i++) await t.advance(0.25);
   await t.q(() => pacetime.act());
-  for (let i = 0; i < 200 && !(await t.q(() => pacetime.instance.goals[4].done)); i++) await t.advance(0.5);
+  let shot = false;
+  for (let i = 0; i < 600 && !(await t.q(() => pacetime.instance.goals[4].done)); i++) {
+    await t.advance(0.5);
+    if (!shot && (await t.q(() => pacetime.player.beta)) > 0.85) { shot = true; console.log("  coaster drop:", await t.snap("pier-drop")); }
+  }
 });
 
 report(t.errors);

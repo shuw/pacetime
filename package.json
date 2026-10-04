@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "bun scripts/serve.ts",
-    "build": "bun build ./index.html --outdir dist --minify"
+    "build": "bun build ./index.html --outdir dist --minify",
+    "test": "node scripts/test.mjs",
+    "shot": "node scripts/shot.mjs"
   },
   "dependencies": {
     "three": "^0.186.0"

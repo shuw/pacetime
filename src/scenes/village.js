@@ -289,6 +289,7 @@ export default {
       walk: [[-210, -260, 210, 160]],
       spawn: [0, 30, 0],
       env: DUSK.env,
+      ambience: "snow",
       post: DUSK.post,
       goals,
       tips: [

@@ -47,6 +47,11 @@ export function toggleLab() {
 }
 
 let toastTimer;
+export function clearToast() {
+  clearTimeout(toastTimer);
+  $("toast").classList.remove("show");
+}
+
 export function toast(msg, seconds = 6) {
   const el = $("toast");
   el.textContent = msg;

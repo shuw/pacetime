@@ -187,18 +187,29 @@ export default {
     // Your own cab ride.
     const ride = new Mover(new THREE.Vector3(0, 0, -TAXI * C), { clip: [-60, -LEN - 40, 60, LEN + 40] });
     taxi(ride, { body: "#f2c230" });
+    ride.group.userData.dynamic = true;
     group.add(ride.group);
+    // From inside: a dashboard and a fare meter, carried with you.
+    const dash = new THREE.Group();
+    dash.userData.dynamic = true;
+    dash.add(ride.add(G.box, { color: "#15161a", ir: 0.1 }, { pos: [0, 0.72, -1.25], scale: [1.7, 0.3, 0.5] }));
+    dash.add(ride.add(G.box, { color: "#ff5040", emissive: 1, ir: 1 }, { pos: [0.3, 0.9, -1.0], scale: [0.22, 0.07, 0.04] }));
+    dash.add(ride.add(G.box, { color: "#2a2c33", ir: 0.1 }, { pos: [0, 1.6, -0.7], scale: [1.8, 0.05, 0.05] }));
+    group.add(dash);
+    dash.visible = false;
     let riding = false;
     const seat = {
       velocity: ride.vel,
       carry: (p, t) => {
         const q = ride.at(t);
-        p.set(q.x - 0.45, 0.35, q.z + 0.4);
+        p.set(q.x - 0.45, -0.25, q.z + 0.4);
         if (q.z < -LEN + 15) end();
       },
     };
     const end = () => {
       riding = false;
+      ride.group.visible = true;
+      dash.visible = false;
       player.alight();
       player.pos.set(AVE + 1.5, 0, -LEN + 18);
       sfx.alight();
@@ -220,9 +231,11 @@ export default {
 
     return {
       group,
+      cabs,
       walk: [[-(AVE + WALK), -LEN, AVE + WALK, LEN], [-140, -(AVE + WALK), 140, AVE + WALK]],
       spawn: [1, 14, 0],
       env: NIGHT.env,
+      ambience: "rain",
       post: NIGHT.post,
       goals,
       tips: [
@@ -258,6 +271,8 @@ export default {
             run: () => {
               ride.dispatch(world.t, new THREE.Vector3(3.6, 0, Math.min(player.pos.z, 30)));
               riding = true;
+              ride.group.visible = false;
+              dash.visible = true;
               player.yaw = 0;
               player.pitch = 0;
               player.board(seat);

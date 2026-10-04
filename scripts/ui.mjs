@@ -13,9 +13,9 @@ const q = (fn, arg) => page.evaluate(fn, arg);
 
 await page.goto(URL);
 await page.waitForTimeout(1500);
-await page.keyboard.press("Digit2");
+await page.keyboard.press("Digit4");
 await page.waitForTimeout(400);
-ok("2 on the title screen starts Train and Tunnel", await q(() => document.getElementById("menu").hidden && document.getElementById("scene-title").textContent === "Train and Tunnel"));
+ok("4 on the title screen starts Einstein's Railway", await q(() => document.getElementById("menu").hidden && document.getElementById("scene-title").textContent === "Einstein's Railway"));
 
 await q(() => { pacetime.player.yaw = -Math.PI / 2; }); // along the platform
 await page.keyboard.down("Shift");
@@ -28,7 +28,7 @@ ok(`sprint reaches 95% of c where c = 5 m/s (got ${(beta * 100).toFixed(1)}%)`, 
 
 await page.waitForTimeout(2500); // coast to a stop
 const hash = await q(() => location.hash);
-ok(`address bar tracks state (${hash})`, /^#tunnel@/.test(hash));
+ok(`address bar tracks state (${hash})`, /^#railway@/.test(hash));
 const before = await q(() => ({ x: pacetime.player.pos.x, z: pacetime.player.pos.z, yaw: pacetime.player.yaw }));
 
 await page.keyboard.press("KeyL");
@@ -40,7 +40,7 @@ ok("switching an effect off shows in the address", (await q(() => location.hash)
 await page.reload();
 await page.waitForTimeout(1500);
 const after = await q(() => ({ x: pacetime.player.pos.x, z: pacetime.player.pos.z, yaw: pacetime.player.yaw, menu: !document.getElementById("menu").hidden, doppler: pacetime.effects.doppler, title: document.getElementById("scene-title").textContent }));
-ok("refresh returns to the same experiment, in game", after.title === "Train and Tunnel" && !after.menu);
+ok("refresh returns to the same experiment, in game", after.title === "Einstein's Railway" && !after.menu);
 ok(`refresh restores position (${before.x.toFixed(1)},${before.z.toFixed(1)} → ${after.x.toFixed(1)},${after.z.toFixed(1)})`, Math.abs(after.x - before.x) < 0.2 && Math.abs(after.z - before.z) < 0.2 && Math.abs(after.yaw - before.yaw) < 0.02);
 ok("refresh restores Lab settings", after.doppler === false && (await q(() => !document.getElementById("fx-doppler").checked)));
 

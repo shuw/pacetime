@@ -240,11 +240,26 @@ export default {
       { group: "Fireworks", text: "Notice the bang arrives long before the flash", done: false },
       { group: "Rides", text: "Stand before the Ferris wheel: bent spokes, one side bluer, one redder", done: false },
       { group: "Rides", text: "Ride the roller coaster (E at its station, right of the stalls)", done: false },
+      { group: "Rides", text: "Ride the Ferris wheel (E under it) and come off younger", done: false },
       { group: "Lighthouse", text: "Watch the lighthouse beam curl into a spiral over the sea", done: false },
     ];
     let note = "Light here moves at 6 m/s, about a jog. Sound still moves at 343 m/s, so it wins every race.";
     let wheelWatch = 0, beamWatch = 0, lastLapS = 0, ridingLap = 0;
     const fwd = new THREE.Vector3(), toward = new THREE.Vector3();
+
+    // Ferris wheel seat: carried round with a cabin, which stays upright.
+    let wheelStart = null;
+    const wheelSeat = {
+      velocity: new THREE.Vector3(),
+      r0: null,
+      carry(p, t) {
+        const a = wheelOmega * t, c = Math.cos(a), s = Math.sin(a);
+        const r = new THREE.Vector3(this.r0.x * c - this.r0.y * s, this.r0.x * s + this.r0.y * c, 0);
+        p.set(WHEEL.x + r.x, WHEEL.y + r.y - 2.75, WHEEL.z);
+        this.velocity.set(-r.y, r.x, 0).multiplyScalar(wheelOmega);
+      },
+    };
+    const cabinPivots = Array.from({ length: 12 }, (_, i) => { const a = (i / 12) * Math.PI * 2; return new THREE.Vector3(Math.cos(a) * WHEEL_R, Math.sin(a) * WHEEL_R, 0); });
 
     let riding = null;
     const seat = {
@@ -281,6 +296,7 @@ export default {
       walk: [[-4.6, -120, 4.6, 44], [-31, -170, 31, -120], [-110, 40, 110, 57]],
       spawn: [0, -60, 0],
       env: DUSK.env,
+      ambience: "sea",
       post: DUSK.post,
       goals,
       log,
@@ -302,7 +318,39 @@ export default {
         ];
       },
       action() {
+        if (riding === wheelSeat) {
+          return {
+            label: "Step off the wheel",
+            run: () => {
+              riding = null;
+              player.alight();
+              player.pos.set(WHEEL.x, 0, WHEEL.z + 4);
+              sfx.alight();
+              const ride = player.tau - wheelStart.tau, out = world.t - wheelStart.t;
+              if (out - ride > 1) goals[5].done = true;
+              toast(`Your ride lasted ${ride.toFixed(1)} s by your watch and ${out.toFixed(1)} s by the pier's clocks. You came off ${(out - ride).toFixed(1)} s younger.`, 9);
+            },
+          };
+        }
         if (riding) return { label: "Step off the coaster", run: () => { riding = null; player.alight(); player.pos.set(24.4, 0, -131); sfx.alight(); } };
+        if (Math.hypot(player.pos.x - WHEEL.x, player.pos.z - WHEEL.z) < 6) {
+          return {
+            label: "Ride the Ferris wheel",
+            run: () => {
+              // Hop into whichever cabin is passing closest to the bottom.
+              const a = wheelOmega * world.t;
+              const best = cabinPivots.map((p0) => ({ p0, y: p0.x * Math.sin(a) + p0.y * Math.cos(a) })).sort((m, n) => m.y - n.y)[0].p0;
+              wheelSeat.r0 = best;
+              riding = wheelSeat;
+              wheelStart = { tau: player.tau, t: world.t };
+              player.yaw = 0;
+              player.pitch = -0.1;
+              player.board(wheelSeat);
+              sfx.board();
+              toast("You're on a wheel whose rim moves at 80% of light speed. Look out to sea, then down at the pier as you swing round.", 8);
+            },
+          };
+        }
         const near = Math.abs(player.pos.x - 24.4) < 3 && Math.abs(player.pos.z + 131) < 8;
         if (near && inStation(world.t)) {
           return {
@@ -380,7 +428,7 @@ export default {
         if (wheelWatch > 3) goals[3].done = true;
         toward.set(LIGHTHOUSE.x, LAMP_Y, LIGHTHOUSE.z).sub(eye).normalize();
         if (fwd.dot(toward) > 0.85) beamWatch += dTau;
-        if (beamWatch > 5) goals[5].done = true;
+        if (beamWatch > 5) goals[6].done = true;
         log.update(player, eye);
       },
     };

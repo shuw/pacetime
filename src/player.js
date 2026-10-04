@@ -3,10 +3,10 @@ import { addVelocity, effects, gammaOf, world } from "./relativity.js";
 
 const EYE_HEIGHT = 1.6;
 // Your legs give you a proper velocity (distance on the deck per tick of your
-// own watch), sized to each experiment's light speed so a walk is about 0.53c
+// own watch), sized to each place's light speed so a walk is about 0.53c
 // and a sprint 0.95c. The Lab's light-speed slider doesn't change them, so
 // with a realistic c they're just an ordinary walk and sprint.
-const WALK_U = 0.63; // × the experiment's light speed
+const WALK_U = 0.63; // × the place's light speed
 const SPRINT_U = 3.04;
 
 export class Player {

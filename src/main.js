@@ -8,8 +8,10 @@ import { Player } from "./player.js";
 import { bake } from "./geo.js";
 import { shared, skyMaterial } from "./shaders.js";
 import { effects, world } from "./relativity.js";
-import { initLab, showScene, syncLab, toast, toggleLab, updateHud } from "./hud.js";
-import { isMuted, setListener, setMuted, sfx, unlockAudio, updateAudio } from "./audio.js";
+import { clearToast, initLab, showScene, syncLab, toast, toggleLab, updateHud } from "./hud.js";
+import { addVelocity } from "./relativity.js";
+import { sparkField } from "./shaders.js";
+import { isMuted, setAmbience, setListener, setMuted, sfx, unlockAudio, updateAudio } from "./audio.js";
 import railway from "./scenes/railway.js";
 import beam from "./scenes/beam.js";
 import pier from "./scenes/pier.js";
@@ -70,10 +72,15 @@ function applyPost(post) {
 
 function load(scene) {
   if (current) root.remove(current.instance.group);
+  clearToast();
   player.place(0, 0, 0);
   player.tau = 0;
   world.t = 0;
   const instance = scene.build({ player, toast });
+  // Balls glow like embers: plenty of light beyond the violet, so they stay
+  // visible (and redden) as they fly away from you.
+  instance.balls = sparkField(120, { gravity: 0.5, intensity: 4, ir: 0.6, uv: 2.4 });
+  instance.group.add(instance.balls);
   instance.lamps = [];
   instance.group.traverse((o) => o.userData.lamp && instance.lamps.push(o.userData.lamp));
   bake(instance.group);
@@ -81,6 +88,7 @@ function load(scene) {
   current = { scene, instance };
   applyEnv(instance.env);
   applyPost(instance.post);
+  setAmbience(instance.ambience ?? null);
   const [x, z, yaw] = instance.spawn;
   player.place(x, z, yaw ?? 0);
   showScene(scene, SCENES.indexOf(scene));
@@ -176,6 +184,22 @@ document.getElementById("scene-cards").addEventListener("click", (e) => {
   if (card) startScene(SCENES.find((s) => s.id === card.dataset.id));
 });
 
+// Throw a glowing ball at 60% of light speed (relative to you), from your hand.
+const BALL_COLORS = ["#ffd166", "#7bdcff", "#ff7aa8", "#9dff8a", "#c7a0ff"];
+let ballN = 0;
+function throwBall() {
+  if (!current || paused) return;
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  dir.y += 0.12;
+  dir.normalize();
+  const vRel = dir.multiplyScalar(0.6 * world.c);
+  const vel = player.v.lengthSq() > 1e-6 ? addVelocity(player.v, vRel) : vRel;
+  const origin = player.eye.clone().add(new THREE.Vector3(0, -0.3, 0));
+  current.instance.balls.set({ origin, vel, birth: world.t, life: 12, color: new THREE.Color(BALL_COLORS[ballN++ % BALL_COLORS.length]), size: 0.5 });
+  sfx.toss();
+}
+
 function act() {
   const a = current?.instance.action?.(player.eye);
   a?.run();
@@ -187,7 +211,9 @@ const back = document.getElementById("back-btn");
 back.addEventListener("touchstart", (e) => { player.lookBack = true; e.preventDefault(); });
 back.addEventListener("touchend", () => (player.lookBack = false));
 canvas.addEventListener("click", () => {
-  if (!paused && document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
+  if (paused) return;
+  if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
+  else throwBall();
 });
 function setHelp(open) {
   if (help.hidden === !open) return;
@@ -229,6 +255,7 @@ addEventListener("keydown", (e) => {
   // The Lab needs the mouse, so opening it lets go of the view.
   else if (e.code === "KeyL" && toggleLab()) document.exitPointerLock?.();
   else if (e.code === "KeyE") act();
+  else if (e.code === "KeyF") throwBall();
   else if (e.code === "KeyT" && current) {
     const [x, z, yaw] = current.instance.spawn;
     player.alight();
@@ -318,7 +345,7 @@ function simulate(dTau, { realtime = true } = {}) {
     if (complete && !wasComplete && !done[scene.id]) {
       done[scene.id] = true;
       store.set("pacetime-done", JSON.stringify(done));
-      setTimeout(() => toast(`${scene.title}: all observations made. Open Experiments (M) for the next one.`, 7), 9000);
+      setTimeout(() => toast(`${scene.title}: everything spotted. Press M for another place.`, 7), 9000);
     }
     wasComplete = complete;
   }
@@ -404,7 +431,7 @@ frame();
 
 // Handy for poking at the physics from the console.
 window.pacetime = {
-  player, world, effects, closeMenu, act, shared, bloom,
+  player, world, effects, closeMenu, act, shared, bloom, throwBall,
   get instance() { return current?.instance; },
   get fps() { const n = frameTimes.length - 1; return n > 0 ? (1000 * n) / (frameTimes[n] - frameTimes[0]) : 0; },
   get drawCalls() { return renderer.info.render.calls; },
