@@ -73,9 +73,13 @@
     <div id="help" hidden role="dialog" aria-modal="true" aria-labelledby="help-title">
       <section class="panel help-card">
         <div class="help-head">
-          <h2 id="help-title">Controls</h2>
+          <h2 id="help-title">Help</h2>
           <button id="help-close" aria-label="Close help"><kbd>?</kbd> close</button>
         </div>
+        <section id="place-help" hidden>
+          <h3 id="place-help-title"></h3>
+          <ul id="place-tips"></ul>
+        </section>
         <dl class="keys">
           <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Move (arrow keys work too)</dd>
           <dt><kbd>Shift</kbd></dt><dd>Sprint, up to 95% of light speed</dd>

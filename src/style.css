@@ -138,6 +138,8 @@ body.photo #hud > *:not(#slowmo) { display: none !important; }
 .help-card h3 { margin-top: 6px; }
 .help-card p { margin: 0; font-size: 13px; line-height: 1.5; color: #c9cede; }
 .help-card b { color: var(--ink); font-weight: 600; }
+#place-tips { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; line-height: 1.5; color: #c9cede; }
+#place-help { display: grid; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .keys { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; align-items: baseline; }
 .keys dt { display: flex; gap: 4px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
 .keys dd { margin: 0; font-size: 13px; }

@@ -265,6 +265,11 @@ canvas.addEventListener("click", () => {
 function setHelp(open) {
   if (help.hidden === !open) return;
   sfx.ui();
+  // What's going on in this place, before the controls.
+  const tips = current?.instance.tips ?? [];
+  document.getElementById("place-help").hidden = !tips.length || paused;
+  document.getElementById("place-help-title").textContent = `What's going on in ${current?.scene.title ?? ""}`;
+  document.getElementById("place-tips").innerHTML = tips.map((t) => `<li>${t}</li>`).join("");
   help.hidden = !open;
   player.enabled = !open && !paused;
   if (open) document.exitPointerLock?.();

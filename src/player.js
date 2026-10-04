@@ -26,6 +26,8 @@ export class Player {
     this.vehicle = null; // a train you're riding, if any
     this.legs = 3; // the light speed your stride is sized for, m/s
     this.autopilot = null; // a proper velocity to hold, for the title screen
+    this.stride = 0;
+    this.bob = 0;
     this.bindInput();
   }
 
@@ -38,7 +40,7 @@ export class Player {
   }
 
   get eye() {
-    return new THREE.Vector3(this.pos.x, this.pos.y + EYE_HEIGHT, this.pos.z);
+    return new THREE.Vector3(this.pos.x, this.pos.y + EYE_HEIGHT + this.bob, this.pos.z);
   }
 
   place(x, z, yaw = 0) {
@@ -174,6 +176,10 @@ export class Player {
     this.ownVelocity();
     const dT = effects.dilation ? dTau * this.gamma : dTau;
     this.pos.addScaledVector(this.v, dT);
+    // A gentle head bob while walking, by your own steps.
+    const step = this.u.length() / this.legs;
+    this.stride += step * dTau * 5.5;
+    this.bob = this.vehicle || this.autopilot ? 0 : Math.sin(this.stride) * 0.035 * Math.min(1, step * 1.5);
     if (this.vehicle) this.vehicle.clamp(this.pos, world.t + dT);
     else this.collide(scene);
     this.ownVelocity();

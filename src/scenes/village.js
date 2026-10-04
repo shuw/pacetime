@@ -294,7 +294,7 @@ export default {
       post: DUSK.post,
       goals,
       tips: [
-        "The church clock is 30 m tall and 100 m away: its light takes over 14 seconds to reach the edge of the village, so it always reads behind.",
+        "From the edge of the village the church clock is about 100 m away. Its light takes some 14 seconds to reach you, so it always reads behind.",
         "Sound here is ordinary, 343 m/s, fifty times faster than light. Close your eyes and you'd know where the train is; open them and it's somewhere else.",
         "On the carousel your watch runs slower than the village's. Ride long enough and you come off younger.",
         "Snowflakes ahead pile up toward the center of your view when you run. That's aberration, the same reason the stars crowd forward in space.",
