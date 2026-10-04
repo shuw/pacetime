@@ -127,6 +127,15 @@ export function updateHud({ player, instance, locked, prompt }) {
   $("gamma").textContent = `γ ${player.gamma < 100 ? player.gamma.toFixed(2) : Math.round(player.gamma)}`;
   $("speed-fill").style.width = `${(b * 100).toFixed(2)}%`;
   $("riding").textContent = player.vehicle ? "· riding" : "";
+  // Which pace is in effect (a held key wins over the chosen pace), and a
+  // nudge toward sprinting while you're walking along.
+  const now = player.paceNow ?? player.pace;
+  document.querySelectorAll(".paces button").forEach((b) => {
+    const k = Number(b.dataset.pace);
+    b.classList.toggle("on", k === now);
+    b.setAttribute("aria-checked", k === now);
+    b.classList.toggle("hint", k === 1 && now === 0 && player.walkingFor > 1.5 && !player.vehicle);
+  });
 
   $("tau").textContent = player.tau.toFixed(1);
   $("worldt").textContent = world.t.toFixed(1);
@@ -173,6 +182,13 @@ export function updateHud({ player, instance, locked, prompt }) {
       .join("");
     lastLog = log.seen.length;
     logRef = log;
+  }
+
+  const clock = instance.clock?.();
+  $("clock").hidden = !clock;
+  if (clock) {
+    $("clock-time").textContent = clock.text;
+    $("clock-icon").classList.toggle("moon", !clock.sun);
   }
 
   $("prompt").hidden = !prompt;

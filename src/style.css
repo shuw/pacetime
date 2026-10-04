@@ -25,7 +25,8 @@ html, body {
   -webkit-user-select: none;
   user-select: none;
 }
-canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+canvas#view.dragging { cursor: grabbing; }
 [hidden] { display: none !important; }
 
 .panel {
@@ -98,11 +99,16 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #log li.fresh { animation: flash 1.2s ease; }
 
 .gauge { position: absolute; left: 16px; bottom: 16px; width: 230px; padding: 10px 12px; }
+.paces { display: grid; grid-template-columns: 0.8fr 1fr 1fr; gap: 4px; margin: 2px 0 6px; }
+.paces button { padding: 5px 4px; font-size: 10px; letter-spacing: 0.06em; display: flex; justify-content: center; align-items: center; gap: 4px; }
+.paces kbd { font-size: 9px; padding: 0 3px; opacity: 0.8; }
+.paces button.on { border-color: var(--warm); color: var(--warm); background: rgba(255, 179, 107, 0.12); }
+.paces button.hint { animation: hint 1.6s ease-in-out infinite; }
+@keyframes hint { 0%, 100% { border-color: var(--line); } 50% { border-color: var(--warm); box-shadow: 0 0 10px rgba(255, 179, 107, 0.35); } }
 .light { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; margin-top: 4px; }
 .light input { width: 100%; accent-color: var(--warm); }
 .light b { font: 500 11px var(--mono); font-variant-numeric: tabular-nums; min-width: 58px; text-align: right; }
-#riding, #pace { color: var(--warm); }
-#pace:not(:empty)::before { content: " · "; }
+#riding { color: var(--warm); }
 .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .big { display: flex; align-items: baseline; gap: 4px; margin: 2px 0; }
 .big b { font: 700 34px/1 var(--display); font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
@@ -111,8 +117,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bar > div { height: 100%; width: 0; border-radius: 2px; background: var(--spectrum); background-size: 250px 4px; }
 .bar i { position: absolute; top: -3px; width: 1px; height: 10px; background: var(--muted); opacity: 0.6; }
 #gamma { text-transform: none; }
-#riding, #pace { color: var(--warm); }
-#pace:not(:empty)::before { content: " · "; }
+#riding { color: var(--warm); }
 
 .watches { position: absolute; right: 16px; bottom: 16px; width: 180px; display: grid; gap: 2px; padding: 8px 12px; }
 .watch { display: flex; justify-content: space-between; align-items: baseline; }
@@ -184,6 +189,13 @@ body.photo #hud > *:not(#slowmo) { display: none !important; }
 .keys dd { margin: 0; font-size: 13px; }
 .keys kbd { color: var(--ink); }
 #help-btn { padding-inline: 11px; }
+#clock {
+  display: flex; align-items: center; gap: 7px; padding: 0 12px; height: 32px; pointer-events: none;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px; backdrop-filter: blur(10px);
+}
+#clock b { font: 600 15px var(--display); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+#clock-icon { width: 12px; height: 12px; border-radius: 50%; background: var(--warm); box-shadow: 0 0 8px var(--warm); }
+#clock-icon.moon { background: transparent; box-shadow: inset 4px -2px 0 0 #dfe6ff; }
 
 #toast {
   position: fixed; top: 16px; left: 50%; transform: translate(-50%, -160%);

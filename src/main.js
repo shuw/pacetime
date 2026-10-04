@@ -147,6 +147,7 @@ function applyEnv(e) {
   shared.uAurora.value = e.aurora ?? 0;
   shared.uClouds.value = e.clouds ?? 0;
   shared.uLightsOn.value = -1e9;
+  shared.uLightsOff.value = 1e9;
   shared.uSun.value.set(...e.sun).normalize();
   shared.uSunColor.value.setRGB(...e.sunColor);
   shared.uSky.value.setRGB(...e.sky);
@@ -260,7 +261,6 @@ function openMenu() {
   buildMenu();
   document.getElementById("menu").hidden = false;
   document.getElementById("hud").hidden = true;
-  document.exitPointerLock?.();
 }
 
 function closeMenu() {
@@ -317,7 +317,6 @@ function startScene(scene) {
   if (scene.intro) startIntro();
   current.instance.started = true;
   closeMenu();
-  if (matchMedia("(pointer: fine)").matches) canvas.requestPointerLock?.();
 }
 
 document.getElementById("scene-cards").addEventListener("click", (e) => {
@@ -363,14 +362,11 @@ document.getElementById("act-btn").addEventListener("click", act);
 const back = document.getElementById("back-btn");
 back.addEventListener("touchstart", (e) => { player.lookBack = true; e.preventDefault(); });
 back.addEventListener("touchend", () => (player.lookBack = false));
-canvas.addEventListener("click", () => {
-  if (paused) return;
-  if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.();
+// Pace buttons: click to pick a pace that stays until you change it.
+document.querySelector(".paces").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-pace]");
+  if (b) player.setPace(Number(b.dataset.pace));
 });
-player.onPace = (p) => {
-  toast(["Walking pace", "Sprinting pace (scroll down to slow)", "Afterburner: 99.5% of light speed"][p], 2);
-  document.getElementById("pace").textContent = ["", "sprint", "afterburner"][p];
-};
 function setHelp(open) {
   if (help.hidden === !open) return;
   sfx.ui();
@@ -381,8 +377,6 @@ function setHelp(open) {
   document.getElementById("place-tips").innerHTML = tips.map((t) => `<li>${t}</li>`).join("");
   help.hidden = !open;
   player.enabled = !open && !paused;
-  if (open) document.exitPointerLock?.();
-  else if (!paused && matchMedia("(pointer: fine)").matches) canvas.requestPointerLock?.();
 }
 document.getElementById("help-btn").addEventListener("click", () => setHelp(true));
 document.getElementById("help-close").addEventListener("click", () => setHelp(false));
@@ -415,7 +409,7 @@ addEventListener("keydown", (e) => {
   else if (e.code === "Escape" && menuOpen && current?.instance.started) closeMenu();
   else if (menuOpen) return;
   // The Lab needs the mouse, so opening it lets go of the view.
-  else if (e.code === "KeyL" && toggleLab()) document.exitPointerLock?.();
+  else if (e.code === "KeyL") toggleLab();
   else if (e.code === "KeyG") toggleGoals();
   else if (e.code === "BracketLeft" || e.code === "BracketRight") {
     setLight(lightSpeed() * (e.code === "BracketLeft" ? 0.8 : 1.25));
@@ -451,7 +445,12 @@ onGoalClick((i) => {
   player.pitch = at[3] ?? 0;
   // Some goals happen at a time of day: wind the sky back to just before it.
   const goal = current.instance.goals[i];
-  if (goal.day !== undefined && current.instance.day && current.instance.day.phaseAt(world.t) > goal.day) current.instance.day.set(goal.day, world.t);
+  const day = current.instance.day;
+  if (goal.day !== undefined && day) {
+    // Wind the sky to just before that time of day, today or tomorrow.
+    const P = day.phaseAt(world.t), d = day.dayOf(P);
+    if (P - d * day.period > goal.day) day.set(d * day.period + goal.day, world.t);
+  }
   sfx.ui();
 });
 
@@ -578,7 +577,7 @@ function tour(dt) {
 function lampOn(l, eye) {
   if (!l.switched) return 1;
   const seen = world.t - (effects.delay ? l.pos.distanceTo(eye) / world.c : 0);
-  return THREE.MathUtils.clamp((seen - shared.uLightsOn.value) / 0.2, 0, 1);
+  return THREE.MathUtils.clamp((seen - shared.uLightsOn.value) / 0.2, 0, 1) * (1 - THREE.MathUtils.clamp((seen - shared.uLightsOff.value) / 0.2, 0, 1));
 }
 function pickLamps(lamps, eye) {
   const near = lamps.length > 8 ? [...lamps].sort((a, b) => a.pos.distanceToSquared(eye) - b.pos.distanceToSquared(eye)).slice(0, 8) : lamps;
@@ -631,7 +630,7 @@ function frame() {
     if (!paused) {
       updateHud({
         player, instance: current.instance,
-        locked: document.pointerLockElement === canvas || matchMedia("(pointer: coarse)").matches,
+        locked: player.dragged || matchMedia("(pointer: coarse)").matches,
         prompt: current.instance.action?.(eye) ?? null,
       });
       writeHash(dTau);

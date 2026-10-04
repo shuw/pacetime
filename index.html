@@ -24,6 +24,7 @@
 
       <div class="top-right">
         <div class="buttons">
+          <span id="clock" hidden title="Time of day"><span id="clock-icon"></span><b id="clock-time"></b></span>
           <button id="help-btn" title="Help (?)" aria-label="Help">?</button>
           <button id="lab-btn" title="Lab (L)">Lab</button>
           <button id="menu-btn" title="Scenes (M)">Scenes</button>
@@ -35,9 +36,14 @@
       </div>
 
       <section class="panel gauge">
-        <div class="row"><span class="label">your speed <span id="riding"></span><span id="pace"></span></span><span class="label" id="gamma">γ 1.00</span></div>
+        <div class="row"><span class="label">your speed <span id="riding"></span></span><span class="label" id="gamma">γ 1.00</span></div>
         <div class="big"><b id="beta">0.000</b><span>c</span></div>
         <div class="bar"><div id="speed-fill"></div><i style="left: 50%"></i><i style="left: 90%"></i></div>
+        <div class="paces" role="radiogroup" aria-label="Pace">
+          <button data-pace="0" role="radio">Walk</button>
+          <button data-pace="1" role="radio">Sprint <kbd>⇧</kbd></button>
+          <button data-pace="2" role="radio">Boost <kbd>⇧␣</kbd></button>
+        </div>
         <label class="light" for="light-slider">
           <span class="label">light</span>
           <input id="light-slider" type="range" min="-0.6" max="2.5" step="0.01" aria-label="Speed of light" />
@@ -54,7 +60,7 @@
       <canvas id="minimap" aria-label="Map of where you are"></canvas>
       <div id="prompt" hidden><kbd>E</kbd><span id="prompt-text"></span></div>
       <div id="crosshair"></div>
-      <div id="look-hint">Click to look around</div>
+      <div id="look-hint">Drag to look around · press and hold to walk</div>
       <button id="back-btn">Look back</button>
       <button id="throw-btn">Throw</button>
       <div id="slowmo" hidden></div>
@@ -102,11 +108,11 @@
           <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Move (arrow keys work too)</dd>
           <dt><kbd>Shift</kbd></dt><dd>Sprint, up to 95% of light speed</dd>
           <dt><kbd>Shift</kbd> + <kbd>Space</kbd></dt><dd>Afterburner: 99.5% of light speed</dd>
-          <dt>Mouse</dt><dd>Look around (click the view to capture the mouse)</dd>
+          <dt>Drag</dt><dd>Look around</dd>
           <dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Turn</dd>
           <dt><kbd>B</kbd> or right-click</dt><dd>Hold to look back</dd>
           <dt><kbd>E</kbd></dt><dd>Board or step off a ride</dd>
-          <dt>Hold click</dt><dd>Walk forward (once the mouse is captured)</dd>
+          <dt>Press and hold</dt><dd>Walk forward; keep dragging to steer</dd>
           <dt>Scroll / swipe</dt><dd>Up to sprint, again for the afterburner; down to slow back to a walk</dd>
           <dt><kbd>F</kbd></dt><dd>Throw a glowing ball at 60% of light speed</dd>
           <dt><kbd>T</kbd></dt><dd>Back to the start of the platform</dd>
@@ -119,10 +125,10 @@
           <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Slow motion: ¼×, ½× or normal speed for everything</dd>
           <dt><kbd>H</kbd></dt><dd>Hide the interface, for photos</dd>
           <dt><kbd>?</kbd></dt><dd>This help</dd>
-          <dt><kbd>Esc</kbd></dt><dd>Release the mouse, or close this panel</dd>
+          <dt><kbd>Esc</kbd></dt><dd>Close this panel</dd>
         </dl>
         <h3>Goals</h3>
-        <p>Click any goal in the top-left list (press Esc first to free the mouse) to jump to a good spot for it.</p>
+        <p>Click any goal in the top-left list to jump to a good spot for it.</p>
         <h3>Touch</h3>
         <p>Left thumb moves; push far to sprint. Right thumb looks. Buttons on screen board trains and look back.</p>
         <h3>Coming back</h3>
@@ -141,8 +147,7 @@
         <p class="tagline">Light here moves at a walking pace. Everything Einstein said follows, and you can watch it happen.</p>
         <ol id="scene-cards"></ol>
         <p class="controls">
-          <kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · mouse to look · <kbd>E</kbd> ride ·
-          hold click to walk · scroll to sprint · <kbd>F</kbd> throw · hold <kbd>B</kbd> to look back · <kbd>1</kbd>–<kbd>5</kbd> pick a place · <kbd>?</kbd> all controls
+          <kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · drag to look · hold to walk · scroll to sprint · <kbd>E</kbd> ride · <kbd>F</kbd> throw · hold <kbd>B</kbd> to look back · <kbd>1</kbd>–<kbd>5</kbd> pick a place · <kbd>?</kbd> all controls
         </p>
         <p class="controls touch">Left thumb moves (push far to sprint, all the way for the afterburner), right thumb looks.</p>
       </div>

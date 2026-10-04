@@ -22,18 +22,29 @@ const BARGE = new THREE.Vector3(0, SEA, -228);
 const TWIN = [new THREE.Vector3(-36, 30, -224), new THREE.Vector3(36, 30, -224)];
 const DAY_LEN = 170; // seconds of world time from golden hour to night
 const LIGHTS_ON = 0.47; // the moment in the day the pier lights switch on
+const LIGHTS_OFF = 1.47; // and off again, after sunrise
 const SHOW_FROM = 0.58; // fireworks once it's dark enough
+const SHOW_TO = 1.3; // until the sky starts to pale
+const SUNSET_AZ = Math.atan2(-0.9, -0.42); // over the sea
+const SUNRISE_AZ = SUNSET_AZ - Math.PI; // behind the town
 
 const BRIGHT = ["#ff4d6d", "#ffbe0b", "#2ec4b6", "#8338ec", "#3a86ff", "#fb5607", "#06d6a0", "#ff006e"];
 
 // Golden hour, sunset, dusk, blue hour, night.
 const DAY = [
-  { p: 0, elev: 0.17, sun: [1.45, 1.05, 0.7], sky: [0.46, 0.44, 0.54], ground: [0.44, 0.33, 0.27], top: "#3d6fb6", hor: "#ffc48a", fog: "#f2b68e", lit: "#ffe2a8", shade: "#b08a9a", clouds: 0.5, stars: 0, night: 0, fogNear: 120, fogFar: 900, bloom: [0.4, 0.82], dark: 0 },
-  { p: 0.25, elev: 0.08, sun: [1.45, 0.85, 0.5], sky: [0.4, 0.35, 0.46], ground: [0.38, 0.26, 0.21], top: "#34589e", hor: "#ffa262", fog: "#e8946e", lit: "#ffc070", shade: "#94607e", clouds: 0.55, stars: 0, night: 0, fogNear: 110, fogFar: 850, bloom: [0.45, 0.78], dark: 0.05 },
-  { p: 0.45, elev: 0.0, sun: [1.3, 0.55, 0.32], sky: [0.32, 0.25, 0.36], ground: [0.26, 0.16, 0.15], top: "#2a4282", hor: "#ff6a44", fog: "#c47068", lit: "#ff7a52", shade: "#703c6e", clouds: 0.58, stars: 0, night: 0, fogNear: 100, fogFar: 800, bloom: [0.55, 0.7], dark: 0.25 },
-  { p: 0.6, elev: -0.05, sun: [0.75, 0.32, 0.3], sky: [0.22, 0.18, 0.3], ground: [0.14, 0.1, 0.12], top: "#1e2d66", hor: "#e0506a", fog: "#70496a", lit: "#e8607e", shade: "#40294f", clouds: 0.55, stars: 0.1, night: 0.2, fogNear: 90, fogFar: 760, bloom: [0.7, 0.58], dark: 0.6 },
-  { p: 0.8, elev: -0.11, sun: [0, 0, 0], sky: [0.14, 0.15, 0.27], ground: [0.07, 0.06, 0.1], top: "#111b46", hor: "#78406c", fog: "#3a3052", lit: "#8a4c7c", shade: "#211f3a", clouds: 0.5, stars: 0.6, night: 0.7, fogNear: 90, fogFar: 760, bloom: [0.7, 0.55], dark: 0.88 },
-  { p: 1, elev: -0.25, sun: [0, 0, 0], sky: [0.07, 0.08, 0.15], ground: [0.03, 0.03, 0.05], top: "#060a1c", hor: "#1c1b36", fog: "#121428", lit: "#30324f", shade: "#10101d", clouds: 0.45, stars: 1, night: 1, fogNear: 90, fogFar: 760, bloom: [0.7, 0.56], dark: 1 },
+  { p: 0, hour: 18.5, elev: 0.17, sun: [1.45, 1.05, 0.7], sky: [0.46, 0.44, 0.54], ground: [0.44, 0.33, 0.27], top: "#3d6fb6", hor: "#ffc48a", fog: "#f2b68e", lit: "#ffe2a8", shade: "#b08a9a", clouds: 0.5, stars: 0, night: 0, fogNear: 120, fogFar: 900, bloom: [0.4, 0.82], dark: 0 },
+  { p: 0.25, hour: 19.25, elev: 0.08, sun: [1.45, 0.85, 0.5], sky: [0.4, 0.35, 0.46], ground: [0.38, 0.26, 0.21], top: "#34589e", hor: "#ffa262", fog: "#e8946e", lit: "#ffc070", shade: "#94607e", clouds: 0.55, stars: 0, night: 0, fogNear: 110, fogFar: 850, bloom: [0.45, 0.78], dark: 0.05 },
+  { p: 0.45, hour: 19.9, elev: 0.0, sun: [1.3, 0.55, 0.32], sky: [0.32, 0.25, 0.36], ground: [0.26, 0.16, 0.15], top: "#2a4282", hor: "#ff6a44", fog: "#c47068", lit: "#ff7a52", shade: "#703c6e", clouds: 0.58, stars: 0, night: 0, fogNear: 100, fogFar: 800, bloom: [0.55, 0.7], dark: 0.25 },
+  { p: 0.6, hour: 20.5, elev: -0.05, sun: [0.75, 0.32, 0.3], sky: [0.22, 0.18, 0.3], ground: [0.14, 0.1, 0.12], top: "#1e2d66", hor: "#e0506a", fog: "#70496a", lit: "#e8607e", shade: "#40294f", clouds: 0.55, stars: 0.1, night: 0.2, fogNear: 90, fogFar: 760, bloom: [0.7, 0.58], dark: 0.6 },
+  { p: 0.8, hour: 21.5, elev: -0.11, sun: [0, 0, 0], sky: [0.14, 0.15, 0.27], ground: [0.07, 0.06, 0.1], top: "#111b46", hor: "#78406c", fog: "#3a3052", lit: "#8a4c7c", shade: "#211f3a", clouds: 0.5, stars: 0.6, night: 0.7, fogNear: 90, fogFar: 760, bloom: [0.7, 0.55], dark: 0.88 },
+  { p: 1, hour: 23.5, elev: -0.25, sun: [0, 0, 0], sky: [0.07, 0.08, 0.15], ground: [0.03, 0.03, 0.05], top: "#060a1c", hor: "#1c1b36", fog: "#121428", lit: "#30324f", shade: "#10101d", clouds: 0.45, stars: 1, night: 1, fogNear: 90, fogFar: 760, bloom: [0.7, 0.56], dark: 1, az: SUNRISE_AZ },
+  // Dawn behind the town, morning, the day wearing on, and back to golden hour.
+  { p: 1.22, hour: 28.5, elev: -0.2, sun: [0, 0, 0], sky: [0.08, 0.09, 0.17], ground: [0.03, 0.03, 0.05], top: "#080d24", hor: "#24203c", fog: "#141630", lit: "#34364f", shade: "#121222", clouds: 0.45, stars: 1, night: 1, fogNear: 90, fogFar: 760, bloom: [0.7, 0.56], dark: 1, az: SUNRISE_AZ },
+  { p: 1.36, hour: 29.8, elev: -0.08, sun: [0, 0, 0], sky: [0.2, 0.2, 0.32], ground: [0.1, 0.09, 0.12], top: "#1d3166", hor: "#d27a8c", fog: "#6a5a7a", lit: "#e090a0", shade: "#4a3f66", clouds: 0.5, stars: 0.3, night: 0.45, fogNear: 100, fogFar: 800, bloom: [0.6, 0.62], dark: 0.65, az: SUNRISE_AZ },
+  { p: 1.46, hour: 30.5, elev: 0.02, sun: [1.35, 0.75, 0.5], sky: [0.36, 0.34, 0.46], ground: [0.3, 0.22, 0.2], top: "#3462a8", hor: "#ffad7a", fog: "#e8a890", lit: "#ffc4a0", shade: "#a07a98", clouds: 0.5, stars: 0, night: 0, fogNear: 110, fogFar: 850, bloom: [0.45, 0.75], dark: 0.2, az: SUNRISE_AZ },
+  { p: 1.62, hour: 32.5, elev: 0.3, sun: [1.2, 1.1, 0.95], sky: [0.42, 0.47, 0.58], ground: [0.45, 0.4, 0.34], top: "#3c7ad4", hor: "#cfe4f8", fog: "#d6e4f0", lit: "#ffffff", shade: "#b4c0d4", clouds: 0.45, stars: 0, night: 0, fogNear: 130, fogFar: 950, bloom: [0.25, 0.92], dark: 0, az: SUNRISE_AZ + 0.5 },
+  { p: 1.82, hour: 37, elev: 0.42, sun: [1.2, 1.1, 0.95], sky: [0.42, 0.47, 0.58], ground: [0.46, 0.4, 0.34], top: "#3874cc", hor: "#d8e6f4", fog: "#dce6f0", lit: "#ffffff", shade: "#b8c2d4", clouds: 0.5, stars: 0, night: 0, fogNear: 130, fogFar: 950, bloom: [0.25, 0.92], dark: 0, az: SUNSET_AZ - 1.2 },
+  { p: 2, hour: 42.5, elev: 0.17, sun: [1.45, 1.05, 0.7], sky: [0.46, 0.44, 0.54], ground: [0.44, 0.33, 0.27], top: "#3d6fb6", hor: "#ffc48a", fog: "#f2b68e", lit: "#ffe2a8", shade: "#b08a9a", clouds: 0.5, stars: 0, night: 0, fogNear: 120, fogFar: 900, bloom: [0.4, 0.82], dark: 0 },
 ];
 
 // The coaster: a closed track, a station stop, a chain lift, then gravity.
@@ -591,12 +602,13 @@ export default {
         "The kids running up and down the pier are going at half the speed of light.",
       ],
       get note() { return note; },
+      clock: () => day.clock(),
       onThrow(b) {
         if (player.pos.distanceTo(GALLERY_LINE) < 6) gallery.throwBall(b);
       },
       readouts() {
         const rows = [
-          ["time of day", ["golden hour", "sunset", "dusk", "blue hour", "night"][Math.min(4, Math.floor(day.now * 5))]],
+          ["time of day", day.now < 0.22 ? "golden hour" : day.now < 0.45 ? "sunset" : day.now < 0.62 ? "dusk" : day.now < 0.8 ? "blue hour" : day.now < 1.32 ? "night" : day.now < 1.5 ? "dawn" : "day"],
           ["wheel rim", "80% c"],
           ["coaster top", `${((prof.vMax / C) * 100).toFixed(0)}% c`],
           ["swings", "60% c"],
@@ -665,8 +677,11 @@ export default {
         // Sky, light and the moment the lamps come on.
         const p = day.apply(t);
         this.bloomNow = day.bloom;
-        const lightsAt = day.timeOf(LIGHTS_ON);
+        // Today's (or the coming) evening: lights on at dusk, off after sunrise.
+        const P = day.phase, d = Math.floor((P - LIGHTS_ON + 0.25) / day.period);
+        const lightsAt = day.timeOf(d * day.period + LIGHTS_ON);
         shared.uLightsOn.value = lightsAt;
+        shared.uLightsOff.value = day.timeOf(d * day.period + LIGHTS_OFF);
         spiral.uSpiralColor.value.copy(beamColor).multiplyScalar(day.dark);
 
         strollers.update(t);
@@ -719,10 +734,14 @@ export default {
         lampMat.uniforms.uSpec.value.z = 0.5 + flare;
 
         // Fireworks once it's dark: a steady show, with twin shells now and then.
-        const showAt = day.timeOf(SHOW_FROM);
+        // Each night's show runs from dusk until the sky starts to pale.
+        const showDay = Math.floor((day.phaseAt(nextShell) - SHOW_FROM + 0.05) / day.period);
+        const showAt = day.timeOf(showDay * day.period + SHOW_FROM), showEnd = day.timeOf(showDay * day.period + SHOW_TO);
         if (nextShell < showAt) nextShell = showAt;
-        if (nextTwin < showAt + 8) nextTwin = showAt + 8;
-        while (t + 12 > nextShell) {
+        if (nextShell > showEnd) nextShell = day.timeOf((showDay + 1) * day.period + SHOW_FROM);
+        if (nextTwin < nextShell + 8 || nextTwin > showEnd) nextTwin = Math.max(nextTwin, nextShell + 8);
+        if (nextTwin > showEnd) nextTwin = day.timeOf((showDay + 1) * day.period + SHOW_FROM) + 8;
+        while (t + 12 > nextShell && nextShell <= showEnd) {
           const at = new THREE.Vector3(BARGE.x + (fw.rand() - 0.5) * 60, 28 + fw.rand() * 16, BARGE.z + (fw.rand() - 0.5) * 16);
           fw.shell(BARGE.clone().setY(SEA + 1), at, nextShell);
           nextShell += 3 + fw.rand() * 3;

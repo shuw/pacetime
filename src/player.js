@@ -80,24 +80,42 @@ export class Player {
     });
     addEventListener("keyup", (e) => this.keys.delete(e.code));
     addEventListener("blur", () => this.keys.clear());
-    addEventListener("mousemove", (e) => {
-      if (document.pointerLockElement !== this.canvas) return;
-      this.yaw -= e.movementX * 0.0022;
-      this.pitch = THREE.MathUtils.clamp(this.pitch - e.movementY * 0.0022, -1.2, 1.2);
-    });
+    // The mouse stays free: drag to look around; press and hold (without
+    // dragging much) to walk forward, and keep dragging to steer as you go.
+    let drag = null;
     this.canvas.addEventListener("mousedown", (e) => {
       if (e.button === 2) this.lookBack = true;
-      if (e.button === 0 && document.pointerLockElement === this.canvas) this.mouseWalk = true;
+      if (e.button !== 0) return;
+      drag = { x: e.clientX, y: e.clientY, moved: 0 };
+      this.canvas.classList.add("dragging");
+      clearTimeout(this.holdTimer);
+      this.holdTimer = setTimeout(() => {
+        if (drag && drag.moved < 8) this.mouseWalk = true;
+      }, 280);
+    });
+    addEventListener("mousemove", (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+      drag.moved += Math.abs(dx) + Math.abs(dy);
+      this.yaw += dx * 0.0042;
+      this.pitch = THREE.MathUtils.clamp(this.pitch + dy * 0.0042, -1.2, 1.2);
+      this.dragged = true;
     });
     addEventListener("mouseup", (e) => {
       if (e.button === 2) this.lookBack = false;
-      if (e.button === 0) this.mouseWalk = false;
+      if (e.button !== 0) return;
+      drag = null;
+      clearTimeout(this.holdTimer);
+      this.mouseWalk = false;
+      this.canvas.classList.remove("dragging");
     });
     // Scroll (or swipe on a trackpad) to change pace; a pause between flicks
     // lets one swipe count once.
     let wheelAcc = 0, wheelAt = 0;
-    addEventListener("wheel", (e) => {
-      if (document.pointerLockElement !== this.canvas) return;
+    this.canvas.addEventListener("wheel", (e) => {
+      if (!this.enabled) return;
       e.preventDefault();
       const now = performance.now();
       if (now - wheelAt > 250) wheelAcc = 0;
@@ -181,6 +199,9 @@ export class Player {
     // so however hard you push you never reach c.
     const c = world.c;
     const boost = sprint && (k.has("Space") || this.touchBoost || this.pace > 1);
+    this.paceNow = boost ? 2 : sprint ? 1 : 0;
+    const going = (fwd !== 0 || side !== 0) && !this.vehicle;
+    this.walkingFor = going && !sprint ? (this.walkingFor ?? 0) + dTau : 0;
     const legs = this.legs;
     const target = this.autopilot ? this.autopilot.clone() : dir.multiplyScalar((boost ? BOOST_U : sprint ? SPRINT_U : WALK_U) * legs);
     // Slowing down is quick, so letting go of the keys doesn't coast you far.

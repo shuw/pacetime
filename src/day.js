@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { shared } from "./shaders.js";
 
-// A sky that changes with the time of day. Keys are sorted by phase p in
-// [0, 1]; everything in between is blended.
+// A sky that changes with the time of day, round and round. Keys are sorted
+// by phase p; the last key's p is one whole day, and its key should match the
+// first so the loop is seamless. Everything in between is blended.
 export class DayCycle {
   constructor(keys, { length = 180, azimuth = [-0.45, -0.89], start = 0, moon = [0.35, 0.62, 0.7], moonColor = [0.24, 0.29, 0.48] } = {}) {
     this.moonDir = new THREE.Vector3(...moon).normalize();
@@ -13,18 +14,38 @@ export class DayCycle {
       lit: new THREE.Color(k.lit), shade: new THREE.Color(k.shade),
     }));
     this.length = length;
-    this.az = new THREE.Vector2(...azimuth).normalize();
+    this.az = Math.atan2(azimuth[1], azimuth[0]);
+    this.period = this.keys.at(-1).p;
     this.offset = start;
     this.now = start;
   }
 
+  // The phase keeps counting up past one day; p mod period is the time of day.
   phaseAt(t) {
-    return THREE.MathUtils.clamp(this.offset + t / this.length, 0, 1);
+    return this.offset + t / this.length;
+  }
+
+  // Phase p of day number `day` (0 = the day that contains phase P now).
+  dayOf(P = this.phase) {
+    return Math.floor(P / this.period);
   }
 
   // Jump to phase p at world time t; time keeps running from there.
   set(p, t) {
     this.offset = p - t / this.length;
+  }
+
+  // A wall clock for the current time of day, from keys' `hour` values.
+  clock() {
+    const ks = this.keys.filter((k) => k.hour !== undefined);
+    const p = this.now;
+    let i = 0;
+    while (i < ks.length - 2 && ks[i + 1].p < p) i++;
+    const a = ks[i], b = ks[i + 1];
+    const k = THREE.MathUtils.clamp((p - a.p) / Math.max(1e-6, b.p - a.p), 0, 1);
+    const h = (((a.hour + (b.hour - a.hour) * k) % 24) + 24) % 24;
+    const hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
+    return { text: `${((hh + 11) % 12) + 1}:${String(mm).padStart(2, "0")} ${hh < 12 ? "AM" : "PM"}`, sun: shared.uSunDisk.value > 0.5 };
   }
 
   // World time at which the phase reaches p.
@@ -33,7 +54,8 @@ export class DayCycle {
   }
 
   apply(t) {
-    const p = this.phaseAt(t);
+    this.phase = this.phaseAt(t);
+    const p = ((this.phase % this.period) + this.period) % this.period;
     this.now = p;
     const ks = this.keys;
     let i = 0;
@@ -43,12 +65,13 @@ export class DayCycle {
     const lerp = (x, y) => x + (y - x) * k;
     const arr = (x, y) => x.map((v, j) => lerp(v, y[j]));
     const elev = lerp(a.elev, b.elev);
+    const az = lerp(a.az ?? this.az, b.az ?? this.az);
     const c = Math.cos(elev);
     // After sunset the moon takes over as the light (and shadow) source. The
     // sunlight fades to nothing before the switch, so it never jumps.
     const sunFade = THREE.MathUtils.smoothstep(elev, -0.075, -0.02);
     if (elev > -0.075) {
-      shared.uSun.value.set(this.az.x * c, Math.sin(elev), this.az.y * c).normalize();
+      shared.uSun.value.set(Math.cos(az) * c, Math.sin(elev), Math.sin(az) * c).normalize();
       shared.uSunColor.value.setRGB(...arr(a.sun, b.sun)).multiplyScalar(sunFade);
       shared.uSunDisk.value = 1;
       shared.uMoon.value = 0;

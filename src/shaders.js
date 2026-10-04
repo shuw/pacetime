@@ -30,6 +30,7 @@ export const shared = {
   uReflection: { value: null },
   uReflOn: { value: 0 },
   uLightsOn: { value: -1e9 },         // world time the switched lights come on
+  uLightsOff: { value: 1e9 },         // and go off again
   uClouds: { value: 0 },                              // cover, 0..1
   uCloudLit: { value: new THREE.Color("#ffb070") },   // sunward edges
   uCloudShade: { value: new THREE.Color("#6a4a70") }, // shadowed undersides
@@ -310,6 +311,7 @@ uniform float uDebugShadow;
 uniform sampler2D uReflection;
 uniform float uReflOn;
 uniform float uLightsOn;
+uniform float uLightsOff;
 uniform vec4 uLampPos[8];   // xyz, range
 uniform vec3 uLampColor[8];
 #ifdef ROTOR
@@ -404,7 +406,8 @@ void main() {
   float e = uSpec.z;
   #ifdef SWITCHED
     // Lamps that all switch on at one world time, seen when that light arrives.
-    float on = smoothstep(uLightsOn, uLightsOn + 0.2, uTime - (uDelay > 0.5 ? vDist / uC : 0.0));
+    float seenAt = uTime - (uDelay > 0.5 ? vDist / uC : 0.0);
+    float on = smoothstep(uLightsOn, uLightsOn + 0.2, seenAt) * (1.0 - smoothstep(uLightsOff, uLightsOff + 0.2, seenAt));
     e *= on;
     base *= mix(0.3, 1.0, on);
   #endif

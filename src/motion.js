@@ -28,7 +28,10 @@ export const motion = {
       const s = Math.abs(r.omega) * r.rmax;
       const eff = s > 0 ? (Math.sign(r.omega) * govern(s, c)) / r.rmax : 0;
       r.u.uOmega.value = eff;
-      r.u.uPhase.value += eff * dT;
+      // Keep the angle small: GPUs compute sin and cos of large angles poorly,
+      // which made fast rides shred after a few minutes.
+      const TAU = Math.PI * 2;
+      r.u.uPhase.value = ((((r.u.uPhase.value + eff * dT + Math.PI) % TAU) + TAU) % TAU) - Math.PI;
     }
     for (const f of others) f(dT, t, c);
   },
