@@ -71,6 +71,7 @@ varying float vAge;
 uniform vec3 uRotCenter;  // a point on the axis
 uniform vec3 uRotAxis;    // unit axis
 uniform float uOmega;     // rad/s, world frame
+uniform float uPhase;     // angle reached by now
 uniform vec4 uPivot;      // xyz pivot; w = 1 to orbit without turning (gondolas)
 uniform float uC;
 uniform float uTime;
@@ -120,11 +121,11 @@ void main() {
     vec3 r0 = (uPivot.w > 0.5 ? uPivot.xyz : wp.xyz) - uRotCenter;
     vec3 offset = uPivot.w > 0.5 ? wp.xyz - uPivot.xyz : vec3(0.0);
     float tau = 0.0;
-    vec3 pr = rotateAbout(r0, uRotAxis, uOmega * uTime);
+    vec3 pr = rotateAbout(r0, uRotAxis, uPhase);
     if (uDelay > 0.5) {
       tau = length(uRotCenter + pr + offset - uCam) / uC;
       for (int i = 0; i < 5; i++) {
-        vec3 ri = rotateAbout(r0, uRotAxis, uOmega * (uTime - tau));
+        vec3 ri = rotateAbout(r0, uRotAxis, uPhase - uOmega * tau);
         vec3 q = uRotCenter + ri + offset - uCam;
         float dq = length(q);
         vec3 vel = uOmega * cross(uRotAxis, ri);
@@ -132,7 +133,7 @@ void main() {
         float df = -dot(vel, q) / max(dq, 1e-4) - uC;
         tau = max(0.0, tau - f / df);
       }
-      pr = rotateAbout(r0, uRotAxis, uOmega * (uTime - tau));
+      pr = rotateAbout(r0, uRotAxis, uPhase - uOmega * tau);
     }
     vSrcVel = uOmega * cross(uRotAxis, pr);
     if (uPivot.w < 0.5) {
@@ -147,7 +148,7 @@ void main() {
   #else
     vNormalW = normalize(mat3(m) * normal);
     #ifdef ROTOR
-      if (uPivot.w < 0.5) vNormalW = rotateAbout(vNormalW, uRotAxis, uOmega * (uTime - tau));
+      if (uPivot.w < 0.5) vNormalW = rotateAbout(vNormalW, uRotAxis, uPhase - uOmega * tau);
     #endif
   #endif
   vWorld = wp.xyz;
@@ -868,11 +869,17 @@ varying float vAgeK;
 varying vec3 vSrc;
 varying vec3 vWorld;
 
+vec3 V; // launch velocity, held under light speed
+
 // How long the particle had been flying at world time te.
 float flight(float te) { return uPeriodic > 0.5 ? mod(te - aBirth, aLife) : te - aBirth; }
-vec3 posAt(vec3 o, float a) { return o + aVel * a + vec3(0.0, -0.5 * uGravity * a * a, 0.0); }
+vec3 posAt(vec3 o, float a) { return o + V * a + vec3(0.0, -0.5 * uGravity * a * a, 0.0); }
 
 void main() {
+  {
+    float v = length(aVel), lim = 0.9 * uC;
+    V = v > lim ? aVel * (lim + 0.085 * uC * tanh((v - lim) / (0.085 * uC))) / v : aVel;
+  }
   float T = uTime - aTail;
   vec3 o = aOrigin;
   if (uPeriodic > 0.5) {
@@ -885,7 +892,7 @@ void main() {
     for (int i = 0; i < 4; i++) {
       float a = flight(T - tau);
       vec3 q = posAt(o, a) - uCam;
-      vec3 vel = aVel + vec3(0.0, -uGravity * a, 0.0);
+      vec3 vel = V + vec3(0.0, -uGravity * a, 0.0);
       float dq = length(q);
       float f = dq - uC * tau;
       float df = -dot(vel, q) / max(dq, 1e-4) - uC;
@@ -893,7 +900,7 @@ void main() {
     }
   }
   float a = flight(T - tau);
-  vSrc = aVel + vec3(0.0, -uGravity * a, 0.0);
+  vSrc = V + vec3(0.0, -uGravity * a, 0.0);
   if (uPeriodic < 0.5 && (a < 0.0 || a > aLife)) {
     gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
     gl_PointSize = 0.0;

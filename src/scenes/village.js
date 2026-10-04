@@ -4,6 +4,7 @@ import { mat, sparkField } from "../shaders.js";
 import { Flashes } from "../world.js";
 import { clockFace, cottage, Emitter, Fireworks, forest, lampPost, mountain, orbiting, reflection, rotor, SOUND_SPEED, stringLights, surface } from "../earth.js";
 import { gammaOf, retardedTime, seenTimeOf, world } from "../relativity.js";
+import { angleOf } from "../motion.js";
 import { sfx } from "../audio.js";
 
 const C = 7; // light speed, m/s
@@ -117,7 +118,7 @@ export default {
 
     // Carousel: its rim moves at 70% of light speed.
     const omegaCar = (CAR_SPEED * C) / CAR_R;
-    const cr = rotor(CAROUSEL.toArray(), [0, 1, 0], omegaCar);
+    const cr = rotor(CAROUSEL.toArray(), [0, 1, 0], omegaCar, CAR_R + 1);
     const onCar = (o) => mat({ ...o, rotor: cr });
     group.add(mesh(G.cyl, onCar({ color: "#7a2a3a", ir: 0.5 }), { pos: [CAROUSEL.x, 0.3, CAROUSEL.z], scale: [CAR_R + 0.4, 0.5, CAR_R + 0.4] }));
     group.add(mesh(G.cyl, onCar({ color: "#e8d9b0", ir: 0.6, grid: { color: "#c8b080", spacing: 1, width: 1, glow: 0 } }), { pos: [CAROUSEL.x, 0.56, CAROUSEL.z], scale: [CAR_R, 0.04, CAR_R] }));
@@ -148,7 +149,7 @@ export default {
     const skaters = new THREE.Group();
     for (let i = 0; i < 7; i++) {
       const r = 5 + (i % 4) * 2.4, speed = 0.45 + (i % 3) * 0.1;
-      const sr = rotor(POND.toArray(), [0, 1, 0], ((i % 2 ? 1 : -1) * speed * C) / r);
+      const sr = rotor(POND.toArray(), [0, 1, 0], ((i % 2 ? 1 : -1) * speed * C) / r, r + 0.5);
       const a = (i / 7) * Math.PI * 2;
       const p = [POND.x + Math.cos(a) * r, 0, POND.z + Math.sin(a) * r];
       const sk = (o) => mat({ ...o, rotor: orbiting(sr, p) });
@@ -162,7 +163,7 @@ export default {
 
     // Steam train on a loop round the valley.
     const omegaTrain = (TRAIN_SPEED * C) / LOOP_R;
-    const tr = rotor(LOOP.toArray(), [0, 1, 0], omegaTrain);
+    const tr = rotor(LOOP.toArray(), [0, 1, 0], omegaTrain, LOOP_R + 3);
     const onTrain = (o) => mat({ ...o, rotor: tr });
     const railGeo = (r) => new THREE.TorusGeometry(r, 0.07, 6, 720);
     for (const r of [LOOP_R - 0.75, LOOP_R + 0.75]) group.add(mesh(railGeo(r), mat({ color: "#8a8f9a", ir: 0.4 }), { pos: [LOOP.x, 0.12, LOOP.z], rot: [Math.PI / 2, 0, 0] }));
@@ -226,7 +227,7 @@ export default {
     return { chimney0, chuffAt: 0, chuffN: 0 };
     });
     group.add(steam);
-    const trainAt = (t, p0) => spin(p0.clone().sub(LOOP), omegaTrain * t).add(LOOP);
+    const trainAt = (t, p0) => spin(p0.clone().sub(LOOP), angleOf(tr, t)).add(LOOP);
     const smoke = sparkField(900, { intensity: 0.5 });
     group.add(smoke);
     const station = new THREE.Vector3(LOOP.x + 4, 0, LOOP.z + LOOP_R);
@@ -257,10 +258,10 @@ export default {
       velocity: new THREE.Vector3(),
       r0: null,
       carry(p, t) {
-        const r = spin(this.r0, omegaCar * t);
+        const a = angleOf(cr, t);
+        const r = spin(this.r0, a);
         p.set(CAROUSEL.x + r.x, 0.56, CAROUSEL.z + r.z);
-        this.velocity.set(0, 1, 0).cross(r).multiplyScalar(omegaCar);
-        const a = omegaCar * t;
+        this.velocity.set(0, 1, 0).cross(r).multiplyScalar(cr.uOmega.value);
         player.yaw += a - lastAngle;
         lastAngle = a;
       },
@@ -269,10 +270,10 @@ export default {
       velocity: new THREE.Vector3(),
       r0: null,
       carry(p, t) {
-        const r = spin(this.r0, omegaTrain * t);
+        const a = angleOf(tr, t);
+        const r = spin(this.r0, a);
         p.set(LOOP.x + r.x, 1.1, LOOP.z + r.z);
-        this.velocity.set(0, 1, 0).cross(r).multiplyScalar(omegaTrain);
-        const a = omegaTrain * t;
+        this.velocity.set(0, 1, 0).cross(r).multiplyScalar(tr.uOmega.value);
         player.yaw += a - lastAngle;
         lastAngle = a;
       },
@@ -349,8 +350,8 @@ export default {
             label: "Ride the carousel",
             run: () => {
               const out = player.pos.clone().sub(CAROUSEL).setY(0).setLength(CAR_R - 0.3);
-              carouselSeat.r0 = spin(out, -omegaCar * world.t);
-              lastAngle = omegaCar * world.t;
+              carouselSeat.r0 = spin(out, -angleOf(cr, world.t));
+              lastAngle = angleOf(cr, world.t);
               // Face the way the rim is going.
               const tangent = new THREE.Vector3(0, 1, 0).cross(out).normalize();
               player.yaw = Math.atan2(-tangent.x, -tangent.z);
@@ -370,9 +371,9 @@ export default {
           return {
             label: "Board the steam train",
             run: () => {
-              const coach = spin(chimney0.clone().sub(LOOP), -0.32 + omegaTrain * world.t).setY(0).setLength(LOOP_R);
-              trainSeat.r0 = spin(coach, -omegaTrain * world.t);
-              lastAngle = omegaTrain * world.t;
+              const coach = spin(chimney0.clone().sub(LOOP), -0.32 + angleOf(tr, world.t)).setY(0).setLength(LOOP_R);
+              trainSeat.r0 = spin(coach, -angleOf(tr, world.t));
+              lastAngle = angleOf(tr, world.t);
               riding = trainSeat;
               player.board(trainSeat);
               sfx.board();

@@ -59,7 +59,7 @@ export function syncLab() {
   for (const id of ["c-slider", "light-slider"]) if (document.activeElement !== $(id)) $(id).value = Math.log10(c);
   $("c-value").textContent = fmtC(c);
   $("light-value").textContent = fmtC(c);
-  $("c-word").textContent = `about as fast as ${cWord(c)}${world.slow < 1 ? ". Moving things slow down too, so nothing outruns it." : ""}`;
+  $("c-word").textContent = `about as fast as ${cWord(c)}. Anything that would outrun it is held just below it.`;
 }
 
 export function toggleLab() {

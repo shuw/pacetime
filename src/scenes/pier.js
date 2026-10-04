@@ -6,6 +6,7 @@ import { Flashes } from "../world.js";
 import { birdGeometry, building, Fireworks, lampPost, neon, orbiting, rotor, SOUND_SPEED, stringLights, surface } from "../earth.js";
 import { Mover } from "../movers.js";
 import { retardedTime, seenTimeOf, world } from "../relativity.js";
+import { angleOf, govern, motion } from "../motion.js";
 import { sfx } from "../audio.js";
 import { Gallery } from "../gallery.js";
 import { DayCycle } from "../day.js";
@@ -241,7 +242,7 @@ export default {
     // A balloon seller near the entrance.
     const balloons = new THREE.Group();
     balloons.userData.dynamic = true;
-    group.add(person({ shirt: "#ff4d6d", pants: "#1d3557", skin: "#e0ac69", hair: "#2b1b10", hat: "#f4e3b5" }, { pos: [2.6, 0, 26], rotY: -Math.PI / 2 }));
+    group.add(person({ body: "#ff6b8b", belly: "#ffd0da", top: "hat", topColor: "#f4e3b5", eyes: "round", cheeks: true, wide: 1.15 }, { pos: [2.6, 0, 26], rotY: -Math.PI / 2, scale: 1.15 }));
     for (let i = 0; i < 9; i++) {
       const a = i * 2.4, r = 0.25 + (i % 3) * 0.18;
       const top = new THREE.Vector3(2.4 + Math.cos(a) * r, 2.9 + (i % 4) * 0.25, 26 + Math.sin(a) * r);
@@ -259,7 +260,7 @@ export default {
 
     // Ferris wheel: the rim moves at 80% of light speed.
     const wheelOmega = (0.8 * C) / WHEEL_R;
-    const wr = rotor([WHEEL.x, WHEEL.y, WHEEL.z], [0, 0, 1], wheelOmega);
+    const wr = rotor([WHEEL.x, WHEEL.y, WHEEL.z], [0, 0, 1], wheelOmega, WHEEL_R + 1.2);
     const spin = (o) => mat({ ...o, rotor: wr });
     for (const dz of [-0.9, 0.9]) {
       group.add(mesh(new THREE.TorusGeometry(WHEEL_R, 0.18, 10, 180), spin({ color: "#f6f2ea", ir: 0.4, uv: 0.3 }), { pos: [WHEEL.x, WHEEL.y, WHEEL.z + dz] }));
@@ -310,7 +311,7 @@ export default {
 
     // Wave swinger: chairs on chains fly out as the canopy spins.
     const swingOmega = (0.6 * C) / SWING_R;
-    const sr = rotor(SWING.toArray(), [0, 1, 0], swingOmega);
+    const sr = rotor(SWING.toArray(), [0, 1, 0], swingOmega, SWING_R + 0.5);
     {
       for (let k = 0; k < 6; k++) group.add(mesh(G.cyl, mat({ color: k % 2 ? "#ffffff" : "#ff4d6d", ir: 0.5 }), { pos: [SWING.x, 0.5 + k, SWING.z], scale: [0.45, 1, 0.45] }));
       const p = new Painter();
@@ -367,9 +368,17 @@ export default {
     group.add(box(0.12, 0.12, 14, { color: "#ffd38a", emissive: 1, ir: 1, switched: true }, [26.4, 3.4, -131]));
     for (let k = 0; k < 4; k++) group.add(person(randomLook(rand), { pos: [27.3, 0, -127 - k * 0.9], rotY: Math.PI }));
     const cars = ["#ffbe0b", "#3a86ff", "#8338ec"].map((c) => { const car = coasterCar(c, rand); group.add(car); return car; });
-    const carS = (k) => (t) => ((prof.sAt(t) - k * 2.4) % prof.L + prof.L) % prof.L;
+    // The coaster keeps its own clock, which only runs slow if light gets
+    // slower than its top speed.
+    const coaster = { clock: 0, k: 1 };
+    motion.add((dT, t, c) => {
+      coaster.k = govern(prof.vMax, c) / prof.vMax;
+      coaster.clock += dT * coaster.k;
+    });
+    const ct = (t) => coaster.clock - coaster.k * (world.t - t);
+    const carS = (k) => (t) => ((prof.sAt(ct(t)) - k * 2.4) % prof.L + prof.L) % prof.L;
     const carPath = (k) => (t) => curve.getPointAt(carS(k)(t) / prof.L);
-    const carVel = (k, t) => curve.getTangentAt(carS(k)(t) / prof.L).multiplyScalar(prof.speed(carS(k)(t)) * (((t % prof.T) + prof.T) % prof.T > 4 ? 1 : 0));
+    const carVel = (k, t) => curve.getTangentAt(carS(k)(t) / prof.L).multiplyScalar(coaster.k * prof.speed(carS(k)(t)) * (((ct(t) % prof.T) + prof.T) % prof.T > 4 ? 1 : 0));
 
     // Lighthouse on a rock, its beam turning through the evening mist.
     group.add(mesh(new THREE.DodecahedronGeometry(9, 0), mat({ color: "#4a4650", ir: 0.4 }), { pos: [LIGHTHOUSE.x, SEA, LIGHTHOUSE.z], scale: [1.4, 0.6, 1.4] }));
@@ -396,7 +405,7 @@ export default {
     for (let i = 0; i < 10; i++) {
       const center = [(rand() - 0.5) * 60, 12 + rand() * 14, -60 - rand() * 120];
       const r = 8 + rand() * 14, speed = (0.25 + rand() * 0.25) * C * (i % 2 ? 1 : -1);
-      const br = rotor(center, [0, 1, 0], speed / r);
+      const br = rotor(center, [0, 1, 0], speed / r, r + 0.6);
       const a = rand() * Math.PI * 2;
       const pos = new THREE.Vector3(center[0] + Math.cos(a) * r, center[1], center[2] - Math.sin(a) * r);
       const gull = mesh(bird, mat({ color: "#f4f1ea", ir: 0.6, uv: 0.3, doubleSided: true, rotor: br }), { pos: pos.toArray() });
@@ -462,10 +471,10 @@ export default {
       velocity: new THREE.Vector3(),
       r0: null,
       carry(p, t) {
-        const a = wheelOmega * t, c = Math.cos(a), s = Math.sin(a);
+        const a = angleOf(wr, t), c = Math.cos(a), s = Math.sin(a);
         const r = new THREE.Vector3(this.r0.x * c - this.r0.y * s, this.r0.x * s + this.r0.y * c, 0);
         p.set(WHEEL.x + r.x, WHEEL.y + r.y - 2.75, WHEEL.z);
-        this.velocity.set(-r.y, r.x, 0).multiplyScalar(wheelOmega);
+        this.velocity.set(-r.y, r.x, 0).multiplyScalar(wr.uOmega.value);
       },
     };
 
@@ -483,7 +492,7 @@ export default {
         seat.heading = heading;
       },
     };
-    const inStation = (t) => ((t % prof.T) + prof.T) % prof.T < 4;
+    const inStation = (t) => ((ct(t) % prof.T) + prof.T) % prof.T < 4;
 
     log.onSeen((e) => {
       const twin = twins.find((w) => w.events.includes(e));
@@ -559,7 +568,7 @@ export default {
           return {
             label: "Ride the Ferris wheel",
             run: () => {
-              const a = wheelOmega * world.t;
+              const a = angleOf(wr, world.t);
               const best = cabinPivots.map((p0) => ({ p0, y: p0.x * Math.sin(a) + p0.y * Math.cos(a) })).sort((m, n) => m.y - n.y)[0].p0;
               wheelSeat.r0 = best;
               riding = wheelSeat;

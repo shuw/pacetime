@@ -26,7 +26,6 @@ export class Player {
     this.touchSprint = false;
     this.vehicle = null; // a train you're riding, if any
     this.legs = 3; // the light speed your stride is sized for, m/s
-    this.stretch = 1; // stride multiplier when light is slowed past a place's own speed
     this.autopilot = null; // a proper velocity to hold, for the title screen
     this.stride = 0;
     this.bob = 0;
@@ -157,11 +156,11 @@ export class Player {
     // so however hard you push you never reach c.
     const c = world.c;
     const boost = sprint && (k.has("Space") || this.touchBoost);
-    const legs = this.legs * this.stretch;
+    const legs = this.legs;
     const target = this.autopilot ? this.autopilot.clone() : dir.multiplyScalar((boost ? BOOST_U : sprint ? SPRINT_U : WALK_U) * legs);
     // Slowing down is quick, so letting go of the keys doesn't coast you far.
     const braking = target.lengthSq() < this.u.lengthSq();
-    const rate = (braking ? 7 : boost ? 6 : sprint ? 2.7 : 2) * legs * this.stretch * dTau;
+    const rate = (braking ? 7 : boost ? 6 : sprint ? 2.7 : 2) * legs * dTau;
     const delta = target.sub(this.u);
     if (delta.length() > rate) delta.setLength(rate);
     this.u.add(delta);
@@ -183,7 +182,7 @@ export class Player {
     this.pos.addScaledVector(this.v, dT);
     // A gentle head bob while walking, by your own steps.
     const step = this.u.length() / legs;
-    this.stride += step * dTau * this.stretch * 5.5;
+    this.stride += step * dTau * 5.5;
     this.bob = this.vehicle || this.autopilot ? 0 : Math.sin(this.stride) * 0.035 * Math.min(1, step * 1.5);
     if (this.vehicle) this.vehicle.clamp(this.pos, world.t + dT);
     else this.collide(scene);

@@ -10,6 +10,7 @@ import { ghosts, reflScale, shared, skyMaterial } from "./shaders.js";
 import { effects, world } from "./relativity.js";
 import { clearToast, cWord, initLab, onGoalClick, showScene, syncLab, toast, toggleGoals, toggleLab, updateHud } from "./hud.js";
 import { lightSpeed } from "./relativity.js";
+import { motion } from "./motion.js";
 import { addVelocity } from "./relativity.js";
 import { sparkField } from "./shaders.js";
 import { isMuted, setAmbience, setListener, setMuted, sfx, unlockAudio, updateAudio } from "./audio.js";
@@ -165,6 +166,7 @@ function load(scene) {
   player.place(0, 0, 0);
   player.tau = 0;
   world.t = 0;
+  motion.reset();
   const instance = scene.build({ player, toast });
   // Balls glow like embers: plenty of light beyond the violet, so they stay
   // visible (and redden) as they fly away from you.
@@ -183,8 +185,6 @@ function load(scene) {
   showScene(scene, SCENES.indexOf(scene));
   instance.c0 = world.c;
   player.legs = world.c;
-  world.slow = 1;
-  player.stretch = 1;
   goalsDone = 0;
   syncLab();
 }
@@ -413,15 +413,11 @@ addEventListener("keydown", (e) => {
   }
 });
 
-// Faster than a place's own light speed, light simply speeds up. Slower than
-// it, the world slows down with it and your stride lengthens, so every moving
-// thing keeps its fraction of c.
+// Light speed is independent of everything else: things keep their own
+// speeds, and are only held just under light speed when they'd outrun it.
 function setLight(c) {
-  const c0 = current?.instance.c0 ?? world.c;
   if (intro) return;
-  if (c >= c0) { world.c = c; world.slow = 1; }
-  else { world.c = c0; world.slow = c / c0; }
-  player.stretch = 1 / world.slow;
+  world.c = c;
 }
 
 initLab(setLight);
@@ -490,6 +486,7 @@ function simulate(dTau, { realtime = true } = {}) {
   const { instance, scene } = current;
   const dT = player.update(dTau, instance);
   world.t += dT;
+  motion.step(dT, world.t);
   player.applyTo(camera);
   camera.updateMatrixWorld();
   eye.copy(player.eye);
@@ -606,7 +603,7 @@ function frame() {
     // Behind the title screen the world keeps running so the menu has a live backdrop.
     const frozen = (paused || !help.hidden) && current.instance.started;
     tour(dTau);
-    const total = frozen ? 0 : dTau * warp * playback * world.slow;
+    const total = frozen ? 0 : dTau * warp * playback;
     if (!frozen) runIntro(dTau);
     const n = Math.max(1, Math.ceil(total / 0.05));
     for (let i = 0; i < n; i++) simulate(total / n, { realtime: i === n - 1 });

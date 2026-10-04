@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { G, mesh } from "./geo.js";
 import { ghostOf, mat } from "./shaders.js";
 import { effects, gammaOf, world } from "./relativity.js";
+import { govern, motion } from "./motion.js";
 
 // Something moving in a straight line at constant velocity, built around its
 // own origin. Every material made through `mat` shares its uniforms, so the
@@ -9,6 +10,8 @@ import { effects, gammaOf, world } from "./relativity.js";
 export class Mover {
   constructor(vel = new THREE.Vector3(), { clip = null } = {}) {
     this.vel = vel.clone();
+    this.baseVel = vel.clone(); // its own speed; vel is that, held under c
+    motion.addMover(this);
     this.anchor = new THREE.Vector3(0, 0, -1e5); // position at world time 0
     this.life = new THREE.Vector2(-1e9, 1e9);
     this.uniforms = { uVel: { value: this.vel }, uAnchor: { value: this.anchor }, uLife: { value: this.life } };
@@ -30,6 +33,17 @@ export class Mover {
     const m = mesh(geo, this.mat(opts), transform);
     this.group.add(m);
     return m;
+  }
+
+  // Hold the speed under light speed, keeping the position continuous.
+  govern(c, t) {
+    const s = this.baseVel.length();
+    const k = s > 0 ? govern(s, c) / s : 1;
+    const next = this.baseVel.clone().multiplyScalar(k);
+    if (next.distanceToSquared(this.vel) < 1e-12) return;
+    const here = this.at(t);
+    this.vel.copy(next);
+    this.anchor.copy(here).addScaledVector(this.vel, -t);
   }
 
   // Be at `pos` at world time t.

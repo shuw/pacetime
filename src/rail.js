@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { box, G, mesh } from "./geo.js";
 import { ghostOf, mat } from "./shaders.js";
 import { effects, gammaOf, seenTimeOf, world } from "./relativity.js";
+import { govern, motion } from "./motion.js";
 import { PALETTE } from "./world.js";
 
 // A glass maglev train on a straight track along x, moving at a fixed fraction
@@ -9,7 +10,15 @@ import { PALETTE } from "./world.js";
 // spacetime from the shared mover uniforms.
 export class Train {
   constructor({ cars = 5, carLen = 12, gap = 0.6, fraction = 0.8, z = 0, width = 3.4, height = 3.1, clip = null } = {}) {
-    this.fraction = fraction;
+    this.speed = fraction * world.c; // its own speed, m/s
+    this.vNow = this.speed;
+    motion.add((dT, t, c) => {
+      const v = govern(this.speed, c);
+      if (v === this.vNow) return;
+      const x = this.centerAt(t);
+      this.vNow = v;
+      this.x0 = x - v * t;
+    });
     this.z = z;
     this.width = width;
     this.length = cars * carLen + (cars - 1) * gap;
@@ -53,11 +62,15 @@ export class Train {
   }
 
   get v() {
-    return this.fraction * world.c;
+    return this.vNow;
   }
 
   get gamma() {
-    return 1 / Math.sqrt(1 - this.fraction ** 2);
+    return gammaOf(this.vNow / world.c);
+  }
+
+  get fraction() {
+    return this.vNow / world.c;
   }
 
   // Length along the track in the world (platform) frame.

@@ -3,18 +3,22 @@ import { box, followDisc, G, mesh, rng } from "./geo.js";
 import { mat, sparkField } from "./shaders.js";
 import { retardedTime, world } from "./relativity.js";
 import { sfx } from "./audio.js";
+import { motion } from "./motion.js";
 
 export const SOUND_SPEED = 343; // m/s: here, sound easily outruns light
 
 // Uniforms for something spinning about an axis. Gondolas pass a pivot so
 // they orbit without turning.
-export function rotor(center, axis, omega) {
-  return {
+export function rotor(center, axis, omega, rmax) {
+  const u = {
     uRotCenter: { value: new THREE.Vector3(...center) },
     uRotAxis: { value: new THREE.Vector3(...axis).normalize() },
     uOmega: { value: omega },
+    uPhase: { value: 0 },
     uPivot: { value: new THREE.Vector4(0, 0, 0, 0) },
   };
+  motion.addRotor(u, omega, rmax);
+  return u;
 }
 
 export function orbiting(r, pivot) {
@@ -54,7 +58,8 @@ export function reflection(obj, y0 = 0, strength = 0.45, { stretch = 1 } = {}) {
         rotors.set(o.rotor.uRotCenter, {
           uRotCenter: { value: new THREE.Vector3(c.x, 2 * y0 - c.y, c.z) },
           uRotAxis: { value: new THREE.Vector3(a.x, -a.y, a.z) },
-          uOmega: { value: -o.rotor.uOmega.value },
+          uOmega: { get value() { return -o.rotor.uOmega.value; } },
+          uPhase: { get value() { return -o.rotor.uPhase.value; } },
         });
       }
       const p = o.rotor.uPivot.value;
