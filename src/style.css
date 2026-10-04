@@ -91,6 +91,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #gamma { text-transform: none; }
 #speed-ms, #riding { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 #riding { color: var(--warm); }
+#seeing { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: #c9cede; min-height: 0; }
+#seeing:empty { display: none; }
 
 .watches { position: absolute; right: 16px; bottom: 16px; width: 250px; display: grid; gap: 4px; }
 .watch { display: flex; justify-content: space-between; align-items: baseline; }

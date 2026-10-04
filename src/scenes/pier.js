@@ -155,7 +155,7 @@ export default {
     }
     for (let i = 0; i < 64; i++) {
       const a = (i / 64) * Math.PI * 2;
-      lights.add(mesh(G.ball, spin({ color: ["#ffd38a", "#ff6b8a", "#8fd8ff", "#c7ff8a"][i % 4], emissive: 1, ir: 1, uv: 0.5 }), { pos: [WHEEL.x + Math.cos(a) * WHEEL_R, WHEEL.y + Math.sin(a) * WHEEL_R, WHEEL.z + 1.05], scale: 0.13 }));
+      lights.add(mesh(G.ball, spin({ color: ["#ffd38a", "#ff6b8a", "#8fd8ff", "#c7ff8a"][i % 4], emissive: 1, ir: 1, uv: 2.2 }), { pos: [WHEEL.x + Math.cos(a) * WHEEL_R, WHEEL.y + Math.sin(a) * WHEEL_R, WHEEL.z + 1.05], scale: 0.13 }));
     }
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
@@ -163,7 +163,7 @@ export default {
       const gr = orbiting(wr, pivot);
       const cabin = new THREE.Group();
       cabin.add(mesh(G.box, mat({ color: ["#e85d5d", "#f2c14e", "#5db0e8"][i % 3], ir: 0.5, uv: 0.2, rotor: gr }), { pos: [pivot[0], pivot[1] - 1.4, pivot[2]], scale: [1.6, 1.4, 1.4] }));
-      cabin.add(mesh(G.box, mat({ color: "#ffe2a8", emissive: 0.9, ir: 1, rotor: gr }), { pos: [pivot[0], pivot[1] - 1.3, pivot[2]], scale: [1.3, 0.5, 1.45] }));
+      cabin.add(mesh(G.box, mat({ color: "#ffe2a8", emissive: 0.9, ir: 1, uv: 2.4, rotor: gr }), { pos: [pivot[0], pivot[1] - 1.3, pivot[2]], scale: [1.3, 0.5, 1.45] }));
       group.add(cabin);
       lights.add(cabin.children[1]);
     }

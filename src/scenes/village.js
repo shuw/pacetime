@@ -122,7 +122,7 @@ export default {
     group.add(mesh(G.cyl, onCar({ color: "#f2e6c8", ir: 0.6 }), { pos: [CAROUSEL.x, 5.95, CAROUSEL.z], scale: [CAR_R + 0.8, 0.5, CAR_R + 0.8] }));
     for (let i = 0; i < 48; i++) {
       const a = (i / 48) * Math.PI * 2;
-      lights.add(mesh(G.ball, onCar({ color: i % 2 ? "#ffd38a" : "#fff0d0", emissive: 1, ir: 1, uv: 0.4 }), { pos: [CAROUSEL.x + Math.cos(a) * (CAR_R + 0.85), 5.85, CAROUSEL.z + Math.sin(a) * (CAR_R + 0.85)], scale: 0.11 }));
+      lights.add(mesh(G.ball, onCar({ color: i % 2 ? "#ffd38a" : "#fff0d0", emissive: 1, ir: 1, uv: 2.2 }), { pos: [CAROUSEL.x + Math.cos(a) * (CAR_R + 0.85), 5.85, CAROUSEL.z + Math.sin(a) * (CAR_R + 0.85)], scale: 0.11 }));
     }
     const horseColors = ["#f4efe6", "#3a2a22", "#c98a4a", "#8a8a96"];
     for (let i = 0; i < 12; i++) {
@@ -150,7 +150,7 @@ export default {
       const sk = (o) => mat({ ...o, rotor: orbiting(sr, p) });
       skaters.add(mesh(G.box, sk({ color: ["#c8343c", "#2a5aa8", "#e8b030", "#3a8a5a"][i % 4], ir: 0.5 }), { pos: [p[0], 1.0, p[2]], scale: [0.45, 1.2, 0.3] }));
       skaters.add(mesh(G.sphere, sk({ color: "#e8c0a0" }), { pos: [p[0], 1.85, p[2]], scale: 0.2 }));
-      skaters.add(mesh(G.ball, sk({ color: "#ffd38a", emissive: 1, ir: 1.4, uv: 0.4 }), { pos: [p[0] + 0.4, 1.3, p[2]], scale: 0.15 }));
+      skaters.add(mesh(G.ball, sk({ color: "#ffd38a", emissive: 1, ir: 1.4, uv: 2 }), { pos: [p[0] + 0.4, 1.3, p[2]], scale: 0.15 }));
     }
     group.add(skaters);
     group.add(reflection(skaters, 0.03, 0.4));
@@ -211,7 +211,7 @@ export default {
           }
           for (const x of [-3, 3]) g.add(mesh(G.ball, onTrain({ color: "#ffc070", emissive: 1, ir: 1.2 }), { pos: [x, 2.0, 1.15], scale: 0.12 }));
         } else {
-          g.add(mesh(G.box, onTrain({ color: k % 2 ? "#2a4a3a" : "#5a1a1e", ir: 0.5, windows: { size: [1.3, 2.2], lit: 0.9, color: "#ffc070", seed: k } }), { pos: [0, 1.9, 0], scale: [7.2, 2.4, 2.4] }));
+          g.add(mesh(G.box, onTrain({ color: k % 2 ? "#2a4a3a" : "#5a1a1e", ir: 0.5, uv: 0.6, windows: { size: [1.3, 2.2], lit: 0.9, color: "#ffc070", seed: k } }), { pos: [0, 1.9, 0], scale: [7.2, 2.4, 2.4] }));
           g.add(mesh(G.box, onTrain({ color: "#e6eef6", ir: 0.6, uv: 0.4 }), { pos: [0, 3.2, 0], scale: [7.4, 0.25, 2.6] }));
         }
         g.add(mesh(G.box, onTrain({ color: "#2a2d34" }), { pos: [0, 0.6, 0], scale: [6.6, 0.4, 2] }));

@@ -488,6 +488,7 @@ function frame() {
         player, instance: current.instance,
         locked: document.pointerLockElement === canvas || matchMedia("(pointer: coarse)").matches,
         prompt: current.instance.action?.(eye) ?? null,
+        look: camera.getWorldDirection(new THREE.Vector3()),
       });
       writeHash(dTau);
     }

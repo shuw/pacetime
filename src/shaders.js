@@ -324,6 +324,8 @@ void main() {
     ndl = smoothstep(0.05, 0.12, ndl) * 0.85 + smoothstep(0.55, 0.62, ndl) * 0.15;
   #endif
   vec3 light = mix(uGround, uSky, N.y * 0.5 + 0.5) + uSunColor * ndl;
+  // Walls darken toward the ground they stand on, which seats them in the scene.
+  light *= mix(1.0, mix(0.55, 1.0, smoothstep(0.0, 1.8, abs(vWorld.y))), step(abs(N.y), 0.6));
   // Nearby lamps.
   for (int i = 0; i < 8; i++) {
     vec3 L = uLampPos[i].xyz - vWorld;

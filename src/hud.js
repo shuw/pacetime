@@ -89,13 +89,26 @@ export function showScene(scene, index) {
   $("log").innerHTML = "";
 }
 
-export function updateHud({ player, instance, locked, prompt }) {
+// A plain description of what your motion is doing to the view right now.
+function seeing(player, look) {
+  const b = player.beta;
+  if (b < 0.25) return "";
+  const v = player.v.clone().normalize();
+  const along = v.dot(look);
+  if (along > 0.6) return b > 0.8 ? "Ahead: the whole world crowds into a circle ringed with rainbow." : "Ahead: things bunch together and shift bluer.";
+  if (along < -0.6) return b > 0.8 ? "Behind: the world stretches away, dim and red." : "Behind: things spread apart and redden.";
+  return "Beside you: things you've passed still look ahead of you.";
+}
+
+export function updateHud({ player, instance, locked, prompt, look }) {
   const b = player.beta;
   $("beta").textContent = b.toFixed(3);
   $("gamma").textContent = `γ ${player.gamma.toFixed(3)}`;
   $("speed-fill").style.width = `${(b * 100).toFixed(2)}%`;
   $("speed-ms").textContent = `${(b * world.c).toFixed(2)} m/s`;
   $("riding").textContent = player.vehicle ? "riding" : "";
+  const s = look ? seeing(player, look) : "";
+  if ($("seeing").textContent !== s) $("seeing").textContent = s;
 
   $("tau").textContent = sec(player.tau);
   $("worldt").textContent = sec(world.t);
