@@ -240,6 +240,31 @@ export const sfx = {
     const { pan, gain } = placed(pos, 20);
     burst(0.9, { gain: 0.15 * gain * amount, from: 400, to: 2500, type: "bandpass", q: 1.5, pan, attack: 0.3 });
   },
+  // A church bell: a struck, slowly decaying chord of inharmonic partials.
+  bell(pos) {
+    const { pan, gain } = placed(pos, 80);
+    [[220, 0.22], [440, 0.12], [528, 0.08], [660, 0.05], [880, 0.04], [1188, 0.025]].forEach(([f, g]) => tone(f, 0, 4.5, { gain: g * gain, pan, attack: 0.003 }));
+  },
+  // A steam locomotive's puff.
+  chuff(pos, k = 1) {
+    const { pan, gain } = placed(pos, 30);
+    burst(0.22, { gain: 0.18 * gain * k, from: 1800, to: 300, type: "bandpass", q: 0.9, pan, attack: 0.01 });
+  },
+  whistle(pos) {
+    const { pan, gain } = placed(pos, 60);
+    [587, 740, 880].forEach((f) => tone(f, 0, 1.6, { type: "triangle", gain: 0.035 * gain, pan, attack: 0.08 }));
+  },
+  // A music-box note.
+  note(freq, pos) {
+    const { pan, gain } = placed(pos, 25);
+    tone(freq, 0, 0.9, { type: "sine", gain: 0.05 * gain, pan, attack: 0.002 });
+    tone(freq * 2, 0, 0.4, { type: "sine", gain: 0.015 * gain, pan, attack: 0.002 });
+  },
+  horn(pos) {
+    const { pan, gain } = placed(pos, 40);
+    tone(415, 0, 0.35, { type: "square", gain: 0.03 * gain, pan, attack: 0.01 });
+    tone(523, 0, 0.35, { type: "square", gain: 0.025 * gain, pan, attack: 0.01 });
+  },
   step(soft = 1) {
     burst(0.07, { gain: 0.05 * soft, from: 900, to: 300, q: 1 });
   },

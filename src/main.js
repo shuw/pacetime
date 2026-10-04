@@ -12,8 +12,10 @@ import { isMuted, setListener, setMuted, sfx, unlockAudio, updateAudio } from ".
 import railway from "./scenes/railway.js";
 import beam from "./scenes/beam.js";
 import pier from "./scenes/pier.js";
+import city from "./scenes/city.js";
+import village from "./scenes/village.js";
 
-const SCENES = [pier, railway, beam];
+const SCENES = [pier, city, village, railway, beam];
 
 const canvas = document.getElementById("view");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });

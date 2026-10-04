@@ -34,9 +34,12 @@ export function surface(opts, { y = 0, radius = 1200, reflective = false } = {})
 // Mirror the glowing parts of `obj` in a horizontal plane at y0. A reflection
 // is just light taking a longer path, the same length as the straight path
 // from a mirrored copy, so drawing the copy gets light delay right too.
-export function reflection(obj, y0 = 0, strength = 0.45) {
+export function reflection(obj, y0 = 0, strength = 0.45, { stretch = 1 } = {}) {
   const out = new THREE.Group();
-  const flip = new THREE.Matrix4().makeTranslation(0, 2 * y0, 0).multiply(new THREE.Matrix4().makeScale(1, -1, 1));
+  // A wet street smears reflections downward; `stretch` > 1 fakes that.
+  const flip = new THREE.Matrix4().makeTranslation(0, y0, 0)
+    .multiply(new THREE.Matrix4().makeScale(1, -stretch, 1))
+    .multiply(new THREE.Matrix4().makeTranslation(0, -y0, 0));
   const rotors = new Map();
   obj.updateMatrixWorld(true);
   obj.traverse((m) => {
@@ -57,6 +60,9 @@ export function reflection(obj, y0 = 0, strength = 0.45) {
       r = { ...rotors.get(o.rotor.uRotCenter), uPivot: { value: new THREE.Vector4(p.x, 2 * y0 - p.y, p.z, p.w) } };
     }
     const copy = new THREE.Mesh(m.geometry, mat({ ...o, rotor: r, additive: true, opacity: strength, unique: true, doubleSided: true }));
+    // Share the live color and glow, so lamps switching on and off show in the reflection.
+    copy.material.uniforms.uColor = m.material.uniforms.uColor;
+    copy.material.uniforms.uSpec = m.material.uniforms.uSpec;
     copy.matrixAutoUpdate = false;
     copy.matrix.copy(flip).multiply(m.matrixWorld);
     copy.frustumCulled = false;
@@ -115,7 +121,8 @@ const STROKES = {
 
 export function neon(text, { pos = [0, 0, 0], rotY = 0, size = 0.25, color = "#ff4fa3", gap = 0.8 } = {}) {
   const g = new THREE.Group();
-  const m = mat({ color, emissive: 1, ir: 0.8, uv: 0.8 });
+  const m = mat({ color, emissive: 1, ir: 0.8, uv: 0.8, unique: true });
+  g.glow = m;
   let cx = 0;
   for (const ch of text) {
     for (const [x0, y0, x1, y1] of STROKES[ch] ?? []) {
@@ -226,3 +233,56 @@ export class Fireworks {
 }
 
 export { box, G, mesh, mat, rng, retardedTime };
+
+// Many pines in a few draw calls. spots: [x, z, height][]
+export function forest(spots, { snow = true } = {}) {
+  const g = new THREE.Group();
+  const n = spots.length;
+  const trunk = new THREE.InstancedMesh(G.box, mat({ color: "#3a2a20", ir: 0.3 }), n);
+  const layers = [0, 1, 2].map((i) => new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 9), mat({ color: "#1d3a2b", ir: 1.4, uv: 0.05 }), n));
+  const caps = [0, 1, 2].map(() => new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 9), mat({ color: "#e9f0f7", ir: 0.6, uv: 0.4 }), n));
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+  spots.forEach(([x, z, h], k) => {
+    q.setFromAxisAngle(up, x * 0.37 + z);
+    trunk.setMatrixAt(k, m4.compose(new THREE.Vector3(x, h * 0.15, z), q, new THREE.Vector3(0.35, h * 0.3, 0.35)));
+    for (let i = 0; i < 3; i++) {
+      const r = h * (0.3 - i * 0.075), y = h * (0.42 + i * 0.2);
+      layers[i].setMatrixAt(k, m4.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(r, h * 0.36, r)));
+      caps[i].setMatrixAt(k, m4.compose(new THREE.Vector3(x, y + h * 0.1, z), q, new THREE.Vector3(r * 0.72, h * 0.17, r * 0.72)));
+    }
+  });
+  for (const m of [trunk, ...layers, ...(snow ? caps : [])]) {
+    m.frustumCulled = false;
+    g.add(m);
+  }
+  return g;
+}
+
+// A clock face whose hands show whatever time `set(t)` is given: the time
+// its light left it. One lap of the big hand is a minute.
+export function clockFace(radius = 1.2, { face = "#f4ead2", rim = "#2b2622", glow = 0.6 } = {}) {
+  const g = new THREE.Group();
+  g.add(mesh(G.cyl, mat({ color: rim, ir: 0.3 }), { rot: [Math.PI / 2, 0, 0], scale: [radius * 1.12, 0.12, radius * 1.12] }));
+  g.add(mesh(G.cyl, mat({ color: face, emissive: glow, ir: 0.8 }), { pos: [0, 0, 0.04], rot: [Math.PI / 2, 0, 0], scale: [radius, 0.12, radius] }));
+  const tick = mat({ color: "#2b2622" });
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    g.add(mesh(G.box, tick, { pos: [Math.sin(a) * radius * 0.82, Math.cos(a) * radius * 0.82, 0.12], rot: [0, 0, -a], scale: [0.06, i % 3 ? 0.14 : 0.3, 0.04] }));
+  }
+  const hand = (len, w, color) => {
+    const pivot = new THREE.Group();
+    pivot.position.z = 0.15;
+    pivot.add(mesh(G.box, mat({ color }), { pos: [0, len / 2, 0], scale: [w, len, 0.04] }));
+    g.add(pivot);
+    return pivot;
+  };
+  const big = hand(radius * 0.78, 0.07, "#2b2622");
+  const small = hand(radius * 0.5, 0.11, "#2b2622");
+  const sec = hand(radius * 0.85, 0.03, "#c0392b");
+  g.set = (t) => {
+    sec.rotation.z = -(t % 10) / 10 * Math.PI * 2; // a fast hand, one lap per 10 s
+    big.rotation.z = -(t / 60) * Math.PI * 2;
+    small.rotation.z = -(t / 720) * Math.PI * 2;
+  };
+  return g;
+}

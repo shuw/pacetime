@@ -242,6 +242,15 @@ varying vec3 vSrcVel;
 #ifdef WATER
 uniform vec3 uSkyTop;
 uniform vec3 uSkyHorizon;
+uniform float uWave;
+#endif
+#ifdef SNOW
+float snowHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float snowNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(snowHash(i), snowHash(i + vec2(1, 0)), f.x), mix(snowHash(i + vec2(0, 1)), snowHash(i + vec2(1, 1)), f.x), f.y);
+}
 #endif
 #ifdef WINDOWS
 uniform vec4 uWindows;  // cell width, cell height, fraction lit, seed
@@ -325,9 +334,9 @@ void main() {
       vec2 q = vWorld.xz;
       float t = uTime;
       vec3 n = normalize(vec3(
-        0.05 * sin(q.x * 0.35 + t * 0.9) + 0.03 * sin(q.x * 0.9 - q.y * 0.6 + t * 1.7) + 0.02 * sin(q.y * 1.7 + t * 2.3),
+        uWave * (0.05 * sin(q.x * 0.35 + t * 0.9) + 0.03 * sin(q.x * 0.9 - q.y * 0.6 + t * 1.7) + 0.02 * sin(q.y * 1.7 + t * 2.3)),
         1.0,
-        0.05 * sin(q.y * 0.4 - t * 0.8) + 0.03 * sin(q.y * 1.1 + q.x * 0.5 + t * 1.3) + 0.02 * sin(q.x * 1.9 - t * 2.1)));
+        uWave * (0.05 * sin(q.y * 0.4 - t * 0.8) + 0.03 * sin(q.y * 1.1 + q.x * 0.5 + t * 1.3) + 0.02 * sin(q.x * 1.9 - t * 2.1))));
       vec3 view = normalize(vWorld - uCam);
       vec3 r = reflect(view, n);
       float fres = 0.04 + 0.96 * pow(1.0 - max(dot(-view, n), 0.0), 5.0);
@@ -336,6 +345,21 @@ void main() {
       rgb = mix(base * (uSky * 0.6 + 0.1), skyc, fres) + uSunColor * glint * 4.0;
       ir = 0.15 + glint * 3.0;
       uv = 0.2 * fres;
+    }
+  #endif
+  #ifdef SNOW
+    // Soft drifts, and crystals that glint as you move.
+    {
+      vec2 q = vWorld.xz;
+      float drift = snowNoise(q * 0.08) * 0.6 + snowNoise(q * 0.31) * 0.3 + snowNoise(q * 1.7) * 0.1;
+      rgb *= 0.82 + 0.3 * drift;
+      vec2 cell = floor(q * 3.0);
+      float h = snowHash(cell);
+      vec3 view = normalize(vWorld - uCam);
+      float glint = step(0.985, h) * pow(max(0.0, sin(dot(view, vec3(h * 40.0, 17.0, h * 31.0)) * 6.0)), 24.0);
+      glint *= smoothstep(0.42, 0.0, length(fract(q * 3.0) - 0.5)) * smoothstep(30.0, 4.0, vDist);
+      rgb += vec3(1.2, 1.25, 1.4) * glint;
+      uv += glint;
     }
   #endif
   #ifdef WINDOWS
@@ -347,9 +371,9 @@ void main() {
       float inside = step(0.18, f.x) * step(f.x, 0.82) * step(0.22, f.y) * step(f.y, 0.78) * step(0.5, abs(N.y) < 0.5 ? 1.0 : 0.0);
       float h = fract(sin(dot(cell + uWindows.w, vec2(41.3, 289.1))) * 43758.5);
       float lit = step(1.0 - uWindows.z, h) * inside;
-      rgb = mix(rgb, uWindowColor * (0.8 + 0.6 * fract(h * 7.0)) * 1.6, lit);
+      rgb = mix(rgb, uWindowColor * (0.25 + 0.45 * fract(h * 7.0)), lit);
       rgb = mix(rgb, rgb * 0.35, inside * (1.0 - lit));
-      ir += lit * 0.8;
+      ir += lit * 0.3;
     }
   #endif
 
@@ -485,7 +509,7 @@ void main() {
     ir += star * 0.8;
     uv += star * 0.8;
     float moon = smoothstep(0.99965, 0.99975, dot(dir, uSun)) * step(0.01, uStars);
-    rgb += vec3(1.6, 1.6, 1.4) * moon;
+    rgb += vec3(0.55, 0.55, 0.52) * moon;
   }
   vec3 col = searchlight(spectralShift(rgb, ir, uv, D), D);
   gl_FragColor = vec4(softClip(col), 1.0);
@@ -517,7 +541,8 @@ export function mat({
   wake = 0,
   sourceVel = null, // colors only: the velocity of something placed by hand at its seen position
   rotor = null,     // { uRotCenter, uRotAxis, uOmega, uPivot } uniforms for something spinning
-  water = false,
+  water = false,     // true, or a wave height multiplier
+  snow = false,
   windows = null,   // { size: [w, h], lit, color, seed }
   spiral = null,    // { uSpiral, uSpiralColor } uniforms for a lighthouse beam
   depthWrite = null,
@@ -540,6 +565,7 @@ export function mat({
   if (sourceVel) defines.SOURCE_VEL = "";
   if (rotor) defines.ROTOR = "";
   if (water) defines.WATER = "";
+  if (snow) defines.SNOW = "";
   if (windows) defines.WINDOWS = "";
   if (spiral) defines.SPIRAL = "";
   if (doubleSided) defines.DOUBLE_SIDED = "";
@@ -565,6 +591,7 @@ export function mat({
       ...(sourceVel && { uVel: sourceVel }),
       ...(rotor && rotor),
       ...(spiral && spiral),
+      ...(water && { uWave: { value: water === true ? 1 : water } }),
       ...(windows && {
         uWindows: { value: new THREE.Vector4(windows.size[0], windows.size[1], windows.lit ?? 0.5, windows.seed ?? 1) },
         uWindowColor: { value: new THREE.Color(windows.color ?? "#ffcf8a") },
@@ -696,7 +723,7 @@ void main() {
   float fade = (1.0 - vAgeK) * (1.0 - vAgeK);
   vec3 rgb = vColor * uIntensity * fade * shape;
   float k = dot(vColor, vec3(0.33)) * uIntensity * fade * shape;
-  vec3 col = searchlight(spectralShift(rgb, k * 0.6, k * 0.6, D), D);
+  vec3 col = searchlight(spectralShift(rgb, k * 0.35, k * 0.35, D), D);
   gl_FragColor = vec4(softClip(col), 1.0);
   #include <colorspace_fragment>
 }
