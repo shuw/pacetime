@@ -6,6 +6,7 @@ import { Flashes } from "../world.js";
 import { building, Fireworks, lampPost, orbiting, reflection, rotor, SOUND_SPEED, stringLights, surface } from "../earth.js";
 import { gammaOf, retardedTime, seenTimeOf, world } from "../relativity.js";
 import { sfx } from "../audio.js";
+import { Gallery } from "../gallery.js";
 
 const C = 6; // light speed here, m/s
 const SEA = -2.4;
@@ -222,6 +223,10 @@ export default {
     mist.renderOrder = 4;
     group.add(mist);
 
+    // Shooting gallery on the shore end of the pier, facing back along it.
+    const gallery = new Gallery(group, { origin: new THREE.Vector3(-20, 0, -132), width: 16, depth: 8, c: C, toast });
+    const GALLERY_LINE = new THREE.Vector3(-20, 0, -130.8);
+
     // Fireworks barge.
     group.add(box(10, 1, 6, { color: "#2b2d33", ir: 0.3 }, [BARGE.x, SEA + 0.4, BARGE.z]));
     const fw = new Fireworks(group, flashes, { mirrorY: SEA, c: C });
@@ -244,6 +249,7 @@ export default {
       { group: "Rides", text: "Stand before the Ferris wheel: bent spokes, one side bluer, one redder", done: false, at: [-16, -122, 0, 0.12] },
       { group: "Rides", text: "Ride the roller coaster (E at its station, right of the stalls)", done: false, at: [24.4, -128, Math.PI, 0] },
       { group: "Rides", text: "Ride the Ferris wheel (E under it) and come off younger", done: false, at: [-16, -142, 0, 0] },
+      { group: "Shooting gallery", text: "Knock down 5 targets: aim where they are, not where you see them (F to throw)", done: false, at: [-20, -130.8, 0, 0.02] },
       { group: "Lighthouse", text: "Watch the lighthouse beam curl into a spiral over the sea", done: false, at: [10, -165, -0.61, 0.15] },
     ];
     let note = "Light here moves at 6 m/s, about a jog. Sound still moves at 343 m/s, so it wins every race.";
@@ -296,6 +302,7 @@ export default {
 
     return {
       group,
+      gallery,
       walk: [[-4.6, -120, 4.6, 44], [-31, -170, 31, -120], [-110, 40, 110, 57]],
       spawn: [0, -60, 0],
       env: DUSK.env,
@@ -310,8 +317,19 @@ export default {
         "Ride the coaster and look around at the bottom of the drop: at 90% of light speed the whole bay squeezes forward.",
       ],
       get note() { return note; },
+      onThrow(b) {
+        if (player.pos.distanceTo(GALLERY_LINE) < 6) gallery.throwBall(b);
+      },
       readouts() {
         const next = Math.min(nextShell, nextTwin) - world.t;
+        if (player.pos.distanceTo(GALLERY_LINE) < 6) {
+          return [
+            ["gallery score", `${gallery.score}`],
+            ["throws", `${gallery.throws}`],
+            ["light delay to targets", `${(8 / world.c).toFixed(1)} s`],
+            ["ball flight", `${(8 / (0.6 * world.c)).toFixed(1)} s`],
+          ];
+        }
         return [
           ["light speed", `${world.c.toFixed(1)} m/s`],
           ["wheel rim", `${(0.8 * 100).toFixed(0)}% c`],
@@ -431,7 +449,12 @@ export default {
         if (wheelWatch > 3) goals[3].done = true;
         toward.set(LIGHTHOUSE.x, LAMP_Y, LIGHTHOUSE.z).sub(eye).normalize();
         if (fwd.dot(toward) > 0.85) beamWatch += dTau;
-        if (beamWatch > 5) goals[6].done = true;
+        if (beamWatch > 5) goals[7].done = true;
+        gallery.update(t);
+        if (gallery.score >= 5 && !goals[6].done) {
+          goals[6].done = true;
+          toast(`Five down in ${gallery.throws} throws. You were aiming metres ahead of what you could see.`, 8);
+        }
         log.update(player, eye);
       },
     };

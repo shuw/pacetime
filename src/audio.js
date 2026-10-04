@@ -294,6 +294,11 @@ export const sfx = {
     tone(415, 0, 0.35, { type: "square", gain: 0.03 * gain, pan, attack: 0.01 });
     tone(523, 0, 0.35, { type: "square", gain: 0.025 * gain, pan, attack: 0.01 });
   },
+  // A hit at the shooting gallery: a bright clang.
+  clang(pos) {
+    const { pan, gain } = placed(pos, 20);
+    [1568, 2093, 2637].forEach((f, i) => tone(f, i * 0.04, 0.6, { type: "triangle", gain: 0.06 * gain, pan }));
+  },
   toss() {
     tone(320, 0, 0.35, { type: "sine", gain: 0.08, slide: 2.4 });
     burst(0.2, { gain: 0.06, from: 2500, to: 800, type: "bandpass", q: 2 });

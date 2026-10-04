@@ -73,6 +73,24 @@ await run("city", async () => {
 function AVE_FIX() { return 7.6; }
 
 await run("pier", async () => {
+  // Shooting gallery: throw exactly at where each target will really be.
+  await t.place(-20, -130.8, 0, 0.02);
+  for (let i = 0; i < 80 && (await t.q(() => pacetime.instance.gallery.score)) < 6; i++) {
+    await t.q(() => {
+      const g = pacetime.instance.gallery, e = pacetime.player.eye, o = e.clone().setY(e.y - 0.3);
+      const tg = g.targets.find((x) => x.hitAt === null && !(x.aimed > pacetime.world.t) && Math.abs(x.m.at(pacetime.world.t).x - o.x) < 5);
+      if (!tg) return;
+      tg.aimed = pacetime.world.t + 5;
+      const speed = 0.6 * pacetime.world.c;
+      let T = Math.abs(tg.z - o.z) / speed, P;
+      for (let k = 0; k < 6; k++) { P = tg.m.at(pacetime.world.t + T).setY(tg.y); T = P.distanceTo(o) / speed; }
+      const vel = P.clone().sub(o).normalize().multiplyScalar(speed);
+      vel.y += 0.25 * T;
+      g.throwBall({ origin: o, vel, birth: pacetime.world.t, gravity: 0.5 });
+      g.throws--;
+    });
+    await t.advance(0.5);
+  }
   await t.place(-16, -143, 0);
   await t.q(() => pacetime.act());
   await t.advance(5);

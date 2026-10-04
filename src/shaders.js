@@ -302,6 +302,9 @@ void main() {
     vec3 bsr = vSrcVel / uC;
     D /= inversesqrt(max(1e-6, 1.0 - dot(bsr, bsr))) * (1.0 + dot(bsr, normalize(vWorld - uCam)));
   #endif
+  #ifdef GHOST
+    D = 1.0;
+  #endif
   vec3 base = uColor * vTint;
   float e = uSpec.z;
   #ifdef CHECKER
@@ -556,6 +559,7 @@ export function mat({
   rect = null,
   wake = 0,
   sourceVel = null, // colors only: the velocity of something placed by hand at its seen position
+  ghost = false,    // drawn where the thing really is now, not where its light says
   rotor = null,     // { uRotCenter, uRotAxis, uOmega, uPivot } uniforms for something spinning
   water = false,     // true, or a wave height multiplier
   snow = false,
@@ -581,6 +585,7 @@ export function mat({
   if (rect) defines.CLIP_RECT = "";
   if (wake) defines.WAKE = "";
   if (sourceVel) defines.SOURCE_VEL = "";
+  if (ghost) defines.GHOST = "";
   if (rotor) defines.ROTOR = "";
   if (water) defines.WATER = "";
   if (snow) defines.SNOW = "";
@@ -607,6 +612,7 @@ export function mat({
       ...(rect && { uRect: { value: new THREE.Vector4(...rect) } }),
       ...(wake && { uWakeFade: { value: wake } }),
       ...(sourceVel && { uVel: sourceVel }),
+      ...(ghost && { uDelay: { value: 0 } }),
       ...(rotor && rotor),
       ...(spiral && spiral),
       ...(water && { uWave: { value: water === true ? 1 : water } }),
@@ -801,4 +807,30 @@ export function sparkField(count, { lines = false, gravity = 0, periodic = false
   };
   obj.count = count;
   return obj;
+}
+
+// Ghosts: see-through copies of moving things drawn where they really are at
+// this moment. Shown when the Lab's "where things really are" switch is on.
+export const ghosts = [];
+
+export function ghostOf(obj) {
+  const g = new THREE.Group();
+  g.userData.dynamic = true;
+  obj.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4();
+  obj.traverse((m) => {
+    const o = m.material?.userData?.opts;
+    if (!m.isMesh || !o || !(o.mover || o.rotor)) return;
+    const copy = new THREE.Mesh(m.geometry, mat({ ...o, ghost: true, color: "#7fe8ff", emissive: 1, unlit: true, additive: true, opacity: 0.22, ir: 0, uv: 0, grid: null, windows: null, unique: false }));
+    copy.matrixAutoUpdate = false;
+    copy.matrix.copy(inv.copy(obj.matrixWorld).invert().multiply(m.matrixWorld));
+    copy.frustumCulled = false;
+    copy.renderOrder = 5;
+    g.add(copy);
+  });
+  g.position.copy(obj.position);
+  g.quaternion.copy(obj.quaternion);
+  g.visible = false;
+  ghosts.push(g);
+  return g;
 }

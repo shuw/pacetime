@@ -177,7 +177,7 @@ export default {
     for (let i = 0; i < 8; i++) {
       const north = i % 2 === 0;
       const m = new Mover(new THREE.Vector3(0, 0, (north ? -1 : 1) * TAXI * C), { clip: [-60, -LEN - 20, 60, LEN + 20] });
-      taxi(m, { heading: north ? 0 : Math.PI, body: i === 3 ? "#f2f2f2" : "#f2c230" });
+      taxi(m, { heading: north ? 0 : Math.PI, body: i === 3 ? "#f2f2f2" : "#f2c230" }).withGhost();
       group.add(m.group);
       const lane = north ? 3.6 : -3.6;
       m.dispatch(0, new THREE.Vector3(lane, 0, north ? LEN - (i / 2) * 120 : -LEN + ((i - 1) / 2) * 120));

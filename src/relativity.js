@@ -9,6 +9,7 @@ export const effects = {
   searchlight: true,
   delay: true,
   dilation: true,
+  ghosts: false,
 };
 
 export const world = {

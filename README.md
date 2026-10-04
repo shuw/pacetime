@@ -20,9 +20,11 @@ The address bar keeps your place, position and Lab settings, so a refresh or a s
    - A roller coaster that tops out at 90%, where the whole bay folds into a bright dome ahead of you.
    - A lighthouse whose beam lies on the mist as a spiral.
    - Fireworks you hear long before you see, mirrored in the sea.
+   - A shooting gallery where targets slide past at up to half light speed. You have to aim metres ahead of what you can see, and you hear a hit before you see it.
 2. **Neon Crossroads** (10 m/s). A rainy city night:
    - Taxis at 85% of light speed seem to cover ground six times faster than light as they come at you, then crawl away and fade into the infrared.
    - Traffic lights change together but ripple outward from wherever you stand, and power flickers roll down the avenue.
+   - Thunder arrives seconds before the lightning.
    - Hail a taxi and the city folds into a tunnel.
 3. **Winter Village** (7 m/s). A snowy valley:
    - A church clock that always reads behind.
@@ -36,7 +38,9 @@ The address bar keeps your place, position and Lab settings, so a refresh or a s
    - A light clock on each train ticks slow, unless you're on it (time dilation).
 5. **Chasing the Beam** (3 m/s). Pulses of light you can watch crawl through dust. Sprint after one and it still pulls away at exactly c.
 
-The Lab changes the speed of light and switches each effect off on its own: bending, color shift, brightening, light delay, and slow clocks with short trains.
+The Lab changes the speed of light and switches each effect off on its own: bending, color shift, brightening, light delay, and slow clocks with short trains. Its x-ray switch shows see-through copies of moving things where they really are right now, next to where you see them.
+
+Arriving at an everyday place, light starts at its real speed and slows to a walk in front of you. Slow motion (`,` and `.`) and a photo mode (`H`) help with studying and sharing.
 
 ## How it works
 

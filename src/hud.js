@@ -13,6 +13,7 @@ const TOGGLES = [
   ["searchlight", "Brightening", "searchlight"],
   ["delay", "Light delay", "travel time"],
   ["dilation", "Slow clocks, short trains", "dilation"],
+  ["ghosts", "Where things really are", "x-ray"],
 ];
 
 const sec = (s) => s.toFixed(2);

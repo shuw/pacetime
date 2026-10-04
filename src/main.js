@@ -6,7 +6,7 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { Player } from "./player.js";
 import { bake } from "./geo.js";
-import { shared, skyMaterial } from "./shaders.js";
+import { ghosts, shared, skyMaterial } from "./shaders.js";
 import { effects, world } from "./relativity.js";
 import { clearToast, cWord, initBrief, initLab, onGoalClick, showScene, syncLab, toast, toggleLab, updateHud } from "./hud.js";
 import { addVelocity } from "./relativity.js";
@@ -72,6 +72,7 @@ function applyPost(post) {
 
 function load(scene) {
   if (current) root.remove(current.instance.group);
+  ghosts.length = 0;
   if (intro) { intro = null; document.getElementById("intro").hidden = true; }
   clearToast();
   player.place(0, 0, 0);
@@ -106,8 +107,9 @@ function stateHash() {
   const p = player;
   let h = `#${current.scene.id}@${p.pos.x.toFixed(1)},${p.pos.z.toFixed(1)},${p.yaw.toFixed(2)},${p.pitch.toFixed(2)}`;
   if (Math.abs(world.c - current.instance.c0) > 1e-3) h += `&c=${+world.c.toFixed(2)}`;
-  const off = Object.keys(effects).filter((k) => !effects[k]);
+  const off = Object.keys(effects).filter((k) => k !== "ghosts" && !effects[k]);
   if (off.length) h += `&off=${off.join(",")}`;
+  if (effects.ghosts) h += "&xray=1";
   return h;
 }
 
@@ -116,11 +118,12 @@ function parseHash() {
   const [id, pose] = head.split("@");
   if (!SCENES.some((s) => s.id === id)) return null;
   const opts = Object.fromEntries(rest.map((kv) => kv.split("=")));
-  return { id, pose: pose?.split(",").map(Number), c: opts.c ? Number(opts.c) : null, off: opts.off ? opts.off.split(",") : [] };
+  return { id, pose: pose?.split(",").map(Number), c: opts.c ? Number(opts.c) : null, off: opts.off ? opts.off.split(",") : [], xray: opts.xray === "1" };
 }
 
 function restore(h) {
   for (const k of Object.keys(effects)) effects[k] = !h.off.includes(k);
+  effects.ghosts = h.xray;
   load(SCENES.find((s) => s.id === h.id));
   current.instance.started = true;
   if (h.c > 0) world.c = h.c;
@@ -226,6 +229,7 @@ function throwBall() {
   const vel = player.v.lengthSq() > 1e-6 ? addVelocity(player.v, vRel) : vRel;
   const origin = player.eye.clone().add(new THREE.Vector3(0, -0.3, 0));
   current.instance.balls.set({ origin, vel, birth: world.t, life: 12, color: new THREE.Color(BALL_COLORS[ballN++ % BALL_COLORS.length]), size: 0.5 });
+  current.instance.onThrow?.({ origin, vel, birth: world.t, gravity: 0.5 });
   sfx.toss();
 }
 
@@ -390,6 +394,7 @@ function simulate(dTau, { realtime = true } = {}) {
   if (before) instance.goals.forEach((g, i) => (g.done = before[i]));
   if (realtime) pickLamps(instance.lamps, eye);
   instance.group.traverse((c) => { if (c.follow) c.position.set(eye.x, c.followY ?? 0, eye.z); });
+  for (const g of ghosts) g.visible = effects.ghosts;
   if (!realtime) return;
 
   setListener(eye, right.set(1, 0, 0).applyQuaternion(camera.quaternion));

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { box, G, mesh } from "./geo.js";
-import { mat } from "./shaders.js";
+import { ghostOf, mat } from "./shaders.js";
 import { effects, gammaOf, seenTimeOf, world } from "./relativity.js";
 import { PALETTE } from "./world.js";
 
@@ -41,6 +41,7 @@ export class Train {
     // Headlights forward, tail lights behind.
     add(box(0.12, 0.35, width * 0.8, m({ color: "#ffffff", emissive: 1, ir: 1.5, uv: 1.5 }), [this.length / 2 + 0.05, 0.7, 0]));
     add(box(0.12, 0.3, width * 0.8, m({ color: "#ff3030", emissive: 1, ir: 1.5, uv: 0.2 }), [-this.length / 2 - 0.05, 0.7, 0]));
+    this.group.add(ghostOf(this.group));
     this.vehicle = {
       velocity: new THREE.Vector3(),
       clamp: (p, t) => {

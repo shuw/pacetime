@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { G, mesh } from "./geo.js";
-import { mat } from "./shaders.js";
+import { ghostOf, mat } from "./shaders.js";
 import { effects, gammaOf, world } from "./relativity.js";
 
 // Something moving in a straight line at constant velocity, built around its
@@ -10,9 +10,16 @@ export class Mover {
   constructor(vel = new THREE.Vector3(), { clip = null } = {}) {
     this.vel = vel.clone();
     this.anchor = new THREE.Vector3(0, 0, -1e5); // position at world time 0
-    this.uniforms = { uVel: { value: this.vel }, uAnchor: { value: this.anchor } };
+    this.life = new THREE.Vector2(-1e9, 1e9);
+    this.uniforms = { uVel: { value: this.vel }, uAnchor: { value: this.anchor }, uLife: { value: this.life } };
     this.clip = clip;
     this.group = new THREE.Group();
+  }
+
+  // Call once built: adds the see-through "where it really is" copy.
+  withGhost() {
+    this.group.add(ghostOf(this.group));
+    return this;
   }
 
   mat(opts) {
