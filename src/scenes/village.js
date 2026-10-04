@@ -16,7 +16,7 @@ const BELL_EVERY = 30; // the church bell rings every 30 s of village time
 
 const DUSK = {
   env: {
-    night: 1, stars: 0.6, sun: [-0.6, 0.35, -0.7], sunColor: [0.42, 0.42, 0.58], sky: [0.2, 0.24, 0.36], ground: [0.14, 0.15, 0.2],
+    night: 1, stars: 0.6, aurora: 1, sun: [-0.6, 0.35, -0.7], sunColor: [0.42, 0.42, 0.58], sky: [0.2, 0.24, 0.36], ground: [0.14, 0.15, 0.2],
     fog: "#2a3352", fogRange: [90, 700], skyTop: "#081230", skyHorizon: "#6a4f78",
   },
   post: { bloom: { strength: 0.8, radius: 0.5, threshold: 0.55 } },

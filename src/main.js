@@ -55,6 +55,7 @@ function applyEnv(e) {
   shared.uNight.value = e.night ?? 0;
   shared.uSpace.value = e.space ?? 0;
   shared.uStars.value = e.stars ?? 1;
+  shared.uAurora.value = e.aurora ?? 0;
   shared.uSun.value.set(...e.sun).normalize();
   shared.uSunColor.value.setRGB(...e.sunColor);
   shared.uSky.value.setRGB(...e.sky);

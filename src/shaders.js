@@ -18,6 +18,7 @@ export const shared = {
   uNight: { value: 0 },
   uSpace: { value: 0 },
   uStars: { value: 1 },
+  uAurora: { value: 0 },
   uLampPos: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, -1000, 0, 1)) },
   uLampColor: { value: Array.from({ length: 8 }, () => new THREE.Color(0, 0, 0)) },
   uPointScale: { value: 600 },
@@ -468,8 +469,41 @@ uniform vec3 uSkyHorizon;
 uniform float uNight;
 uniform float uSpace;
 uniform float uStars;
+uniform float uAurora;
+uniform float uTime;
 varying vec3 vWorld;
 ${common}
+
+float aHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float aNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(aHash(i), aHash(i + vec2(1, 0)), f.x), mix(aHash(i + vec2(0, 1)), aHash(i + vec2(1, 1)), f.x), f.y);
+}
+
+// Curtains of aurora: green at the bottom edge, red and violet higher up.
+vec3 aurora(vec3 dir, out float ir, out float uv) {
+  ir = 0.0; uv = 0.0;
+  if (dir.y < 0.02) return vec3(0.0);
+  float az = atan(dir.z, dir.x);
+  float h = dir.y;
+  vec3 col = vec3(0.0);
+  for (int k = 0; k < 3; k++) {
+    float fk = float(k);
+    // Where this curtain's lower edge sits, wandering slowly.
+    float base = 0.22 + 0.08 * fk + 0.05 * sin(az * (2.0 + fk) + uTime * 0.05 * (1.0 + fk)) + 0.04 * aNoise(vec2(az * 3.0 + fk * 7.0, uTime * 0.03));
+    float above = h - base;
+    if (above < -0.02) continue;
+    float rays = 0.55 + 0.45 * aNoise(vec2(az * 40.0 + fk * 13.0, uTime * 0.25));
+    float fold = 0.5 + 0.5 * sin(az * (9.0 + fk * 3.0) + uTime * 0.12 + aNoise(vec2(az * 4.0, uTime * 0.05)) * 4.0);
+    float edge = smoothstep(-0.02, 0.01, above) * exp(-max(above, 0.0) / (0.08 + 0.05 * fold));
+    float tall = smoothstep(0.0, 0.25, above) * exp(-max(above, 0.0) / 0.35);
+    float strength = rays * (0.5 + 0.5 * fold) * (k == 0 ? 1.0 : 0.6);
+    col += strength * (vec3(0.25, 1.4, 0.55) * edge + vec3(0.7, 0.15, 0.45) * tall * 0.6);
+    uv += strength * tall * 0.4;
+  }
+  return col * 0.32;
+}
 
 float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 
@@ -526,6 +560,11 @@ void main() {
     uv += star * 0.8;
     float moon = smoothstep(0.99965, 0.99975, dot(dir, uSun)) * step(0.01, uStars);
     rgb += vec3(0.55, 0.55, 0.52) * moon;
+  }
+  if (uAurora > 0.0) {
+    float air, auv;
+    rgb += aurora(dir, air, auv) * uAurora;
+    uv += auv * uAurora;
   }
   vec3 col = searchlight(spectralShift(rgb, ir, uv, D), D);
   gl_FragColor = vec4(softClip(col), 1.0);
