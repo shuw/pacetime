@@ -92,6 +92,10 @@ await run("city", async () => {
 function AVE_FIX() { return 7.6; }
 
 await run("pier", async () => {
+  // Watch the lights come on, looking down the pier.
+  await t.place(0, 30, 0, 0.03);
+  for (let i = 0; i < 600 && !(await t.q(() => pacetime.instance.goals[0].done)); i++) await t.advance(0.25);
+  console.log("  lights on:", await t.snap("pier-lights-on"));
   // Shooting gallery: throw exactly at where each target will really be.
   await t.place(-20, -130.8, 0, 0.02);
   for (let i = 0; i < 80 && (await t.q(() => pacetime.instance.gallery.score)) < 6; i++) {
@@ -116,18 +120,25 @@ await run("pier", async () => {
   console.log("  wheel:", await t.q(() => !!pacetime.player.vehicle), await t.snap("pier-wheel-ride"));
   await t.advance(9);
   await t.q(() => pacetime.act());
-  await t.place(0, -118, 0, 0.25);
-  for (let i = 0; i < 80 && !(await t.q(() => pacetime.instance.goals[0].done)); i++) await t.advance(0.5);
   await t.place(-16, -122, 0);
   await t.advance(4);
   await t.place(24.4, -131, Math.PI);
   for (let i = 0; i < 800 && (await t.q(() => pacetime.instance.action()?.label)) !== "Board the coaster"; i++) await t.advance(0.25);
   await t.q(() => pacetime.act());
   let shot = false;
-  for (let i = 0; i < 600 && !(await t.q(() => pacetime.instance.goals[4].done)); i++) {
+  for (let i = 0; i < 600 && !(await t.q(() => pacetime.instance.goals[5].done)); i++) {
     await t.advance(0.5);
     if (!shot && (await t.q(() => pacetime.player.beta)) > 0.85) { shot = true; console.log("  coaster drop:", await t.snap("pier-drop")); }
   }
+  await t.q(() => pacetime.act());
+  // After dark: twin shells from the middle, then from the side, and the lighthouse.
+  await t.place(0, -118, 0, 0.25);
+  for (let i = 0; i < 200 && !(await t.q(() => pacetime.instance.goals[1].done)); i++) await t.advance(0.5);
+  await t.place(-26, -160, 0, 0.25);
+  for (let i = 0; i < 200 && !(await t.q(() => pacetime.instance.goals[2].done)); i++) await t.advance(0.5);
+  await t.place(10, -165, -0.61, 0.15);
+  for (let i = 0; i < 100 && !(await t.q(() => pacetime.instance.goals[8].done)); i++) await t.advance(0.25);
+  console.log("  night:", await t.snap("pier-night"));
 });
 
 report(t.errors);

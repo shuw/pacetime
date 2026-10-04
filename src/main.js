@@ -6,7 +6,7 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { Player } from "./player.js";
 import { bake } from "./geo.js";
-import { ghosts, shared, skyMaterial } from "./shaders.js";
+import { ghosts, reflScale, shared, skyMaterial } from "./shaders.js";
 import { effects, world } from "./relativity.js";
 import { clearToast, cWord, initLab, onGoalClick, showScene, syncLab, toast, toggleGoals, toggleLab, updateHud } from "./hud.js";
 import { lightSpeed } from "./relativity.js";
@@ -32,7 +32,90 @@ const root = new THREE.Scene();
 const sky = new THREE.Mesh(new THREE.SphereGeometry(600, 128, 64), skyMaterial());
 sky.frustumCulled = false;
 sky.renderOrder = -1;
+sky.layers.set(1);
 root.add(sky);
+
+// Layers: 0 casts shadows and shows in reflections, 1 shows in reflections
+// only (sky, particles, ground), 2 is seen directly only (water, mirrored copies).
+camera.layers.enable(1);
+camera.layers.enable(2);
+
+// Sun shadows: a depth map drawn from the sun, in the world's own frame.
+const SHADOW_SIZE = 2048;
+const shadowRT = new THREE.WebGLRenderTarget(SHADOW_SIZE, SHADOW_SIZE, { depthBuffer: true });
+shadowRT.depthTexture = new THREE.DepthTexture(SHADOW_SIZE, SHADOW_SIZE, THREE.FloatType);
+const shadowCam = new THREE.OrthographicCamera(-80, 80, 80, -80, 1, 900);
+shadowCam.layers.set(0);
+
+function renderShadow() {
+  const sun = shared.uSun.value;
+  const on = current.instance.shadows ? THREE.MathUtils.smoothstep(sun.y, -0.01, 0.06) : 0;
+  shared.uShadowOn.value = on;
+  if (on <= 0) return;
+  // Centre the map a little ahead of where you're looking.
+  const ahead = camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
+  const center = new THREE.Vector3(eye.x, 0, eye.z).addScaledVector(ahead, 40);
+  shadowCam.position.copy(center).addScaledVector(sun, 400);
+  shadowCam.lookAt(center);
+  shadowCam.updateMatrixWorld();
+  shared.uShadowMatrix.value.multiplyMatrices(shadowCam.projectionMatrix, shadowCam.matrixWorldInverse);
+  const delay = shared.uDelay.value;
+  shared.uDelay.value = 0;
+  shared.uPass.value = 2;
+  // A texture can't be read while it's being drawn into.
+  shared.uShadowMap.value = null;
+  renderer.setRenderTarget(shadowRT);
+  renderer.clear();
+  renderer.render(root, shadowCam);
+  renderer.setRenderTarget(null);
+  shared.uPass.value = 0;
+  shared.uDelay.value = delay;
+  shared.uShadowMap.value = shadowRT.depthTexture;
+}
+
+// Water reflections: the scene drawn again from a camera mirrored in the
+// water's surface. Its distances are the real reflected light paths, so light
+// delay and color shifts come out right in the reflection too.
+const mirrorCam = new THREE.PerspectiveCamera();
+mirrorCam.matrixAutoUpdate = false;
+mirrorCam.matrixWorldAutoUpdate = false;
+mirrorCam.layers.set(0);
+mirrorCam.layers.enable(1);
+let reflRT = null;
+const flipX = new THREE.Matrix4().makeScale(-1, 1, 1);
+
+function renderMirror() {
+  const y0 = current.instance.mirrorY;
+  if (y0 === undefined) { shared.uReflOn.value = 0; return; }
+  const size = renderer.getDrawingBufferSize(new THREE.Vector2()).multiplyScalar(reflScale.value).floor();
+  if (!reflRT || reflRT.width !== size.x || reflRT.height !== size.y) {
+    reflRT?.dispose();
+    reflRT = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType });
+  }
+  const R = new THREE.Matrix4().set(1, 0, 0, 0, 0, -1, 0, 2 * y0, 0, 0, 1, 0, 0, 0, 0, 1);
+  mirrorCam.projectionMatrix.copy(camera.projectionMatrix).premultiply(flipX);
+  mirrorCam.projectionMatrixInverse.copy(mirrorCam.projectionMatrix).invert();
+  mirrorCam.matrixWorld.copy(R).multiply(camera.matrixWorld);
+  mirrorCam.matrixWorldInverse.copy(mirrorCam.matrixWorld).invert();
+  const cam = shared.uCam.value.clone(), beta = shared.uBeta.value.clone();
+  shared.uCam.value.applyMatrix4(R);
+  shared.uBeta.value.y *= -1;
+  sky.position.copy(shared.uCam.value);
+  shared.uPass.value = 1;
+  shared.uMirrorY.value = y0;
+  shared.uReflOn.value = 0;
+  shared.uReflection.value = null;
+  renderer.setRenderTarget(reflRT);
+  renderer.clear();
+  renderer.render(root, mirrorCam);
+  renderer.setRenderTarget(null);
+  shared.uPass.value = 0;
+  shared.uCam.value.copy(cam);
+  shared.uBeta.value.copy(beta);
+  sky.position.copy(cam);
+  shared.uReflection.value = reflRT.texture;
+  shared.uReflOn.value = 1;
+}
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(root, camera));
@@ -57,6 +140,8 @@ function applyEnv(e) {
   shared.uSpace.value = e.space ?? 0;
   shared.uStars.value = e.stars ?? 1;
   shared.uAurora.value = e.aurora ?? 0;
+  shared.uClouds.value = e.clouds ?? 0;
+  shared.uLightsOn.value = -1e9;
   shared.uSun.value.set(...e.sun).normalize();
   shared.uSunColor.value.setRGB(...e.sunColor);
   shared.uSky.value.setRGB(...e.sky);
@@ -348,6 +433,9 @@ onGoalClick((i) => {
   player.alight();
   player.place(at[0], at[1], at[2] ?? 0);
   player.pitch = at[3] ?? 0;
+  // Some goals happen at a time of day: wind the sky back to just before it.
+  const goal = current.instance.goals[i];
+  if (goal.day !== undefined && current.instance.day && current.instance.day.phaseAt(world.t) > goal.day) current.instance.day.set(goal.day, world.t);
   sfx.ui();
 });
 
@@ -467,14 +555,20 @@ function tour(dt) {
   player.autopilot = new THREE.Vector3(tr.dir[0], 0, tr.dir[1]).normalize().multiplyScalar(u);
 }
 
-// The eight lamps nearest you light their surroundings.
+// The eight lamps nearest you light their surroundings. Switched lamps only
+// light things once their switching-on has been seen.
+function lampOn(l, eye) {
+  if (!l.switched) return 1;
+  const seen = world.t - (effects.delay ? l.pos.distanceTo(eye) / world.c : 0);
+  return THREE.MathUtils.clamp((seen - shared.uLightsOn.value) / 0.2, 0, 1);
+}
 function pickLamps(lamps, eye) {
   const near = lamps.length > 8 ? [...lamps].sort((a, b) => a.pos.distanceToSquared(eye) - b.pos.distanceToSquared(eye)).slice(0, 8) : lamps;
   for (let i = 0; i < 8; i++) {
     const l = near[i];
     if (l) {
       shared.uLampPos.value[i].set(l.pos.x, l.pos.y, l.pos.z, l.range);
-      shared.uLampColor.value[i].copy(l.color).multiplyScalar(l.power);
+      shared.uLampColor.value[i].copy(l.color).multiplyScalar(l.power * lampOn(l, eye));
     } else shared.uLampColor.value[i].setRGB(0, 0, 0);
   }
 }
@@ -527,6 +621,11 @@ function frame() {
   }
   adaptResolution(dTau);
   renderer.info.reset();
+  if (current?.instance.bloomNow) Object.assign(bloom, current.instance.bloomNow);
+  if (current) {
+    renderShadow();
+    renderMirror();
+  }
   if (usePost) composer.render();
   else renderer.render(root, camera);
   requestAnimationFrame(frame);

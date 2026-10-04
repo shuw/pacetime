@@ -27,7 +27,7 @@ export function surface(opts, { y = 0, radius = 1200, reflective = false } = {})
   const m = followDisc(radius, mat({ ...opts, depthWrite: reflective ? false : null }));
   m.position.y = y;
   m.followY = y;
-  if (reflective) m.renderOrder = 1;
+  if (reflective) { m.renderOrder = 1; m.layers.set(2); }
   return m;
 }
 
@@ -73,27 +73,42 @@ export function reflection(obj, y0 = 0, strength = 0.45, { stretch = 1 } = {}) {
     copy.matrix.copy(flip).multiply(m.matrixWorld);
     copy.frustumCulled = false;
     copy.renderOrder = 2;
+    copy.layers.set(2);
     out.add(copy);
   });
   return out;
 }
 
-export function lampPost(x, z, { h = 4, color = "#ffcf8a", pole = "#2a2622", range = 6, power = 1 } = {}) {
+export function lampPost(x, z, { h = 4, color = "#ffcf8a", pole = "#2a2622", range = 6, power = 1, switched = false, fancy = false } = {}) {
   const g = new THREE.Group();
-  g.userData.lamp = { pos: new THREE.Vector3(x, h + 0.2, z), color: new THREE.Color(color), range, power };
+  g.userData.lamp = { pos: new THREE.Vector3(x, h + 0.2, z), color: new THREE.Color(color), range, power, switched };
   g.add(box(0.12, h, 0.12, { color: pole, ir: 0.2 }, [x, h / 2, z]));
-  g.add(mesh(G.sphere, mat({ color, emissive: 1, ir: 1.2, uv: 0.2 }), { pos: [x, h + 0.2, z], scale: 0.28 }));
+  if (fancy) {
+    // A Victorian seaside lamp: a fluted base, a crown and a glass globe.
+    g.add(mesh(G.cyl, mat({ color: pole, ir: 0.2 }), { pos: [x, 0.35, z], scale: [0.22, 0.7, 0.22] }));
+    g.add(mesh(G.cyl, mat({ color: "#c9a24a", ir: 0.5 }), { pos: [x, h - 0.1, z], scale: [0.2, 0.12, 0.2] }));
+    g.add(mesh(new THREE.ConeGeometry(1, 1, 12), mat({ color: pole, ir: 0.2 }), { pos: [x, h + 0.62, z], scale: [0.24, 0.28, 0.24] }));
+  }
+  g.add(mesh(G.sphere, mat({ color, emissive: 1, ir: 1.2, uv: 0.2, switched }), { pos: [x, h + 0.2, z], scale: fancy ? 0.3 : 0.28 }));
   return g;
 }
 
 // Bulbs hanging in a sagging line between two points.
-export function stringLights(a, b, { n = 14, sag = 0.8, colors = ["#ffd38a", "#ff8a6b", "#9fe0ff", "#ffe9b0"], size = 0.08 } = {}) {
+export function stringLights(a, b, { n = 14, sag = 0.8, colors = ["#ffd38a", "#ff8a6b", "#9fe0ff", "#ffe9b0"], size = 0.08, switched = false, wire = null } = {}) {
   const g = new THREE.Group();
+  let prev = null;
   for (let i = 0; i <= n; i++) {
     const k = i / n;
     const p = new THREE.Vector3().lerpVectors(new THREE.Vector3(...a), new THREE.Vector3(...b), k);
     p.y -= sag * 4 * k * (1 - k);
-    g.add(mesh(G.ball, mat({ color: colors[i % colors.length], emissive: 1, ir: 1, uv: 0.3 }), { pos: [p.x, p.y, p.z], scale: size }));
+    g.add(mesh(G.ball, mat({ color: colors[i % colors.length], emissive: 1, ir: 1, uv: 0.3, switched }), { pos: [p.x, p.y, p.z], scale: size }));
+    if (wire && prev) {
+      const seg = mesh(G.cyl, mat({ color: wire, ir: 0.2 }), { scale: [0.012, prev.distanceTo(p), 0.012] });
+      seg.position.copy(prev).add(p).multiplyScalar(0.5);
+      seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p.clone().sub(prev).normalize());
+      g.add(seg);
+    }
+    prev = p;
   }
   return g;
 }
@@ -137,9 +152,9 @@ const STROKES = {
   4: [[0, 4, 0, 2], [0, 2, 2, 2], [2, 4, 2, 0]],
 };
 
-export function neon(text, { pos = [0, 0, 0], rotY = 0, size = 0.25, color = "#ff4fa3", gap = 0.8, ir = 0.8, uv = 0.8, additive = false, width = 0.07 } = {}) {
+export function neon(text, { pos = [0, 0, 0], rotY = 0, size = 0.25, color = "#ff4fa3", gap = 0.8, ir = 0.8, uv = 0.8, additive = false, width = 0.07, switched = false } = {}) {
   const g = new THREE.Group();
-  const m = mat({ color, emissive: 1, ir, uv, additive, unique: true });
+  const m = mat({ color, emissive: 1, ir, uv, additive, switched, unique: true });
   g.glow = m;
   let cx = 0;
   for (const ch of text) {
@@ -192,7 +207,7 @@ export class Fireworks {
     this.scale = scale;
     this.c = c; // the place's own light speed, so shells don't change if the Lab does
     // Each spark is a glowing head and a streak behind it.
-    this.sparks = sparkField(capacity, { gravity: 1.6, intensity: 6, uv: 1 });
+    this.sparks = sparkField(capacity, { gravity: 1.6, intensity: 3.5, uv: 1 });
     this.streaks = sparkField(capacity, { gravity: 1.6, intensity: 2.2, lines: true, uv: 1 });
     this.trails = sparkField(800, { intensity: 3 });
     group.add(this.sparks, this.streaks, this.trails);
@@ -238,7 +253,7 @@ export class Fireworks {
       const dir = new THREE.Vector3(rand() * 2 - 1, rand() * 2 - 1, rand() * 2 - 1);
       if (dir.lengthSq() > 1 || dir.lengthSq() < 0.05) { i--; continue; }
       dir.normalize().multiplyScalar(v * (0.85 + 0.15 * rand()));
-      const p = { origin: at, vel: dir, birth: tBurst, life: 3.6 + rand() * 1.4, color: i % 5 === 0 ? new THREE.Color("#ffffff") : col, size: 1.1 * this.scale, tail: 0.35 };
+      const p = { origin: at, vel: dir, birth: tBurst, life: 3.6 + rand() * 1.4, color: i % 9 === 0 ? new THREE.Color("#ffffff") : col, size: 1.1 * this.scale, tail: 0.35 };
       this.#put(this.sparks, this.mSparks, p);
       this.#put(this.streaks, this.mStreaks, p);
     }

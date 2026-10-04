@@ -19,6 +19,19 @@ export const shared = {
   uSpace: { value: 0 },
   uStars: { value: 1 },
   uAurora: { value: 0 },
+  uPass: { value: 0 },               // 0 normal, 1 mirror (water reflection), 2 shadow depth
+  uMirrorY: { value: -1e6 },
+  uShadowMap: { value: null },
+  uShadowMatrix: { value: new THREE.Matrix4() },
+  uShadowOn: { value: 0 },
+  uDebugShadow: { value: 0 },
+  uReflection: { value: null },
+  uReflOn: { value: 0 },
+  uLightsOn: { value: -1e9 },         // world time the switched lights come on
+  uClouds: { value: 0 },                              // cover, 0..1
+  uCloudLit: { value: new THREE.Color("#ffb070") },   // sunward edges
+  uCloudShade: { value: new THREE.Color("#6a4a70") }, // shadowed undersides
+  uWind: { value: new THREE.Vector2(0.004, 0.0015) },
   uLampPos: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, -1000, 0, 1)) },
   uLampColor: { value: Array.from({ length: 8 }, () => new THREE.Color(0, 0, 0)) },
   uPointScale: { value: 600 },
@@ -36,6 +49,8 @@ const vertex = /* glsl */ `
 uniform vec3 uCam;
 uniform vec3 uBeta;
 uniform vec4 uFlags;
+uniform float uPass;
+uniform mat4 uShadowMatrix;
 #ifdef MOVER
 uniform vec3 uVel;    // m/s, world frame
 uniform vec3 uAnchor; // where the object's origin is at world time 0
@@ -162,6 +177,8 @@ void main() {
     P = x + n * ((g - 1.0) * dot(x, n)) + uBeta * (g * d);
   }
   gl_Position = projectionMatrix * viewMatrix * vec4(uCam + P, 1.0);
+  // The sun's shadow map is made in the world's own frame, with no light delay.
+  if (uPass > 1.5) gl_Position = uShadowMatrix * vec4(wp.xyz, 1.0);
 }
 `;
 
@@ -269,6 +286,15 @@ uniform vec3 uVel;
 #endif
 uniform vec3 uGridColor;
 uniform vec3 uGrid; // spacing, line width in pixels, glow
+uniform float uPass;
+uniform float uMirrorY;
+uniform sampler2D uShadowMap;
+uniform mat4 uShadowMatrix;
+uniform float uShadowOn;
+uniform float uDebugShadow;
+uniform sampler2D uReflection;
+uniform float uReflOn;
+uniform float uLightsOn;
 uniform vec4 uLampPos[8];   // xyz, range
 uniform vec3 uLampColor[8];
 #ifdef ROTOR
@@ -278,6 +304,7 @@ varying vec3 vSrcVel;
 uniform vec3 uSkyTop;
 uniform vec3 uSkyHorizon;
 uniform float uWave;
+uniform float uReflScale;
 #endif
 #ifdef SNOW
 float snowHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -317,7 +344,24 @@ varying float vDist;
 uniform vec3 uCam;
 ${common}
 
+// 1 in sunlight, 0 in shadow, softened over a few texels.
+float sunVisible(vec3 p, vec3 N) {
+  if (uShadowOn <= 0.0) return 1.0;
+  vec4 s = uShadowMatrix * vec4(p + N * 0.08, 1.0);
+  vec3 q = s.xyz / s.w * 0.5 + 0.5;
+  if (q.x < 0.0 || q.y < 0.0 || q.x > 1.0 || q.y > 1.0 || q.z > 1.0) return 1.0;
+  float lit = 0.0;
+  vec2 texel = vec2(1.0 / 2048.0);
+  for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {
+    float d = texture2D(uShadowMap, q.xy + vec2(float(i), float(j)) * texel * 1.5).r;
+    lit += step(q.z - 0.0015, d);
+  }
+  return mix(1.0, lit / 9.0, uShadowOn);
+}
+
 void main() {
+  if (uPass > 1.5) { gl_FragColor = vec4(1.0); return; }
+  if (uPass > 0.5 && vWorld.y < uMirrorY - 0.05) discard;
   #ifdef CLIP_RECT
     if (vWorld.x < uRect.x || vWorld.z < uRect.y || vWorld.x > uRect.z || vWorld.z > uRect.w) discard;
   #endif
@@ -338,9 +382,32 @@ void main() {
   #endif
   vec3 base = uColor * vTint;
   float e = uSpec.z;
+  #ifdef SWITCHED
+    // Lamps that all switch on at one world time, seen when that light arrives.
+    float on = smoothstep(uLightsOn, uLightsOn + 0.2, uTime - (uDelay > 0.5 ? vDist / uC : 0.0));
+    e *= on;
+    base *= mix(0.3, 1.0, on);
+  #endif
   #ifdef CHECKER
     vec2 cell = floor(vWorld.xz / uCheckerSize);
     if (mod(cell.x + cell.y, 2.0) > 0.5) base = uCheckerB;
+  #endif
+  #ifdef PLANKS
+    // Deck boards laid across, each a slightly different shade, ends staggered.
+    {
+      float w = 0.24;
+      float row = floor(vWorld.z / w);
+      float seg = floor((vWorld.x + fract(row * 0.37) * 2.4) / 2.4);
+      float h = fract(sin(row * 12.9898 + seg * 78.233) * 43758.5453);
+      base *= 0.82 + 0.32 * h;
+      // fz, fx are distances to the nearest seam in pixels: darken within ~1 px.
+      float seamZ = abs(fract(vWorld.z / w + 0.5) - 0.5) / fwidth(vWorld.z / w);
+      float seamX = abs(fract((vWorld.x + fract(row * 0.37) * 2.4) / 2.4 + 0.5) - 0.5) / fwidth(vWorld.x / 2.4);
+      float gap = 1.0 - min(min(seamZ, seamX) / 1.0, 1.0);
+      base *= 1.0 - 0.5 * gap;
+      float grain = fract(sin(dot(floor(vWorld.xz * vec2(9.0, 40.0)), vec2(41.3, 289.1))) * 43758.5);
+      base *= 0.96 + 0.06 * grain;
+    }
   #endif
   #ifdef GRID
     vec2 gc = vWorld.xz / uGrid.x;
@@ -354,6 +421,9 @@ void main() {
     if (!gl_FrontFacing) N = -N;
   #endif
   float ndl = max(dot(N, uSun), 0.0);
+  #ifndef UNLIT
+    if (ndl > 0.0) ndl *= sunVisible(vWorld, N);
+  #endif
   #ifdef TOON
     ndl = smoothstep(0.05, 0.12, ndl) * 0.85 + smoothstep(0.55, 0.62, ndl) * 0.15;
   #endif
@@ -371,6 +441,8 @@ void main() {
     light = vec3(1.0);
   #endif
   float lum = dot(light, vec3(0.33));
+  float waterFres = 0.0;
+  vec3 waterN = vec3(0.0, 1.0, 0.0);
   vec3 rgb = base * mix(light, vec3(1.6), e);
   float ir = uSpec.x * mix(lum, 1.6, e);
   float uv = uSpec.y * mix(lum, 1.6, e);
@@ -389,9 +461,11 @@ void main() {
       float fres = 0.04 + 0.96 * pow(1.0 - max(dot(-view, n), 0.0), 5.0);
       vec3 skyc = mix(uSkyHorizon, uSkyTop, pow(max(r.y, 0.0), 0.6));
       float glint = pow(max(dot(r, uSun), 0.0), 300.0) * (1.0 - uNight);
-      rgb = mix(base * (uSky * 0.6 + 0.1), skyc, fres) + uSunColor * glint * 4.0;
+      rgb = mix(base * (uSky * 0.6 + 0.1), skyc, uReflOn > 0.5 ? 0.0 : fres) + uSunColor * glint * 4.0;
       ir = 0.15 + glint * 3.0;
       uv = 0.2 * fres;
+      waterFres = fres;
+      waterN = n;
     }
   #endif
   #ifdef SNOW
@@ -463,8 +537,8 @@ void main() {
       float seen = uTime - (uDelay > 0.5 ? vDist / uC : 0.0);
       float te = seen - (uDelay > 0.5 ? r / uC : 0.0);
       float dAng = mod(uSpiral.z * te - atan(d.y, d.x) + 3.14159, 6.28318) - 3.14159;
-      float glow = exp(-pow(dAng / uSpiral.w, 2.0)) * smoothstep(1.5, 6.0, r) / (1.0 + r * 0.025);
-      rgb += uSpiralColor * glow * 0.7;
+      float glow = exp(-pow(dAng / uSpiral.w, 2.0)) * smoothstep(8.0, 40.0, r) / (1.0 + r * 0.012);
+      rgb += uSpiralColor * glow * 0.45;
       ir += glow * 0.4;
       uv += glow * 0.4;
     }
@@ -482,6 +556,21 @@ void main() {
   #endif
 
   vec3 col = searchlight(spectralShift(rgb, ir, uv, D), D);
+  if (uDebugShadow > 0.5) {
+    vec4 s = uShadowMatrix * vec4(vWorld, 1.0);
+    vec3 q = s.xyz / s.w * 0.5 + 0.5;
+    col = vec3(texture2D(uShadowMap, q.xy).r, q.z, sunVisible(vWorld, N));
+  }
+  #ifdef WATER
+    // The reflection pass is already drawn as seen, so it's mixed in after the shift.
+    if (uReflOn > 0.5) {
+      vec2 sc = gl_FragCoord.xy / vec2(textureSize(uReflection, 0)) * uReflScale;
+      sc.x = 1.0 - sc.x;
+      sc += waterN.xz * vec2(-0.06, 0.06);
+      vec3 refl = texture2D(uReflection, clamp(sc, 0.001, 0.999)).rgb;
+      col = mix(col, refl * (1.0 - f * 0.7), waterFres * 0.92 + 0.04);
+    }
+  #endif
   float alpha = uOpacity;
   #ifdef WAKE
     alpha *= exp(-vAge / uWakeFade);
@@ -501,6 +590,11 @@ uniform float uSpace;
 uniform float uStars;
 uniform float uAurora;
 uniform float uTime;
+uniform float uClouds;
+uniform vec3 uCloudLit;
+uniform vec3 uCloudShade;
+uniform vec2 uWind;
+uniform vec3 uSunColor;
 varying vec3 vWorld;
 ${common}
 
@@ -537,6 +631,31 @@ vec3 aurora(vec3 dir, out float ir, out float uv) {
 
 float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 
+float fbm(vec2 p) {
+  float v = 0.0, a = 0.5;
+  for (int i = 0; i < 5; i++) { v += a * aNoise(p); p = p * 2.03 + vec2(17.1, 9.2); a *= 0.5; }
+  return v;
+}
+
+// A layer of cloud on a dome overhead, lit from the sun's side.
+vec4 clouds(vec3 dir) {
+  if (uClouds <= 0.0 || dir.y < -0.02) return vec4(0.0);
+  vec2 p = dir.xz / (dir.y + 0.12) * 1.6 + uWind * uTime * 60.0;
+  float n = fbm(p) * 0.75 + fbm(p * 3.1 + 4.0) * 0.25;
+  float cover = mix(0.72, 0.4, uClouds);
+  float dens = smoothstep(cover, cover + 0.22, n);
+  if (dens <= 0.0) return vec4(0.0);
+  // Thin wisps near the horizon, fading into haze.
+  dens *= smoothstep(-0.02, 0.12, dir.y);
+  // Light from the sun's side: undersides glow when the sun is low.
+  float toward = 0.5 + 0.5 * dot(normalize(vec3(dir.x, 0.0, dir.z) + 1e-4), normalize(vec3(uSun.x, 0.0, uSun.z) + 1e-4));
+  float glow = pow(max(dot(dir, uSun), 0.0), 6.0);
+  float edge = smoothstep(cover + 0.22, cover, n); // thin edges catch the light
+  vec3 col = mix(uCloudShade, uCloudLit, clamp(0.25 + 0.55 * toward * toward + 0.6 * edge * toward, 0.0, 1.0));
+  col += uSunColor * glow * (0.6 + edge);
+  return vec4(col, dens);
+}
+
 void main() {
   vec3 dir = normalize(vWorld - uCam);
   float D = doppler(dir);
@@ -550,8 +669,10 @@ void main() {
   // Skylight beyond the rainbow scales with how bright the sky is.
   float skyLum = clamp(dot(rgb, vec3(0.3, 0.5, 0.2)) * 2.5, 0.0, 1.0);
   float uv = mix(0.5, 1.1, max(h, 0.0)) * (1.0 - uNight) * skyLum;
-  float sun = smoothstep(0.9975, 0.999, dot(dir, uSun)) * (1.0 - uSpace);
-  rgb += vec3(2.5, 2.2, 1.6) * sun * (1.0 - uNight);
+  float sd = dot(dir, uSun);
+  float sun = smoothstep(0.99955, 0.99975, sd) * (1.0 - uSpace);
+  float halo = (pow(max(sd, 0.0), 400.0) * 0.6 + pow(max(sd, 0.0), 30.0) * 0.12) * (1.0 - uSpace);
+  rgb += (vec3(3.2, 2.8, 2.0) * sun + uSunColor * halo) * (1.0 - uNight) * smoothstep(-0.04, 0.0, dir.y);
   float ir = 0.3 * (1.0 - uNight) * skyLum + 0.03 + 2.0 * sun;
   if (uSpace > 0.5) {
     // Deep space: no horizon, a faint galactic band, stars in every direction.
@@ -591,6 +712,10 @@ void main() {
     float moon = smoothstep(0.99965, 0.99975, dot(dir, uSun)) * step(0.01, uStars);
     rgb += vec3(0.55, 0.55, 0.52) * moon;
   }
+  vec4 cl = clouds(dir);
+  rgb = mix(rgb, cl.rgb, cl.a);
+  ir = mix(ir, 0.35 * dot(cl.rgb, vec3(0.33)), cl.a);
+  uv = mix(uv, 0.2 * dot(cl.rgb, vec3(0.33)), cl.a);
   if (uAurora > 0.0) {
     float air, auv;
     rgb += aurora(dir, air, auv) * uAurora;
@@ -603,6 +728,8 @@ void main() {
 `;
 
 const cache = new Map();
+// Screen pixels per reflection texel (the reflection is drawn at reduced size).
+export const reflScale = { value: 0.5 };
 const ids = new WeakMap();
 let nextId = 1;
 const idOf = (o) => { if (!ids.has(o)) ids.set(o, nextId++); return ids.get(o); };
@@ -632,6 +759,8 @@ export function mat({
   rotor = null,     // { uRotCenter, uRotAxis, uOmega, uPivot } uniforms for something spinning
   water = false,     // true, or a wave height multiplier
   snow = false,
+  planks = false,
+  switched = false, // a lamp that comes on at uLightsOn
   windows = null,   // { size: [w, h], lit, color, seed }
   spiral = null,    // { uSpiral, uSpiralColor } uniforms for a lighthouse beam
   depthWrite = null,
@@ -658,6 +787,8 @@ export function mat({
   if (rotor) defines.ROTOR = "";
   if (water) defines.WATER = "";
   if (snow) defines.SNOW = "";
+  if (planks) defines.PLANKS = "";
+  if (switched) defines.SWITCHED = "";
   if (windows) defines.WINDOWS = "";
   if (spiral) defines.SPIRAL = "";
   if (doubleSided) defines.DOUBLE_SIDED = "";
@@ -684,7 +815,7 @@ export function mat({
       ...(ghost && { uDelay: { value: 0 } }),
       ...(rotor && rotor),
       ...(spiral && spiral),
-      ...(water && { uWave: { value: water === true ? 1 : water } }),
+      ...(water && { uWave: { value: water === true ? 1 : water }, uReflScale: reflScale }),
       ...(windows && {
         uWindows: { value: new THREE.Vector4(windows.size[0], windows.size[1], windows.lit ?? 0.5, windows.seed ?? 1) },
         uWindowColor: { value: new THREE.Color(windows.color ?? "#ffcf8a") },
@@ -852,6 +983,7 @@ export function sparkField(count, { lines = false, gravity = 0, periodic = false
   });
   const obj = lines ? new THREE.LineSegments(geo, material) : new THREE.Points(geo, material);
   obj.frustumCulled = false;
+  obj.layers.set(1);
   obj.renderOrder = 3;
   let next = 0;
   // Sets particle i (or the next free slot).
@@ -890,6 +1022,7 @@ export function ghostOf(obj) {
     copy.matrix.copy(inv.copy(obj.matrixWorld).invert().multiply(m.matrixWorld));
     copy.frustumCulled = false;
     copy.renderOrder = 5;
+    copy.layers.set(2);
     g.add(copy);
   });
   g.position.copy(obj.position);
