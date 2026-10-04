@@ -142,6 +142,9 @@ body.photo #hud > *:not(#slowmo) { display: none !important; }
 .slider input { width: 100%; accent-color: var(--accent); }
 .slider small { color: var(--muted); font-size: 12px; }
 #toggles { display: grid; gap: 2px; }
+.seg { display: grid; grid-template-columns: auto 1fr 1fr; align-items: center; gap: 6px; }
+.seg button { padding: 6px 8px; font-size: 11px; }
+.seg button[aria-checked="true"] { border-color: var(--warm); color: var(--warm); }
 #toggles label { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; cursor: pointer; }
 #toggles input { accent-color: var(--accent); width: 15px; height: 15px; }
 #toggles small, .sound-toggle small { color: var(--muted); font: 11px var(--mono); margin-left: auto; }

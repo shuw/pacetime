@@ -23,6 +23,8 @@ export const shared = {
   uLampColor: { value: Array.from({ length: 8 }, () => new THREE.Color(0, 0, 0)) },
   uPointScale: { value: 600 },
   uExposure: { value: 1 },
+  uShiftAmt: { value: 0.4 },   // 1 = true to life; less softens the color shift
+  uGlowAmt: { value: 0.5 },    // 1 = true to life; less softens the brightening
   uGrain: { value: 0 },
   uTime: { value: 0 },
   uC: { value: 3 },
@@ -168,6 +170,15 @@ uniform mat3 uCorr;
 uniform vec4 uFlags;
 uniform vec3 uBeta;
 uniform float uExposure;
+uniform float uShiftAmt;
+uniform float uGlowAmt;
+// Softened Doppler factor: follows D for small shifts, then levels off, so
+// colors lean warmer or cooler without washing out. k = 1 is the real thing.
+float softD(float D, float k) {
+  if (k > 0.999) return D;
+  float l = log(max(D, 1e-4));
+  return exp(k * 1.5 * tanh(l / 1.5));
+}
 const vec3 EYE = vec3(610.0, 545.0, 465.0);
 
 vec3 eye(float l, float a) { vec3 z = (vec3(l) - EYE) / 48.0; return a * exp(-z * z); }
@@ -189,24 +200,43 @@ float doppler(vec3 x) {
 // rgb plus infrared and ultraviolet light that tails off away from the
 // visible (roughly like sunlight), as seen with Doppler factor D: every
 // wavelength gets divided by D.
-vec3 spectralShift(vec3 rgb, float ir, float uv, float D) {
-  if (uFlags.y < 0.5) D = 1.0;
+// The part of infrared and ultraviolet light that lands in view at Doppler factor D.
+vec3 beyondSeen(float ir, float uv, float D) {
+  float k = 1.0 / D;
+  return eyeSpan(760.0 * k, 1100.0 * k, 0.5 * ir)
+       + eyeSpan(1100.0 * k, 1800.0 * k, 0.22 * ir)
+       + eyeSpan(1800.0 * k, 3200.0 * k, 0.08 * ir)
+       + eyeSpan(330.0 * k, 400.0 * k, 0.6 * uv)
+       + eyeSpan(250.0 * k, 330.0 * k, 0.25 * uv)
+       + eyeSpan(120.0 * k, 250.0 * k, 0.06 * uv);
+}
+
+vec3 bandsSeen(vec3 rgb, float ir, float uv, float D) {
   vec3 a = uCorr * rgb;
   float k = 1.0 / D;
-  vec3 o = eye(610.0 * k, a.r) + eye(545.0 * k, a.g) + eye(465.0 * k, a.b)
-         + eyeSpan(760.0 * k, 1100.0 * k, 0.5 * ir)
-         + eyeSpan(1100.0 * k, 1800.0 * k, 0.22 * ir)
-         + eyeSpan(1800.0 * k, 3200.0 * k, 0.08 * ir)
-         + eyeSpan(330.0 * k, 400.0 * k, 0.6 * uv)
-         + eyeSpan(250.0 * k, 330.0 * k, 0.25 * uv)
-         + eyeSpan(120.0 * k, 250.0 * k, 0.06 * uv);
-  return max(o, 0.0);
+  vec3 o = eye(610.0 * k, a.r) + eye(545.0 * k, a.g) + eye(465.0 * k, a.b);
+  return o + beyondSeen(ir, uv, D);
+}
+
+vec3 spectralShift(vec3 rgb, float ir, float uv, float D) {
+  if (uFlags.y < 0.5) D = 1.0;
+  if (uShiftAmt > 0.999) return max(bandsSeen(rgb, ir, uv, D), 0.0);
+  // Gentle: colors keep their hue and lean bluer ahead, warmer behind. Light
+  // from beyond the rainbow still slides into view, so hidden inks show.
+  float l = log(max(D, 1e-4));
+  float s = tanh(l / 1.2);
+  vec3 tint = s > 0.0 ? mix(vec3(1.0), vec3(0.8, 0.96, 1.3), s) : mix(vec3(1.0), vec3(1.28, 0.93, 0.72), -s);
+  float Dk = exp(uShiftAmt * 3.0 * tanh(l / 1.5));
+  vec3 extra = max(beyondSeen(ir, uv, Dk) - beyondSeen(ir, uv, 1.0), 0.0);
+  extra *= 0.2 + 0.8 * smoothstep(0.6, 2.5, max(ir, uv));
+  return max((rgb + beyondSeen(ir, uv, 1.0)) * tint + extra, 0.0);
 }
 
 // Brighter ahead, dimmer behind; uExposure is the eye adapting to it.
 vec3 searchlight(vec3 c, float D) {
   if (uFlags.z < 0.5) return c;
-  return c * D * D * uExposure;
+  float g = softD(D, uGlowAmt);
+  return c * g * g * uExposure;
 }
 
 uniform float uGrain;

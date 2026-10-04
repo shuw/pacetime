@@ -1,4 +1,17 @@
 import { effects, lightSpeed, world } from "./relativity.js";
+import { shared } from "./shaders.js";
+
+// Gentle softens the color shift and brightening; true to life is the real thing.
+const LOOKS = { gentle: [0.25, 0.35], full: [1, 1] };
+let look = "gentle";
+try { look = localStorage.getItem("pacetime-look") === "full" ? "full" : "gentle"; } catch {}
+export function setLook(k) {
+  look = k;
+  [shared.uShiftAmt.value, shared.uGlowAmt.value] = LOOKS[k];
+  try { localStorage.setItem("pacetime-look", k); } catch {}
+  $("look-gentle").setAttribute("aria-checked", k === "gentle");
+  $("look-full").setAttribute("aria-checked", k === "full");
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -33,6 +46,9 @@ export function initLab(onLight) {
     });
   }
   $("lab-btn").addEventListener("click", toggleLab);
+  $("look-gentle").addEventListener("click", () => setLook("gentle"));
+  $("look-full").addEventListener("click", () => setLook("full"));
+  setLook(look);
   $("goals-toggle").addEventListener("click", toggleGoals);
   syncLab();
 }

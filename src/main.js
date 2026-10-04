@@ -372,7 +372,9 @@ function adaptExposure(dt) {
   camera.getWorldDirection(viewDir);
   const D = beta2 > 1e-10 ? 1 / (Math.sqrt(1 / (1 - beta2)) * (1 - b.dot(viewDir))) : 1;
   // On a train, the carriage around you moves with you and fills the view, so don't adapt.
-  const target = effects.searchlight && !player.vehicle ? THREE.MathUtils.clamp(D < 1 ? D ** -1.2 : D ** -0.5, 0.3, 4) : 1;
+  const k = shared.uGlowAmt.value;
+  const Dg = k > 0.999 ? D : Math.exp(k * 1.5 * Math.tanh(Math.log(Math.max(D, 1e-4)) / 1.5));
+  const target = effects.searchlight && !player.vehicle ? THREE.MathUtils.clamp(Dg < 1 ? Dg ** -1.2 : Dg ** -0.5, 0.3, 4) : 1;
   const u = shared.uExposure;
   u.value += (target - u.value) * Math.min(1, dt * 4);
 }
