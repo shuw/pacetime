@@ -13,11 +13,14 @@
 
     <div id="hud" hidden>
       <section class="panel brief">
-        <p class="kicker" id="kicker"></p>
-        <h2 id="scene-title"></h2>
-        <ul id="goals"></ul>
-        <p id="note"></p>
+        <div class="brief-head">
+          <h2 id="scene-title"></h2>
+          <button id="goals-toggle" title="All goals (G)"><span id="goals-count"></span></button>
+        </div>
+        <p id="next-goal"></p>
+        <ul id="goals" hidden></ul>
       </section>
+      <p id="note"></p>
 
       <div class="top-right">
         <div class="buttons">
@@ -25,27 +28,27 @@
           <button id="lab-btn" title="Lab (L)">Lab</button>
           <button id="menu-btn" title="Scenes (M)">Scenes</button>
         </div>
-        <section class="panel readouts" id="readouts"></section>
         <section class="panel log" id="log-panel" hidden>
-          <h3>Observations</h3>
-          <div class="log-head"><span></span><span>seen</span><span>happened</span></div>
+          <div class="log-head"><span>observed</span><span>seen</span><span>happened</span></div>
           <ol id="log"></ol>
-          <p class="fine">Times on your watch. "Happened" takes out the light's travel time, in your frame.</p>
         </section>
       </div>
 
       <section class="panel gauge">
-        <div class="row"><span class="label">your speed</span><span class="label" id="gamma">γ 1.000</span></div>
+        <div class="row"><span class="label">your speed <span id="riding"></span></span><span class="label" id="gamma">γ 1.00</span></div>
         <div class="big"><b id="beta">0.000</b><span>c</span></div>
         <div class="bar"><div id="speed-fill"></div><i style="left: 50%"></i><i style="left: 90%"></i></div>
-        <div class="row small"><span id="speed-ms">0.00 m/s</span><span id="riding"></span></div>
-        <p id="seeing"></p>
+        <label class="light" for="light-slider">
+          <span class="label">light</span>
+          <input id="light-slider" type="range" min="-0.6" max="2.5" step="0.01" aria-label="Speed of light" />
+          <b id="light-value"></b>
+        </label>
       </section>
 
       <section class="panel watches">
-        <div class="watch"><span class="label">your watch</span><b id="tau">0.00</b></div>
-        <div class="watch"><span class="label">platform clock</span><b id="worldt">0.00</b></div>
-        <div class="watch diff"><span class="label">difference</span><b id="younger">0.00</b></div>
+        <div class="watch"><span class="label">you</span><b id="tau">0.0</b></div>
+        <div class="watch"><span class="label">world</span><b id="worldt">0.0</b></div>
+        <div class="watch diff" id="younger-row" hidden><span class="label">younger by</span><b id="younger">0.0</b></div>
       </section>
 
       <div id="prompt" hidden><kbd>E</kbd><span id="prompt-text"></span></div>
@@ -62,10 +65,11 @@
       <h3>Lab</h3>
       <label class="slider" for="c-slider">
         <span>speed of light <b id="c-value"></b></span>
-        <input id="c-slider" type="range" min="0" max="2.5" step="0.01" />
+        <input id="c-slider" type="range" min="-0.6" max="2.5" step="0.01" />
         <small id="c-word"></small>
       </label>
       <div id="toggles"></div>
+      <div id="readouts"></div>
       <label class="sound-toggle" for="sound-toggle"><input type="checkbox" id="sound-toggle" checked /> Sound <small>N</small></label>
       <p class="fine">Switch effects off one at a time to see what each one does.</p>
     </aside>

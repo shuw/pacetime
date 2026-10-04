@@ -15,7 +15,14 @@ export const effects = {
 export const world = {
   c: 3.0,
   t: 0, // world (coordinate) time
+  // Below a place's own light speed, light is slowed further by running the
+  // world slower and lengthening your stride: everything that moves keeps
+  // its fraction of c, so nothing outruns light.
+  slow: 1,
 };
+
+// The speed of light as you experience it, m/s of your own stride.
+export const lightSpeed = () => world.c * world.slow;
 
 // Narrow emission bands an RGB surface is assumed to send out, and the eye's
 // three sensitivity curves (same numbers as the shader). Shifting a band by the

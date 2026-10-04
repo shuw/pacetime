@@ -8,7 +8,8 @@ import { Player } from "./player.js";
 import { bake } from "./geo.js";
 import { ghosts, shared, skyMaterial } from "./shaders.js";
 import { effects, world } from "./relativity.js";
-import { clearToast, cWord, initBrief, initLab, onGoalClick, showScene, syncLab, toast, toggleLab, updateHud } from "./hud.js";
+import { clearToast, cWord, initLab, onGoalClick, showScene, syncLab, toast, toggleGoals, toggleLab, updateHud } from "./hud.js";
+import { lightSpeed } from "./relativity.js";
 import { addVelocity } from "./relativity.js";
 import { sparkField } from "./shaders.js";
 import { isMuted, setAmbience, setListener, setMuted, sfx, unlockAudio, updateAudio } from "./audio.js";
@@ -97,6 +98,8 @@ function load(scene) {
   showScene(scene, SCENES.indexOf(scene));
   instance.c0 = world.c;
   player.legs = world.c;
+  world.slow = 1;
+  player.stretch = 1;
   goalsDone = 0;
   syncLab();
 }
@@ -106,7 +109,7 @@ function load(scene) {
 function stateHash() {
   const p = player;
   let h = `#${current.scene.id}@${p.pos.x.toFixed(1)},${p.pos.z.toFixed(1)},${p.yaw.toFixed(2)},${p.pitch.toFixed(2)}`;
-  if (Math.abs(world.c - current.instance.c0) > 1e-3) h += `&c=${+world.c.toFixed(2)}`;
+  if (Math.abs(lightSpeed() - current.instance.c0) > 1e-3) h += `&c=${+lightSpeed().toFixed(2)}`;
   const off = Object.keys(effects).filter((k) => k !== "ghosts" && !effects[k]);
   if (off.length) h += `&off=${off.join(",")}`;
   if (effects.ghosts) h += "&xray=1";
@@ -126,7 +129,7 @@ function restore(h) {
   effects.ghosts = h.xray;
   load(SCENES.find((s) => s.id === h.id));
   current.instance.started = true;
-  if (h.c > 0) world.c = h.c;
+  if (h.c > 0) setLight(h.c);
   if (h.pose?.length >= 3 && h.pose.every(Number.isFinite)) {
     player.place(h.pose[0], h.pose[1], h.pose[2]);
     player.pitch = h.pose[3] ?? 0;
@@ -308,6 +311,11 @@ addEventListener("keydown", (e) => {
   else if (menuOpen) return;
   // The Lab needs the mouse, so opening it lets go of the view.
   else if (e.code === "KeyL" && toggleLab()) document.exitPointerLock?.();
+  else if (e.code === "KeyG") toggleGoals();
+  else if (e.code === "BracketLeft" || e.code === "BracketRight") {
+    setLight(lightSpeed() * (e.code === "BracketLeft" ? 0.8 : 1.25));
+    syncLab();
+  }
   else if (e.code === "KeyE") act();
   else if (e.code === "KeyF") throwBall();
   else if (e.code === "Comma") setPlayback(SPEEDS[Math.max(0, SPEEDS.indexOf(playback) - 1)]);
@@ -320,15 +328,23 @@ addEventListener("keydown", (e) => {
   }
 });
 
-initLab();
-initBrief();
+// Faster than a place's own light speed, light simply speeds up. Slower than
+// it, the world slows down with it and your stride lengthens, so every moving
+// thing keeps its fraction of c.
+function setLight(c) {
+  const c0 = current?.instance.c0 ?? world.c;
+  if (intro) return;
+  if (c >= c0) { world.c = c; world.slow = 1; }
+  else { world.c = c0; world.slow = c / c0; }
+  player.stretch = 1 / world.slow;
+}
+
+initLab(setLight);
 buildMenu();
 // Clicking a goal takes you to a good spot for it.
 onGoalClick((i) => {
   const at = current?.instance.goals?.[i]?.at;
   if (!at) return;
-  // On phones a tap on the folded panel only unfolds it.
-  if (matchMedia("(max-width: 760px)").matches && !document.querySelector(".brief").classList.contains("expanded")) return;
   player.alight();
   player.place(at[0], at[1], at[2] ?? 0);
   player.pitch = at[3] ?? 0;
@@ -494,7 +510,7 @@ function frame() {
     // Behind the title screen the world keeps running so the menu has a live backdrop.
     const frozen = (paused || !help.hidden) && current.instance.started;
     tour(dTau);
-    const total = frozen ? 0 : dTau * warp * playback;
+    const total = frozen ? 0 : dTau * warp * playback * world.slow;
     if (!frozen) runIntro(dTau);
     const n = Math.max(1, Math.ceil(total / 0.05));
     for (let i = 0; i < n; i++) simulate(total / n, { realtime: i === n - 1 });
@@ -503,7 +519,6 @@ function frame() {
         player, instance: current.instance,
         locked: document.pointerLockElement === canvas || matchMedia("(pointer: coarse)").matches,
         prompt: current.instance.action?.(eye) ?? null,
-        look: camera.getWorldDirection(new THREE.Vector3()),
       });
       writeHash(dTau);
     }
