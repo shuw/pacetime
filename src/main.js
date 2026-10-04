@@ -8,6 +8,11 @@ import meadow from "./scenes/meadow.js";
 import choir from "./scenes/choir.js";
 import garden from "./scenes/garden.js";
 import tea from "./scenes/tea.js";
+import { PREVIEWS } from "./styles.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
 const SCENES = [meadow, choir, garden, tea];
 const DAY = {
@@ -49,6 +54,7 @@ function localStorageSet(k, v) {
 function applyEnv(env) {
   const e = { ...DAY, ...env };
   shared.uNight.value = e.night;
+  shared.uSpace.value = e.space ?? 0;
   shared.uSun.value.set(...e.sun).normalize();
   shared.uSunColor.value.setRGB(...e.sunColor);
   shared.uSky.value.setRGB(...e.sky);
@@ -60,6 +66,18 @@ function applyEnv(env) {
   document.body.style.background = e.night ? "#120e26" : "#fbe9f2";
 }
 
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(root, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0, 0.5, 0.8);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+let usePost = false;
+
+function applyPost(post) {
+  usePost = !!post?.bloom;
+  if (usePost) Object.assign(bloom, post.bloom);
+}
+
 function load(scene) {
   if (current) root.remove(current.instance.group);
   const instance = scene.build();
@@ -67,6 +85,7 @@ function load(scene) {
   root.add(instance.group);
   current = { scene, instance };
   applyEnv(instance.env);
+  applyPost(instance.post);
   const [x, z, yaw] = instance.spawn;
   player.place(x, z, yaw ?? 0);
   player.tau = 0;
@@ -132,6 +151,7 @@ buildMenu();
 function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false);
+  composer.setSize(w, h);
   camera.aspect = w / h;
   camera.fov = w < h ? 90 : 72;
   camera.updateProjectionMatrix();
@@ -171,13 +191,16 @@ function frame() {
     shared.uBeta.value.copy(player.v).divideScalar(world.c);
     shared.uFlags.value.set(+effects.aberration, +effects.doppler, +effects.searchlight, 0);
     shared.uTime.value = world.t;
+    shared.uC.value = world.c;
+    shared.uDelay.value = +effects.delay;
+    shared.uContract.value = +effects.dilation;
     adaptExposure(step);
     sky.position.copy(eye);
 
     instance.update({ player, eye, camera, t: world.t, dT, dTau: step });
     updateHud({ player, instance, dTau: step, locked: document.pointerLockElement === canvas || matchMedia("(pointer: coarse)").matches });
 
-    const complete = instance.goals?.every((g) => g.done);
+    const complete = instance.goals?.length > 0 && instance.goals.every((g) => g.done);
     if (complete && !wasComplete && !stars[scene.id]) {
       stars[scene.id] = true;
       localStorageSet("pacetime-stars", JSON.stringify(stars));
@@ -185,7 +208,8 @@ function frame() {
     }
     wasComplete = complete;
   }
-  renderer.render(root, camera);
+  if (usePost) composer.render();
+  else renderer.render(root, camera);
   requestAnimationFrame(frame);
 }
 
@@ -196,4 +220,7 @@ document.getElementById("menu").classList.remove("overlay");
 frame();
 
 // Handy for poking at the physics from the console.
-window.pacetime = { player, world, effects, load: (id) => load(SCENES.find((s) => s.id === id)), closeMenu };
+window.pacetime = {
+  player, world, effects, closeMenu,
+  load: (id) => load([...SCENES, ...PREVIEWS].find((s) => s.id === id)),
+};

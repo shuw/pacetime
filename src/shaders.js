@@ -16,14 +16,27 @@ export const shared = {
   uSkyTop: { value: new THREE.Color("#6fb8ff") },
   uSkyHorizon: { value: new THREE.Color("#ffe3ef") },
   uNight: { value: 0 },
+  uSpace: { value: 0 },
   uExposure: { value: 1 },
+  uGrain: { value: 0 },
   uTime: { value: 0 },
+  uC: { value: 3 },
+  uDelay: { value: 1 },
+  uContract: { value: 1 },
 };
 
 const vertex = /* glsl */ `
 uniform vec3 uCam;
 uniform vec3 uBeta;
 uniform vec4 uFlags;
+#ifdef MOVER
+uniform vec3 uVel;    // m/s, world frame
+uniform vec3 uAnchor; // where the object's origin is at world time 0
+uniform float uC;
+uniform float uTime;
+uniform float uDelay;
+uniform float uContract;
+#endif
 varying vec3 vNormalW;
 varying vec3 vWorld;
 varying vec3 vTint;
@@ -35,7 +48,30 @@ void main() {
     m = m * instanceMatrix;
   #endif
   vec4 wp = m * vec4(position, 1.0);
-  vNormalW = normalize(mat3(m) * normal);
+  #ifdef MOVER
+    // Moving objects are built around the origin. Squash them along their
+    // motion (Lorentz contraction), then find where this vertex was when the
+    // light reaching the observer now left it: |w - u*tau| = c*tau.
+    vec3 rel = wp.xyz;
+    float u2 = dot(uVel, uVel);
+    if (u2 > 1e-8 && uContract > 0.5) {
+      vec3 un = uVel * inversesqrt(u2);
+      rel -= un * dot(rel, un) * (1.0 - sqrt(1.0 - u2 / (uC * uC)));
+    }
+    vec3 w = uAnchor + rel + uVel * uTime - uCam;
+    float tau = 0.0;
+    if (uDelay > 0.5) {
+      float a = uC * uC - u2;
+      float wu = dot(w, uVel);
+      tau = (-wu + sqrt(wu * wu + a * dot(w, w))) / a;
+    }
+    wp.xyz = w - uVel * tau + uCam;
+  #endif
+  #ifdef UNLIT
+    vNormalW = vec3(0.0, 1.0, 0.0);
+  #else
+    vNormalW = normalize(mat3(m) * normal);
+  #endif
   vWorld = wp.xyz;
   vTint = vec3(1.0);
   #ifdef USE_INSTANCING_COLOR
@@ -103,7 +139,9 @@ vec3 searchlight(vec3 c, float D) {
   return c * D * D * uExposure;
 }
 
+uniform float uGrain;
 vec3 softClip(vec3 c) {
+  c *= 1.0 - uGrain * fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
   float m = max(c.r, max(c.g, c.b));
   if (m > 0.8) c *= (0.8 + 0.2 * tanh((m - 0.8) / 0.2)) / m;
   return mix(c, vec3(1.0), smoothstep(1.2, 8.0, m) * 0.7);
@@ -123,6 +161,12 @@ uniform vec2 uFogRange;
 uniform vec3 uCheckerB;
 uniform float uCheckerSize;
 uniform float uNight;
+#ifdef MOVER
+uniform vec3 uVel;
+uniform float uC;
+#endif
+uniform vec3 uGridColor;
+uniform vec3 uGrid; // spacing, line width in pixels, glow
 varying vec3 vNormalW;
 varying vec3 vWorld;
 varying vec3 vTint;
@@ -132,19 +176,36 @@ ${common}
 
 void main() {
   float D = doppler(vWorld - uCam);
+  #ifdef MOVER
+    vec3 bs = uVel / uC;
+    D /= inversesqrt(max(1e-6, 1.0 - dot(bs, bs))) * (1.0 + dot(bs, normalize(vWorld - uCam)));
+  #endif
   vec3 base = uColor * vTint;
+  float e = uSpec.z;
   #ifdef CHECKER
     vec2 cell = floor(vWorld.xz / uCheckerSize);
     if (mod(cell.x + cell.y, 2.0) > 0.5) base = uCheckerB;
+  #endif
+  #ifdef GRID
+    vec2 gc = vWorld.xz / uGrid.x;
+    vec2 gd = abs(fract(gc - 0.5) - 0.5) / fwidth(gc);
+    float line = 1.0 - min(min(gd.x, gd.y) / uGrid.y, 1.0);
+    base = mix(base, uGridColor, line);
+    e = mix(e, uGrid.z, line);
   #endif
   vec3 N = normalize(vNormalW);
   #ifdef DOUBLE_SIDED
     if (!gl_FrontFacing) N = -N;
   #endif
   float ndl = max(dot(N, uSun), 0.0);
+  #ifdef TOON
+    ndl = smoothstep(0.05, 0.12, ndl) * 0.85 + smoothstep(0.55, 0.62, ndl) * 0.15;
+  #endif
   vec3 light = mix(uGround, uSky, N.y * 0.5 + 0.5) + uSunColor * ndl;
+  #ifdef UNLIT
+    light = vec3(1.0);
+  #endif
   float lum = dot(light, vec3(0.33));
-  float e = uSpec.z;
   vec3 rgb = base * mix(light, vec3(1.6), e);
   float ir = uSpec.x * mix(lum, 1.6, e);
   float uv = uSpec.y * mix(lum, 1.6, e);
@@ -166,6 +227,7 @@ uniform vec3 uSun;
 uniform vec3 uSkyTop;
 uniform vec3 uSkyHorizon;
 uniform float uNight;
+uniform float uSpace;
 varying vec3 vWorld;
 ${common}
 
@@ -177,17 +239,40 @@ void main() {
   float h = clamp(dir.y, -0.2, 1.0);
   vec3 rgb = mix(uSkyHorizon, uSkyTop, pow(max(h, 0.0), 0.6));
   float uv = mix(0.5, 1.1, max(h, 0.0)) * (1.0 - uNight);
-  float sun = smoothstep(0.9975, 0.999, dot(dir, uSun));
+  float sun = smoothstep(0.9975, 0.999, dot(dir, uSun)) * (1.0 - uSpace);
   rgb += vec3(2.5, 2.2, 1.6) * sun * (1.0 - uNight);
   float ir = 0.3 * (1.0 - uNight) + 0.03 + 2.0 * sun;
-  if (uNight > 0.5) {
-    vec3 cell = floor(dir * 180.0);
+  if (uSpace > 0.5) {
+    // Deep space: no horizon, a faint galactic band, stars in every direction.
+    vec3 gal = normalize(vec3(0.3, 0.9, -0.3));
+    float band = exp(-pow(dot(dir, gal) / 0.18, 2.0));
+    rgb = vec3(0.004, 0.005, 0.012) + vec3(0.05, 0.045, 0.06) * band;
+    uv = 0.05 * band;
+    ir = 0.08 * band;
+    for (int i = 0; i < 2; i++) {
+      float scale = i == 0 ? 220.0 : 520.0;
+      vec3 cell = floor(dir * scale);
+      float s = hash(cell + float(i) * 17.0);
+      vec3 f = fract(dir * scale) - 0.5;
+      float star = step(i == 0 ? 0.992 : 0.985 - 0.02 * band, s) * smoothstep(0.35, 0.0, length(f));
+      float temp = fract(s * 113.0);
+      vec3 tint = mix(vec3(1.0, 0.75, 0.55), vec3(0.7, 0.85, 1.2), temp);
+      rgb += tint * star * (i == 0 ? 3.0 : 1.2);
+      ir += star * (1.2 - temp);
+      uv += star * temp * 1.2;
+    }
+    float sunDisk = smoothstep(0.9992, 0.9996, dot(dir, uSun));
+    rgb += vec3(6.0, 5.5, 5.0) * sunDisk;
+    ir += 4.0 * sunDisk;
+    uv += 3.0 * sunDisk;
+  } else if (uNight > 0.5) {
+    vec3 cell = floor(dir * 300.0);
     float s = hash(cell);
-    float star = step(0.9965, s) * smoothstep(0.0, 0.3, h);
+    float star = step(0.996, s) * smoothstep(0.0, 0.3, h) * smoothstep(0.4, 0.1, length(fract(dir * 300.0) - 0.5));
     rgb += vec3(1.0, 0.95, 0.9) * star * (0.6 + 2.0 * fract(s * 91.0));
     ir += star * 0.8;
     uv += star * 0.8;
-    float moon = smoothstep(0.9990, 0.9994, dot(dir, uSun));
+    float moon = smoothstep(0.99965, 0.99975, dot(dir, uSun));
     rgb += vec3(1.6, 1.6, 1.4) * moon;
   }
   vec3 col = searchlight(spectralShift(rgb, ir, uv, D), D);
@@ -208,14 +293,22 @@ export function mat({
   opacity = 1,
   additive = false,
   checker = null,
+  grid = null,
+  toon = false,
+  unlit = false,
   doubleSided = false,
   unique = false,
+  mover = null,
   vertexColors = false,
 } = {}) {
   const key = JSON.stringify(arguments[0] ?? {});
-  if (cache.has(key)) return cache.get(key);
+  if (!mover && cache.has(key)) return cache.get(key);
   const defines = {};
   if (checker) defines.CHECKER = "";
+  if (grid) defines.GRID = "";
+  if (toon) defines.TOON = "";
+  if (unlit) defines.UNLIT = "";
+  if (mover) defines.MOVER = "";
   if (doubleSided) defines.DOUBLE_SIDED = "";
   const m = new THREE.ShaderMaterial({
     vertexShader: vertex,
@@ -229,13 +322,16 @@ export function mat({
       uOpacity: { value: opacity },
       uCheckerB: { value: new THREE.Color(checker?.b ?? "#000") },
       uCheckerSize: { value: checker?.size ?? 1 },
+      uGridColor: { value: new THREE.Color(grid?.color ?? "#fff") },
+      uGrid: { value: new THREE.Vector3(grid?.spacing ?? 4, grid?.width ?? 1, grid?.glow ?? 0) },
+      ...(mover && { uVel: mover.uVel, uAnchor: mover.uAnchor }),
     },
     transparent: opacity < 1 || additive,
     depthWrite: !additive && opacity >= 1,
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
     side: doubleSided ? THREE.DoubleSide : THREE.FrontSide,
   });
-  if (!unique) cache.set(key, m);
+  if (!unique && !mover) cache.set(key, m);
   return m;
 }
 
