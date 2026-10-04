@@ -222,7 +222,7 @@ export default {
         group.add(box(0.5, 0.08, 1.8, { color: "#a0663a", ir: 0.5 }, [x, 0.45, z]));
         group.add(box(0.08, 0.5, 1.8, { color: "#a0663a", ir: 0.5 }, [x + s * 0.24, 0.75, z]));
         for (const lz of [-0.8, 0.8]) group.add(box(0.5, 0.45, 0.08, { color: "#23465a", ir: 0.3 }, [x, 0.22, z + lz]));
-        const n = rand() < 0.75 ? 1 + Math.floor(rand() * 2) : 0;
+        const n = rand() < 0.45 ? 1 : 0;
         for (let k = 0; k < n; k++) group.add(person(randomLook(rand), { pose: "sit", pos: [x - s * 0.05, 0, z - 0.45 + k * 0.85], rotY: s * Math.PI / 2 }));
       }
     }
@@ -236,7 +236,7 @@ export default {
     kiosk(group, colliders, -6, -124, 0, "#fb5607", "FRIES");
     kiosk(group, colliders, 8, -124, 0, "#3a86ff", "DRINKS");
     for (const [x, z] of [[-6, -121.6], [8, -121.6], [-27, -121.6]]) {
-      for (let k = 0; k < 2; k++) group.add(person(randomLook(rand), { pos: [x - 0.5 + k * 0.9, 0, z + 0.6 + k * 0.7], rotY: Math.PI }));
+      if (rand() < 0.7) group.add(person(randomLook(rand), { pos: [x - 0.3, 0, z + 0.9], rotY: Math.PI }));
     }
 
     // A balloon seller near the entrance.
@@ -255,8 +255,8 @@ export default {
     group.add(balloons);
 
     // People strolling up and down; a few kids running at half light speed.
-    const strollers = new Strollers(group, { count: 22, kids: 6, x0: -3.2, x1: 3.2, z0: -116, z1: 34, speed: [1, 1.5], kidSpeed: [2.6, 3.4], seed: 31, avoid: 1.1 });
-    const strollers2 = new Strollers(group, { count: 8, x0: -26, x1: 26, z0: -168, z1: -150, speed: [0.6, 1.1], seed: 32 });
+    const strollers = new Strollers(group, { count: 12, kids: 4, x0: -3.2, x1: 3.2, z0: -116, z1: 34, speed: [1, 1.5], kidSpeed: [2.6, 3.4], seed: 31, avoid: 1.1 });
+    const strollers2 = new Strollers(group, { count: 4, x0: -26, x1: 26, z0: -168, z1: -150, speed: [0.6, 1.1], seed: 32 });
 
     // Ferris wheel: the rim moves at 80% of light speed.
     const wheelOmega = (0.8 * C) / WHEEL_R;
@@ -378,7 +378,7 @@ export default {
     for (const dz of [-6.5, 6.5]) group.add(box(0.2, 3, 0.2, { color: "#f6f2ea" }, [26.2, 2.1, -131 + dz]));
     group.add(box(4.4, 0.2, 14.4, { color: "#ff4d6d", ir: 0.5 }, [24.4, 3.6, -131]));
     group.add(box(0.12, 0.12, 14, { color: "#ffd38a", emissive: 1, ir: 1, switched: true }, [26.4, 3.4, -131]));
-    for (let k = 0; k < 4; k++) group.add(person(randomLook(rand), { pos: [27.3, 0, -127 - k * 0.9], rotY: Math.PI }));
+    for (let k = 0; k < 2; k++) group.add(person(randomLook(rand), { pos: [27.3, 0, -127 - k * 0.9], rotY: Math.PI }));
     const cars = ["#ffbe0b", "#3a86ff", "#8338ec"].map((c) => { const car = coasterCar(c, rand); group.add(car); return car; });
     // The coaster keeps its own clock, which only runs slow if light gets
     // slower than its top speed.
@@ -424,6 +424,39 @@ export default {
       gull.rotation.y = a + (speed > 0 ? 0 : Math.PI);
       group.add(gull);
     }
+
+    // Two blimps drifting over the bay; one slow, one hurrying along at 40% of
+    // light speed (and squashed a little for it). Their signs light up at dusk.
+    const blimps = [
+      { speed: 0.12, y: 46, z: -210, x: -60, dir: 1, body: "#f4f1ea", band: "#ff4d6d", sign: "PACETIME", signColor: "#ff6fb5" },
+      { speed: 0.4, y: 28, z: -95, x: 120, dir: -1, body: "#ffd166", band: "#3a86ff", sign: "ICE CREAM", signColor: "#7fe8ff" },
+    ].map((b) => {
+      const m = new Mover(new THREE.Vector3(b.dir * b.speed * C, 0, 0));
+      const g = new THREE.Group();
+      const add = (geo, opts, tr) => { const o = mesh(geo, m.mat(opts), tr); g.add(o); return o; };
+      add(new THREE.SphereGeometry(1, 40, 20), { color: b.body, ir: 0.5, uv: 0.4 }, { pos: [0, 0, 0], scale: [10, 3.2, 3.2] });
+      for (const x of [-3.5, 3.5]) add(new THREE.CylinderGeometry(1, 1, 1, 40, 1, true), { color: b.band, ir: 0.5, uv: 0.4, doubleSided: true }, { pos: [x, 0, 0], rot: [0, 0, Math.PI / 2], scale: [3.07 - Math.abs(x) * 0.02, 1.2, 3.07 - Math.abs(x) * 0.02] });
+      for (const r of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) add(G.box, { color: b.band, ir: 0.5 }, { pos: [-8.6, Math.cos(r) * 1.9, Math.sin(r) * 1.9], rot: [r, 0, 0], scale: [2.6, 2.4, 0.12] });
+      add(G.box, { color: "#2b2d33", ir: 0.3 }, { pos: [0.5, -3.45, 0], scale: [3.4, 0.9, 1.2] });
+      add(G.box, { color: "#ffe2a8", emissive: 1, ir: 1, uv: 1, switched: true }, { pos: [0.5, -3.4, 0], scale: [3.2, 0.32, 1.22] });
+      add(G.sphere, { color: "#ff3030", emissive: 1, ir: 1, switched: true }, { pos: [10.05, 0, 0], scale: 0.22 });
+      for (const side of [-1, 1]) {
+        const n = neon(b.sign, { size: 0.36, color: b.signColor, switched: true, width: 0.12 });
+        n.position.set(side > 0 ? -n.textWidth / 2 : n.textWidth / 2, -0.75, side * 3.25);
+        n.rotation.y = side > 0 ? 0 : Math.PI;
+        n.traverse((o) => { if (o.isMesh) o.material = m.mat({ color: b.signColor, emissive: 1, ir: 0.8, uv: 0.8, switched: true }); });
+        g.add(n);
+      }
+      if (b.dir < 0) g.rotation.y = Math.PI;
+      g.position.y = b.y;
+      g.scale.setScalar(1.5);
+      m.group.add(g);
+      m.withGhost();
+      m.group.userData.dynamic = true;
+      group.add(m.group);
+      m.dispatch(0, new THREE.Vector3(b.x, 0, b.z));
+      return { m, ...b };
+    });
 
     // Sailing boats crossing the bay.
     const boats = [];
@@ -639,6 +672,10 @@ export default {
         strollers.update(t);
         strollers2.update(t);
         balloons.rotation.z = Math.sin(retardedTime(eye, new THREE.Vector3(2.4, 3, 26)) * 0.9) * 0.02;
+        for (const b of blimps) {
+          const x = b.m.at(t).x;
+          if (b.dir > 0 ? x > 260 : x < -260) b.m.dispatch(t, new THREE.Vector3(b.dir > 0 ? -260 : 260, 0, b.z));
+        }
         for (const b of boats) {
           const x = b.m.at(t).x;
           if (b.dir > 0 ? x > 180 : x < -180) b.m.dispatch(t, new THREE.Vector3(b.dir > 0 ? -180 : 180, 0, b.z));
