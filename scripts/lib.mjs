@@ -5,7 +5,7 @@ export const URL = process.env.URL ?? "http://localhost:5180/";
 let shotCount = 0;
 
 // The dev server's log, where build errors show up.
-export const DEV_LOG = process.env.PACETIME_LOG ?? "/tmp/pacetime-dev.log";
+export const DEV_LOG = process.env.SLOWLIGHT_LOG ?? "/tmp/slowlight-dev.log";
 
 // fixed: the same random numbers and the same date on every run, for
 // screenshots that can be compared.
@@ -29,7 +29,7 @@ export async function open({ hash = "", size = [1440, 860], gpu = true, fixed = 
   await page.goto(URL + hash);
   try {
     // With a place in the address, wait for it; otherwise the title screen is enough.
-    await page.waitForFunction((h) => (h ? window.pacetime?.instance : window.pacetime), hash, { timeout: 15000 });
+    await page.waitForFunction((h) => (h ? window.slowlight?.instance : window.slowlight), hash, { timeout: 15000 });
   } catch (e) {
     // Bun serves its error page when the build fails; it's a script, so read
     // the dev server log for why instead.
@@ -50,11 +50,11 @@ export async function open({ hash = "", size = [1440, 860], gpu = true, fixed = 
       await page.screenshot({ path });
       return path;
     },
-    place: (x, z, yaw = 0, pitch = 0) => page.evaluate(([x, z, yaw, pitch]) => { pacetime.player.place(x, z, yaw); pacetime.player.pitch = pitch; }, [x, z, yaw, pitch]),
-    advance: (s) => page.evaluate((s) => pacetime.advance(s), s),
+    place: (x, z, yaw = 0, pitch = 0) => page.evaluate(([x, z, yaw, pitch]) => { slowlight.player.place(x, z, yaw); slowlight.player.pitch = pitch; }, [x, z, yaw, pitch]),
+    advance: (s) => page.evaluate((s) => slowlight.advance(s), s),
     hud: (show) => page.evaluate((show) => { document.getElementById("hud").hidden = !show; }, show),
-    goals: () => page.evaluate(() => (pacetime.instance.goals ?? []).map((g) => (g.done ? "✓ " : "· ") + g.text)),
-    note: () => page.evaluate(() => pacetime.instance.note ?? ""),
+    goals: () => page.evaluate(() => (slowlight.instance.goals ?? []).map((g) => (g.done ? "✓ " : "· ") + g.text)),
+    note: () => page.evaluate(() => slowlight.instance.note ?? ""),
     close: () => browser.close(),
   };
   return t;

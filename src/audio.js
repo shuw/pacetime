@@ -2,13 +2,14 @@
 // a train hum pitched by the same Doppler factor you see, and one-shot effects
 // panned toward where they happen.
 import * as THREE from "three";
+import { store } from "./store.js";
 
 let ctx = null, master = null, noiseBuf = null;
 let muted = false;
 const loops = {};
 const listener = { pos: new THREE.Vector3(), right: new THREE.Vector3(1, 0, 0) };
 
-try { muted = localStorage.getItem("pacetime-muted") === "1"; } catch {}
+muted = store.get("muted") === "1";
 
 export function unlockAudio() {
   if (!ctx) {
@@ -34,7 +35,7 @@ export function isMuted() {
 
 export function setMuted(m) {
   muted = m;
-  try { localStorage.setItem("pacetime-muted", m ? "1" : "0"); } catch {}
+  store.set("muted", m ? "1" : "0");
   if (master) master.gain.setTargetAtTime(m ? 0 : 0.8, ctx.currentTime, 0.05);
 }
 

@@ -10,7 +10,7 @@ export default [
   },
   {
     files: ["scripts/**", "tests/**", "*.config.js"],
-    languageOptions: { globals: { ...globals.node, ...globals.browser, pacetime: "readonly", Bun: "readonly" } },
+    languageOptions: { globals: { ...globals.node, ...globals.browser, slowlight: "readonly", Bun: "readonly" } },
   },
   {
     rules: {

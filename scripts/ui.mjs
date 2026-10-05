@@ -17,23 +17,23 @@ await page.keyboard.press("Digit5");
 await page.waitForFunction(() => document.getElementById("menu").hidden, null, { timeout: 5000 }).catch(() => {});
 ok("5 on the title screen starts Einstein's Railway", await q(() => document.getElementById("menu").hidden && document.getElementById("scene-title").textContent === "Einstein's Railway"));
 
-await q(() => { pacetime.player.yaw = -Math.PI / 2; }); // along the platform
+await q(() => { slowlight.player.yaw = -Math.PI / 2; }); // along the platform
 await page.keyboard.down("w");
 await page.waitForTimeout(3500);
-const beta = await q(() => pacetime.player.beta);
+const beta = await q(() => slowlight.player.beta);
 ok(`W alone sprints, to 95% of c where c = 5 m/s (got ${(beta * 100).toFixed(1)}%)`, Math.abs(beta - 0.95) < 0.01);
 await page.keyboard.down("Shift");
 await page.waitForTimeout(2500);
-const boosted = await q(() => pacetime.player.beta);
+const boosted = await q(() => slowlight.player.beta);
 await page.keyboard.up("w");
 await page.keyboard.up("Shift");
 ok(`holding Shift steps up to the afterburner, 99.5% (got ${(boosted * 100).toFixed(1)}%)`, Math.abs(boosted - 0.995) < 0.002);
 ok("the mouse hint goes once you've used the movement keys", await q(() => document.getElementById("look-hint").hidden));
-await q(() => { pacetime.player.place(-96, 11, Math.PI / 2); }); // back along the platform
+await q(() => { slowlight.player.place(-96, 11, Math.PI / 2); }); // back along the platform
 await page.keyboard.down("Alt");
 await page.keyboard.down("w");
 await page.waitForTimeout(2500);
-const walked = await q(() => pacetime.player.beta);
+const walked = await q(() => slowlight.player.beta);
 await page.keyboard.up("w");
 await page.keyboard.up("Alt");
 ok(`holding Alt steps down to a walk, 53% (got ${(walked * 100).toFixed(1)}%)`, Math.abs(walked - 0.532) < 0.01);
@@ -41,7 +41,7 @@ ok(`holding Alt steps down to a walk, 53% (got ${(walked * 100).toFixed(1)}%)`, 
 await page.waitForTimeout(2500); // coast to a stop
 const hash = await q(() => location.hash);
 ok(`address bar tracks state (${hash})`, /^#railway@/.test(hash));
-const before = await q(() => ({ x: pacetime.player.pos.x, z: pacetime.player.pos.z, yaw: pacetime.player.yaw }));
+const before = await q(() => ({ x: slowlight.player.pos.x, z: slowlight.player.pos.z, yaw: slowlight.player.yaw }));
 
 await page.keyboard.press("KeyL");
 await page.click("#fx-doppler");
@@ -51,7 +51,7 @@ ok("switching an effect off shows in the address", (await q(() => location.hash)
 
 await page.reload();
 await page.waitForTimeout(1500);
-const after = await q(() => ({ x: pacetime.player.pos.x, z: pacetime.player.pos.z, yaw: pacetime.player.yaw, menu: !document.getElementById("menu").hidden, doppler: pacetime.effects.doppler, title: document.getElementById("scene-title").textContent }));
+const after = await q(() => ({ x: slowlight.player.pos.x, z: slowlight.player.pos.z, yaw: slowlight.player.yaw, menu: !document.getElementById("menu").hidden, doppler: slowlight.effects.doppler, title: document.getElementById("scene-title").textContent }));
 ok("refresh returns to the same experiment, in game", after.title === "Einstein's Railway" && !after.menu);
 ok(`refresh restores position (${before.x.toFixed(1)},${before.z.toFixed(1)} → ${after.x.toFixed(1)},${after.z.toFixed(1)})`, Math.abs(after.x - before.x) < 0.2 && Math.abs(after.z - before.z) < 0.2 && Math.abs(after.yaw - before.yaw) < 0.02);
 ok("refresh restores Lab settings", after.doppler === false && (await q(() => !document.getElementById("fx-doppler").checked)));
@@ -70,6 +70,6 @@ await page.evaluate(() => { location.hash = "#city"; });
 await page.waitForTimeout(800);
 ok("editing the hash to #city switches place", await q(() => document.getElementById("scene-title").textContent === "Neon Crossroads"));
 
-await page.evaluate(() => { history.replaceState(null, "", location.pathname); pacetime.effects.doppler = true; });
+await page.evaluate(() => { history.replaceState(null, "", location.pathname); slowlight.effects.doppler = true; });
 console.log(errors.length ? "ERRORS:\n" + [...new Set(errors)].join("\n") : "no console errors");
 await browser.close();

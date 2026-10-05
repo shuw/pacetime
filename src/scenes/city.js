@@ -124,14 +124,14 @@ export default {
       ["BAR", [AVE + WALK + 0.9, 6, 30], -Math.PI / 2, "#ffb020"],
       ["OPEN 24", [-(AVE + WALK + 0.9), 4, 22], Math.PI / 2, "#7dff8a"],
       ["TAXI", [-(AVE + WALK + 0.9), 3.4, 12], Math.PI / 2, "#ffd84a"],
-      ["PACETIME", [-(AVE + WALK + 0.9), 16, -70], Math.PI / 2, "#b48cff"],
+      ["SLOWLIGHT", [-(AVE + WALK + 0.9), 16, -70], Math.PI / 2, "#b48cff"],
       ["RAMEN", [AVE + WALK + 0.9, 9, -80], -Math.PI / 2, "#ff6a4a"],
       ["CINEMA", [-30, 8, -(AVE + WALK + 0.9)], 0, "#ff4f6a"],
       ["MOTEL", [36, 6, AVE + WALK + 0.9], Math.PI, "#4fffd0"],
     ];
     const signMeshes = [];
     for (const [text, pos, rot, color] of signs) {
-      const s = neon(text.replace(" ", ""), { pos, rotY: rot, size: text === "PACETIME" ? 0.55 : 0.32, color });
+      const s = neon(text.replace(" ", ""), { pos, rotY: rot, size: text === "SLOWLIGHT" ? 0.55 : 0.32, color });
       lights.add(s);
       signMeshes.push({ s, pos: new THREE.Vector3(...pos), color: new THREE.Color(color) });
     }

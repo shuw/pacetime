@@ -2,7 +2,7 @@
   "lockfileVersion": 1,
   "workspaces": {
     "": {
-      "name": "pacetime",
+      "name": "slowlight",
       "dependencies": {
         "three": "^0.186.0",
       },

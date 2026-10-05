@@ -13,7 +13,7 @@ const t0 = Date.now();
 
 // A build error would otherwise show up as every page timing out.
 try {
-  execFileSync("bun", ["build", "./index.html", "--outdir", join(tmpdir(), "pacetime-check")], { stdio: "pipe" });
+  execFileSync("bun", ["build", "./index.html", "--outdir", join(tmpdir(), "slowlight-check")], { stdio: "pipe" });
 } catch (e) {
   console.log("FAIL build\n" + (e.stdout?.toString() ?? "") + (e.stderr?.toString() ?? ""));
   process.exit(1);
@@ -34,7 +34,7 @@ const runs = [
   ["looks", ["scripts/looks.mjs", ...(process.argv.includes("--update") ? ["--update"] : [])]],
 ];
 const results = await Promise.all(runs.map(([name, args]) => new Promise((resolve) => {
-  const p = spawn("node", args, { env: { ...process.env, WARP: "6", PACETIME_LOG: DEV_LOG } });
+  const p = spawn("node", args, { env: { ...process.env, WARP: "6", SLOWLIGHT_LOG: DEV_LOG } });
   let out = "";
   p.stdout.on("data", (d) => (out += d));
   p.stderr.on("data", (d) => (out += d));

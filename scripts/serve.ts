@@ -31,4 +31,4 @@ const server = Bun.serve({
     return file ? new Response(file, { headers: { "Cache-Control": "no-store" } }) : new Response("Not found", { status: 404 });
   },
 });
-console.log(`Pacetime on ${server.url}`);
+console.log(`Slowlight on ${server.url}`);

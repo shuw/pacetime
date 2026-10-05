@@ -454,7 +454,7 @@ export default {
     // Two blimps drifting over the bay; one slow, one hurrying along at 40% of
     // light speed (and squashed a little for it). Their signs light up at dusk.
     const blimps = [
-      { speed: 0.12, y: 46, z: -210, x: -60, dir: 1, body: "#f4f1ea", band: "#ff4d6d", sign: "PACETIME", signColor: "#ff6fb5" },
+      { speed: 0.12, y: 46, z: -210, x: -60, dir: 1, body: "#f4f1ea", band: "#ff4d6d", sign: "SLOWLIGHT", signColor: "#ff6fb5" },
       { speed: 0.4, y: 28, z: -95, x: 120, dir: -1, body: "#ffd166", band: "#3a86ff", sign: "ICE CREAM", signColor: "#7fe8ff" },
     ].map((b) => {
       const m = new Mover(new THREE.Vector3(b.dir * b.speed * C, 0, 0));

@@ -1,16 +1,16 @@
 import { effects, lightSpeed, world } from "./relativity.js";
 import { formatBeta, formatTime, kmh } from "./format.js";
+import { store } from "./store.js";
 import { shared } from "./shaders.js";
 
 // Gentle softens the color shift, brightening and bending; true to life is the real thing.
 // [color shift, brightening, bending]
 const LOOKS = { gentle: [0.25, 0.12, 0.55], full: [1, 1, 1] };
-let look = "gentle";
-try { look = localStorage.getItem("pacetime-look") === "full" ? "full" : "gentle"; } catch {}
+let look = store.get("look") === "full" ? "full" : "gentle";
 export function setLook(k) {
   look = k;
   [shared.uShiftAmt.value, shared.uGlowAmt.value, shared.uAberrK.value] = LOOKS[k];
-  try { localStorage.setItem("pacetime-look", k); } catch {}
+  store.set("look", k);
   $("look-gentle").setAttribute("aria-checked", k === "gentle");
   $("look-full").setAttribute("aria-checked", k === "full");
 }

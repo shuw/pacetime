@@ -12,6 +12,7 @@ import { isMuted, setAmbience, setListener, setMuted, sfx, unlockAudio, updateAu
 import { adaptExposure, adaptResolution, applyEnv, applyPost, bloom, camera, draw, fps, frameTick, pickLamps, pixelRatio, renderer, root, setAdaptiveResolution, sky, warmUp } from "./render.js";
 import { linkFor, linkKeeper, readLink } from "./link.js";
 import { TitleScreen } from "./title.js";
+import { store } from "./store.js";
 import railway from "./scenes/railway.js";
 import pier from "./scenes/pier.js";
 import city from "./scenes/city.js";
@@ -32,11 +33,7 @@ let current = null;
 let paused = true;
 const help = document.getElementById("help");
 
-const store = {
-  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
-};
-const done = JSON.parse(store.get("pacetime-done") ?? "{}");
+const done = JSON.parse(store.get("done") ?? "{}");
 
 function load(scene) {
   if (current) root.remove(current.instance.group);
@@ -122,7 +119,6 @@ async function startScene(scene) {
   unlockAudio();
   sfx.ui();
   load(scene);
-  store.set("pacetime-last", scene.id);
   current.instance.started = true;
   await warmUp();
   starting = false;
@@ -341,7 +337,7 @@ function simulate(dTau, { realtime = true } = {}) {
     const complete = instance.goals?.length > 0 && instance.goals.every((g) => g.done);
     if (complete && !wasComplete && !done[scene.id]) {
       done[scene.id] = true;
-      store.set("pacetime-done", JSON.stringify(done));
+      store.set("done", JSON.stringify(done));
       setTimeout(() => toast(`${scene.title}: everything spotted. Press M for another place.`, 7), 9000);
     }
     wasComplete = complete;
@@ -389,7 +385,7 @@ else openMenu();
 frame();
 
 // Handy for poking at the physics from the console, and for the tests.
-window.pacetime = {
+window.slowlight = {
   player, world, effects, closeMenu, act, shared, bloom, throwBall, pickLamps,
   get instance() { return current?.instance; },
   get fps() { return fps(); },

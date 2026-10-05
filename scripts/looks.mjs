@@ -11,19 +11,19 @@ const SIZE = [800, 500];
 
 // Each view: a place, then code run in the page before the shot.
 const VIEWS = [
-  ["pier-golden-hour", "pier", () => pacetime.advance(1)],
-  ["pier-night", "pier", () => { pacetime.instance.day.set(0.85, pacetime.world.t); pacetime.player.place(0, -60, 0); pacetime.player.pitch = 0.05; pacetime.advance(1); }],
-  ["highway-99.93", "highway", () => { pacetime.player.eta = 4; pacetime.advance(0.4); }],
-  ["starship-cabin", "starship", () => pacetime.advance(1)],
-  ["starship-cruise", "starship", () => { const s = pacetime.player.ship; s.helm = true; s.local.set(0, 0, -4.75); s.eta = 8; pacetime.advance(1); }],
-  ["city", "city", () => pacetime.advance(2)],
-  ["railway", "railway", () => { pacetime.advance(20); pacetime.player.place(-60, 12, 0.3); pacetime.player.pitch = 0.05; pacetime.advance(0.05); }],
+  ["pier-golden-hour", "pier", () => slowlight.advance(1)],
+  ["pier-night", "pier", () => { slowlight.instance.day.set(0.85, slowlight.world.t); slowlight.player.place(0, -60, 0); slowlight.player.pitch = 0.05; slowlight.advance(1); }],
+  ["highway-99.93", "highway", () => { slowlight.player.eta = 4; slowlight.advance(0.4); }],
+  ["starship-cabin", "starship", () => slowlight.advance(1)],
+  ["starship-cruise", "starship", () => { const s = slowlight.player.ship; s.helm = true; s.local.set(0, 0, -4.75); s.eta = 8; slowlight.advance(1); }],
+  ["city", "city", () => slowlight.advance(2)],
+  ["railway", "railway", () => { slowlight.advance(20); slowlight.player.place(-60, 12, 0.3); slowlight.player.pitch = 0.05; slowlight.advance(0.05); }],
 ];
 
 mkdirSync(DIR, { recursive: true });
 mkdirSync("shots", { recursive: true });
 const t = await open({ size: SIZE, fixed: true });
-await t.q(() => { pacetime.warp = 0; pacetime.adaptiveResolution = false; });
+await t.q(() => { slowlight.warp = 0; slowlight.adaptiveResolution = false; });
 await t.page.addStyleTag({ content: "#hud, #toast, #minimap { display: none !important; }" });
 
 // Pixels differing by more than 48 (of 255) in any channel, and the mean difference.
@@ -52,7 +52,7 @@ async function compare(a, b) {
 
 let failed = 0;
 for (const [name, place, setup] of VIEWS) {
-  await t.q((id) => { pacetime.load(id); pacetime.closeMenu(); }, place);
+  await t.q((id) => { slowlight.load(id); slowlight.closeMenu(); }, place);
   await t.q(setup);
   await t.q(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok))));
   const shot = await t.page.screenshot({ type: "jpeg", quality: 85 });

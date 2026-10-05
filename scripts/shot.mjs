@@ -12,7 +12,7 @@ const size = (flag("size", "1200x750")).split("x").map(Number);
 
 const t = await open({ hash, size });
 if (!has("hud")) await t.hud(false);
-if (flag("warp")) await t.q((k) => (pacetime.warp = k), Number(flag("warp")));
+if (flag("warp")) await t.q((k) => (slowlight.warp = k), Number(flag("warp")));
 if (flag("advance")) await t.advance(Number(flag("advance")));
 if (flag("js")) console.log(await t.q(new Function(`return (${flag("js")})`)));
 await t.wait(Number(flag("wait", 1.5)) * 1000);
