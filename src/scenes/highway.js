@@ -82,6 +82,21 @@ function instanced(geo, opts, count) {
   return m;
 }
 
+// Soft colour bands across a planet or its rings: `at` maps a vertex to a
+// position through the list of colours.
+function banded(geo, colors, at) {
+  const p = geo.attributes.position, out = new Float32Array(p.count * 3), q = new THREE.Vector3();
+  const cs = colors.map((c) => new THREE.Color(c)), c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const f = at(q.fromBufferAttribute(p, i)), k = Math.floor(f), w = THREE.MathUtils.smoothstep(f - k, 0.3, 0.7);
+    const n = cs.length, a = cs[((k % n) + n) % n], b = cs[(((k + 1) % n) + n) % n];
+    c.copy(a).lerp(b, w);
+    out.set([c.r, c.g, c.b], i * 3);
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(out, 3));
+  return geo;
+}
+
 /** @type {import("../place.js").PlaceModule} */
 export default {
   id: "highway",
@@ -118,8 +133,8 @@ export default {
     sky.follow = true;
     sky.userData.dynamic = true;
     const planetAt = [-250, 95, 430];
-    sky.add(mesh(new THREE.SphereGeometry(1, 96, 64), mat({ color: "#e0a36a", ir: 0.7, uv: 0.3 }), { pos: planetAt, scale: 62 }));
-    sky.add(mesh(new THREE.RingGeometry(84, 128, 160, 3), mat({ color: "#c8b28a", ir: 0.4, uv: 0.3, doubleSided: true }), { pos: planetAt, rot: [-1.2, 0.35, 0.25] }));
+    sky.add(mesh(banded(new THREE.SphereGeometry(1, 96, 64), ["#f0c08a", "#c98a58", "#e8b07a", "#a8704a", "#f4d2a2"], (q) => q.y * 9 + Math.sin(q.x * 6 + q.z * 4) * 0.35), mat({ color: "#ffffff", vertexColors: true, ir: 0.7, uv: 0.3 }), { pos: planetAt, rot: [0.25, 0, 0.3], scale: 62 }));
+    sky.add(mesh(banded(new THREE.RingGeometry(84, 128, 160, 24), ["#e2cfa8", "#a8906a", "#d8c09a", "#6a5a48", "#c8b28a"], (q) => Math.hypot(q.x, q.y) / 4.3), mat({ color: "#ffffff", vertexColors: true, ir: 0.4, uv: 0.3, doubleSided: true, opacity: 0.92 }), { pos: planetAt, rot: [-1.2, 0.35, 0.25] }));
     sky.add(mesh(new THREE.SphereGeometry(1, 48, 32), mat({ color: "#9fb4d8", ir: 0.4, uv: 0.4 }), { pos: [-120, 160, 470], scale: 11 }));
     group.add(sky);
 
@@ -136,7 +151,7 @@ export default {
 
     // A small blue planet ahead and to the right. Racing toward it, it only
     // shrinks and slides toward the middle of the view.
-    sky.add(mesh(new THREE.SphereGeometry(1, 64, 40), mat({ color: "#6fa8ff", ir: 0.4, uv: 0.6 }), { pos: [260, 140, -440], scale: 34 }));
+    sky.add(mesh(banded(new THREE.SphereGeometry(1, 64, 40), ["#4f8ef0", "#6fa8ff", "#e8f2ff", "#5a9aff", "#3f7ad8"], (q) => q.y * 4 + Math.sin(q.x * 5 + q.y * 7) * 0.8 + Math.sin(q.z * 9) * 0.4), mat({ color: "#ffffff", vertexColors: true, ir: 0.4, uv: 0.6 }), { pos: [260, 140, -440], scale: 34 }));
 
     // Your craft: a sleek nose ahead of you, carried along (so not bent).
     const cockpit = new THREE.Group();

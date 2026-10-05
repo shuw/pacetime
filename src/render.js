@@ -239,7 +239,10 @@ function lampOn(l, eye) {
   return THREE.MathUtils.clamp((seen - shared.uLightsOn.value) / 0.2, 0, 1) * (1 - THREE.MathUtils.clamp((seen - shared.uLightsOff.value) / 0.2, 0, 1));
 }
 export function pickLamps(lamps, eye) {
-  const near = lamps.length > 8 ? [...lamps].sort((a, b) => a.pos.distanceToSquared(eye) - b.pos.distanceToSquared(eye)).slice(0, 8) : lamps;
+  // The eight that light up the most around you: big bright lamps beat small
+  // glows that happen to be nearer, and lamps that are off don't count.
+  const weight = (l) => (l.power * lampOn(l, eye) * l.range * l.range) / (l.pos.distanceToSquared(eye) + l.range * l.range);
+  const near = lamps.length > 8 ? lamps.map((l) => [weight(l), l]).sort((a, b) => b[0] - a[0]).slice(0, 8).map((x) => x[1]) : lamps;
   for (let i = 0; i < 8; i++) {
     const l = near[i];
     if (l) {

@@ -187,12 +187,12 @@ export default {
     const rand = rng(11);
 
     // The valley: a meadow, the track bed, alps and pines all round.
-    group.add(surface({ color: "#6aa84f", ir: 1.3, uv: 0.1, surface: "grass", flashes }, { y: GROUND, radius: 2400 }));
+    group.add(surface({ color: "#5f9c47", ir: 1.3, uv: 0.1, surface: "grass", flashes }, { y: GROUND, radius: 2400 }));
     // Rolling green foothills before the mountains.
     for (let i = 0; i < 9; i++) {
       const x = -700 + i * 170 + rand() * 60;
-      group.add(mesh(G.sphere, mat({ color: i % 2 ? "#5f9a48" : "#6aa04e", ir: 1.2, uv: 0.1 }), { pos: [x, GROUND - 8, -260 - rand() * 80], scale: [90 + rand() * 50, 34 + rand() * 18, 60] }));
-      group.add(mesh(G.sphere, mat({ color: i % 2 ? "#6aa04e" : "#5f9a48", ir: 1.2, uv: 0.1 }), { pos: [x + 60, GROUND - 8, 300 + rand() * 80], scale: [80 + rand() * 40, 26 + rand() * 14, 60] }));
+      group.add(mesh(G.sphere, mat({ color: i % 2 ? "#5f9a48" : "#6aa04e", ir: 1.2, uv: 0.1, surface: "grass", vary: 0.12 }), { pos: [x, GROUND - 8, -260 - rand() * 80], scale: [90 + rand() * 50, 34 + rand() * 18, 60] }));
+      group.add(mesh(G.sphere, mat({ color: i % 2 ? "#6aa04e" : "#5f9a48", ir: 1.2, uv: 0.1, surface: "grass", vary: 0.12 }), { pos: [x + 60, GROUND - 8, 300 + rand() * 80], scale: [80 + rand() * 40, 26 + rand() * 14, 60] }));
     }
     group.add(box(2 * P + 24, 0.06, 5, { color: "#8a8076", ir: 0.4, surface: "gravel", flashes }, [0, GROUND + 0.03, 0]));
     for (const s of [-0.75, 0.75]) group.add(box(2 * P + 24, 0.12, 0.12, { color: "#c9ccd4", ir: 0.4, uv: 0.4, surface: "metal" }, [0, GROUND + 0.12, s]));
@@ -232,7 +232,7 @@ export default {
 
     // The platform: a wooden edge with a safety line, a stone promenade
     // behind, lamp posts with bunting, benches and flower boxes.
-    const plank = { color: "#b8834f", ir: 0.6, uv: 0.1, planks: true, flashes };
+    const plank = { color: "#b8834f", ir: 0.6, uv: 0.1, planks: true, surface: "wood", flashes };
     group.add(box(2 * P + 16, 0.2, 6, plank, [0, -0.1, EDGE + 3]));
     group.add(box(2 * P + 16, 0.2, 14.5, { color: "#d8cfbf", ir: 0.5, uv: 0.2, surface: "paving", flashes }, [0, -0.1, EDGE + 6 + 7.25]));
     group.add(box(2 * P + 16, -GROUND, 0.4, { color: "#a39a8a", ir: 0.4, surface: "stone" }, [0, GROUND / 2, EDGE - 0.2]));

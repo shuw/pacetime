@@ -21,10 +21,10 @@ export class Gallery {
     const back = origin.z - depth;
     const o = origin;
     // Booth: back wall, side posts, striped canopy, rails for each row.
-    group.add(box(width + 3, 4.4, 0.3, { color: "#2a1a2a", ir: 0.3 }, [o.x, 2.2, back - 0.4]));
-    for (const s of [-1, 1]) group.add(box(0.4, 5, 0.4, { color: "#e8d9b0", ir: 0.5 }, [o.x + s * (width / 2 + 1.3), 2.5, back + depth / 2]));
-    for (let k = 0; k < 10; k++) group.add(box((width + 3) / 10, 0.25, 3, { color: k % 2 ? "#ffffff" : "#d8344a", ir: 0.5 }, [o.x - (width + 3) / 2 + (k + 0.5) * ((width + 3) / 10), 4.6, back + 1]));
-    group.add(box(width + 3, 0.9, 0.3, { color: "#d8344a", ir: 0.5 }, [o.x, 0.45, o.z - 0.4]));
+    group.add(box(width + 3, 4.4, 0.3, { color: "#3a2232", ir: 0.3, surface: "wood" }, [o.x, 2.2, back - 0.4]));
+    for (const s of [-1, 1]) group.add(box(0.4, 5, 0.4, { color: "#e8d9b0", ir: 0.5, surface: "paint" }, [o.x + s * (width / 2 + 1.3), 2.5, back + depth / 2]));
+    for (let k = 0; k < 10; k++) group.add(box((width + 3) / 10, 0.25, 3, { color: k % 2 ? "#ffffff" : "#d8344a", ir: 0.5, surface: "fabric" }, [o.x - (width + 3) / 2 + (k + 0.5) * ((width + 3) / 10), 4.6, back + 1]));
+    group.add(box(width + 3, 0.9, 0.3, { color: "#d8344a", ir: 0.5, surface: "wood" }, [o.x, 0.45, o.z - 0.4]));
     for (let k = 0; k < 14; k++) group.add(mesh(G.ball, mat({ color: k % 2 ? "#ffd38a" : "#fff0d0", emissive: 1, ir: 1, uv: 1 }), { pos: [o.x - width / 2 - 1 + (k * (width + 2)) / 13, 4.4, back + 2.55], scale: 0.1 }));
     group.add(mesh(new THREE.RingGeometry(0.55, 0.65, 40), mat({ color: "#ffb36b", emissive: 1, unlit: true, doubleSided: true }), { pos: [o.x, 0.03, o.z + 1.2], rot: [-Math.PI / 2, 0, 0] }));
 

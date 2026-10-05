@@ -33,7 +33,7 @@ const SIGNAL = { green: 7, yellow: 2, red: 9 };
 
 const NIGHT = {
   env: {
-    night: 1, stars: 0, sun: [0.3, 0.6, -0.7], sunColor: [0.1, 0.1, 0.16], sky: [0.08, 0.07, 0.13], ground: [0.04, 0.03, 0.04],
+    night: 1, stars: 0, sun: [0.3, 0.6, -0.7], sunColor: [0.1, 0.1, 0.16], sky: [0.11, 0.1, 0.16], ground: [0.05, 0.04, 0.05],
     fog: "#1a1222", fogRange: [30, 240], skyTop: "#05040e", skyHorizon: "#2e1834",
   },
   post: { bloom: { strength: 0.6, radius: 0.5, threshold: 0.68 }, vignette: 0.4, warm: 0.02 },
@@ -45,7 +45,7 @@ function signalAt(t) {
   const p = ((t % T) + T) % T;
   return p < SIGNAL.green ? "green" : p < SIGNAL.green + SIGNAL.yellow ? "yellow" : "red";
 }
-const surgeAt = (t) => { const p = ((t % SURGE_EVERY) + SURGE_EVERY) % SURGE_EVERY; return p > SURGE_EVERY - 0.9; };
+const surgeAt = (t) => t > 0 && t % SURGE_EVERY > SURGE_EVERY - 0.9; // none before the clock starts
 
 function signalHead(group, x, z, rotY) {
   const g = new THREE.Group();
@@ -134,7 +134,12 @@ export default {
     const colliders = []; // people and things you can't walk through
 
     // Wet asphalt mirrors every light; sidewalks are paved.
-    group.add(surface({ color: "#1c1d24", water: 0.08, surface: "asphalt", ir: 0.15, uv: 0.1, flashes }, { y: 0, reflective: true }));
+    group.add(surface({ color: "#34353f", surface: "asphalt", rough: 0.4, ir: 0.15, uv: 0.1, flashes }, { y: 0, reflective: true }));
+    // Each lane: a dark oil line down its middle, polished wheel tracks either side.
+    for (const lane of [-5.25, -1.75, 1.75, 5.25]) {
+      group.add(box(0.7, 0.004, 2 * LEN, { color: "#24252c", surface: "asphalt", rough: 0.3, ir: 0.15 }, [lane, 0.003, 0]));
+      for (const s of [-0.85, 0.85]) group.add(box(0.5, 0.004, 2 * LEN, { color: "#3a3b45", surface: "asphalt", rough: 0.2, ir: 0.15 }, [lane + s, 0.003, 0]));
+    }
     const curb = { color: "#4c4d57", ir: 0.3, uv: 0.1, surface: "paving" };
     const edge = { color: "#8a8a92", ir: 0.3, surface: "stone" };
     const outer = AVE + WALK;
@@ -145,8 +150,8 @@ export default {
       group.add(box(140 - outer, 0.2, 0.25, edge, [sx * (outer + (140 - outer) / 2), 0.1, sz * (AVE + 0.12)]));
     }
     // Lane markings: a double yellow line, white dashes between lanes, zebras.
-    const white = { color: "#d8d6cc", emissive: 0.12, ir: 0.3, surface: "paint" };
-    const yellow = { color: "#f2c14e", emissive: 0.15, ir: 0.4, surface: "paint" };
+    const white = { color: "#d8d6cc", emissive: 0.08, ir: 0.3, surface: "markings" };
+    const yellow = { color: "#f2c14e", emissive: 0.1, ir: 0.4, surface: "markings" };
     for (const s of [-0.12, 0.12]) group.add(box(0.1, 0.02, 2 * LEN, yellow, [s, 0.01, 0]));
     for (let z = -LEN; z < LEN; z += 6) if (Math.abs(z + 1.5) > AVE + 4) for (const s of [-3.5, 3.5]) group.add(box(0.12, 0.02, 3, white, [s, 0.011, z + 1.5]));
     for (const s of [-1, 1]) for (let k = -6; k <= 6; k++) {
@@ -208,13 +213,31 @@ export default {
       for (const sx of [-1, 1]) {
         const zz = z + (sx > 0 ? 8 : 0);
         if (Math.abs(zz) < outer) continue; // not in the crossings
-        const p = lampPost(sx * (AVE + 0.6), zz, { h: 6, color: "#ffd9a0", range: 8, power: 0.75 });
+        const p = lampPost(sx * (AVE + 0.6), zz, { h: 6, color: "#ffd9a0", range: 11, power: 0.85 });
         const bulb = p.children[1];
         bulb.material = mat({ color: "#ffd9a0", emissive: 1, ir: 1.2, uv: 0.2, unique: true });
         lights.add(p);
         lamps.push({ bulb, pos: new THREE.Vector3(sx * (AVE + 0.6), 6.2, zz), light: p.userData.lamp });
         colliders.push({ x: sx * (AVE + 0.6), z: zz, r: 0.15 });
       }
+    }
+    // A lamp hung on wires over the middle of the crossroads.
+    {
+      const top = new THREE.Vector3(0, 7.9, 0);
+      lights.add(mesh(new THREE.CylinderGeometry(0.12, 0.55, 0.38, 16), mat({ color: "#2a2c33", surface: "metal" }), { pos: [0, 7.7, 0] }));
+      const bulb = mesh(G.sphere, mat({ color: "#ffe2b0", emissive: 1, ir: 1.2, uv: 0.2, unique: true }), { pos: [0, 7.48, 0], scale: [0.32, 0.14, 0.32] });
+      lights.add(bulb);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const end = new THREE.Vector3(sx * (AVE + 0.8), 6.8, sz * (AVE + 0.8));
+        const wire = mesh(G.cyl, mat({ color: "#15161a" }), { scale: [0.015, top.distanceTo(end), 0.015] });
+        wire.position.copy(top).add(end).multiplyScalar(0.5);
+        wire.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), end.clone().sub(top).normalize());
+        lights.add(wire);
+      }
+      const hung = new THREE.Group();
+      hung.userData.lamp = { pos: new THREE.Vector3(0, 7.3, 0), color: new THREE.Color("#ffd9a0"), range: 15, power: 1 };
+      lights.add(hung);
+      lamps.push({ bulb, pos: new THREE.Vector3(0, 7.5, 0), light: hung.userData.lamp, power: 1 });
     }
     // Strings of bulbs zigzagging over the avenue near the crossroads.
     for (const z of [-40, -26, 24, 40, 56]) lights.add(stringLights([-(outer - 0.3), 8.5, z], [outer - 0.3, 8.5, z + 7], { n: 26, sag: 1.2, colors: ["#ff8fd8", "#ffd166", "#7fe8ff", "#b48cff"], size: 0.09, wire: "#1d1b22" }));
@@ -592,7 +615,7 @@ export default {
         while (strikes.length > 6) strikes.shift();
         bolts.forEach((b) => b.update(eye));
         // The sky lights up when the flash's light reaches you.
-        shared.uSky.value.setRGB(0.08 + glow * 0.9, 0.07 + glow * 0.95, 0.13 + glow * 1.1);
+        shared.uSky.value.setRGB(0.11 + glow * 0.9, 0.1 + glow * 0.95, 0.16 + glow * 1.1);
         shared.uSkyTop.value.set("#05040e").lerp(new THREE.Color("#8a96c8"), glow * 0.6);
         shared.uSkyHorizon.value.set("#2e1834").lerp(new THREE.Color("#b0b8e0"), glow * 0.6);
 
@@ -620,7 +643,7 @@ export default {
         for (const l of lamps) {
           const off = surgeAt(retardedTime(eye, l.pos));
           l.bulb.material.uniforms.uSpec.value.z = off ? 0.03 : 1;
-          l.light.power = off ? 0 : 0.75;
+          l.light.power = off ? 0 : l.power ?? 0.85;
           l.bulb.material.uniforms.uColor.value.set(off ? "#2a2018" : "#ffd9a0");
         }
         const surging = surgeAt(retardedTime(eye, new THREE.Vector3(eye.x, 6, eye.z - 40)));

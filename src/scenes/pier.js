@@ -116,10 +116,10 @@ function coasterCar(color, rand) {
 // A seaside kiosk with a striped awning and a neon sign.
 function kiosk(group, colliders, x, z, rotY, color, sign) {
   const g = new THREE.Group();
-  g.add(box(2.6, 2.2, 2, { color: "#f6efe2", ir: 0.5 }, [0, 1.1, 0]));
+  g.add(box(2.6, 2.2, 2, { color: "#f6efe2", ir: 0.5, surface: "wood" }, [0, 1.1, 0]));
   g.add(box(2.4, 0.9, 0.06, { color: "#2b2340", ir: 0.2 }, [0, 1.35, 1.01]));
-  g.add(box(2.7, 0.12, 2.1, { color, ir: 0.5 }, [0, 2.25, 0]));
-  for (let k = 0; k < 6; k++) g.add(box(0.45, 0.06, 1.2, { color: k % 2 ? "#ffffff" : color, ir: 0.5 }, [-1.125 + k * 0.45, 2.15, 1.45], [-0.35, 0, 0]));
+  g.add(box(2.7, 0.12, 2.1, { color, ir: 0.5, surface: "paint" }, [0, 2.25, 0]));
+  for (let k = 0; k < 6; k++) g.add(box(0.45, 0.06, 1.2, { color: k % 2 ? "#ffffff" : color, ir: 0.5, surface: "fabric" }, [-1.125 + k * 0.45, 2.15, 1.45], [-0.35, 0, 0]));
   const n = neon(sign, { size: 0.13, color: "#fff4c0", switched: true });
   n.position.set(-n.textWidth / 2, 2.45, 0.5);
   g.add(n);
@@ -147,6 +147,28 @@ function bunting(group, a, b, { n = 16, sag = 0.5, colors = BRIGHT } = {}) {
   group.add(mesh(p.geometry(), mat({ color: "#ffffff", vertexColors: true, doubleSided: true, ir: 0.4, uv: 0.4 })));
 }
 
+// A headland across the bay: rock cliffs from the water, grassy rolling tops.
+function headland(x, z, s) {
+  const r = rng(Math.round(x * 3 + z));
+  const geo = new THREE.SphereGeometry(1, 96, 24, 0, Math.PI * 2, 0, Math.PI / 2);
+  const p = geo.attributes.position, col = new Float32Array(p.count * 3);
+  const rock = new THREE.Color("#7a6a66"), grass = new THREE.Color("#5f7a44"), dry = new THREE.Color("#8f8a4e"), c = new THREE.Color();
+  const n = (a, b) => Math.sin(a * 5 + x) * 0.5 + Math.sin(a * 11 - b * 3 + z) * 0.3 + Math.sin(a * 23 + b * 7) * 0.2;
+  for (let i = 0; i < p.count; i++) {
+    const vx = p.getX(i), vy = p.getY(i), vz = p.getZ(i), a = Math.atan2(vz, vx);
+    // Steep at the shore, rounded above, with lumps along the ridge.
+    const lift = Math.pow(vy, 0.55) * (1 + 0.18 * n(a, vy));
+    const out = 1 + 0.06 * n(a * 2, vy) * (1 - vy);
+    p.setXYZ(i, vx * out * s * 2.2, lift * s * 0.5, vz * out * s);
+    const cliff = 1 - THREE.MathUtils.smoothstep(vy, 0.12, 0.32 + 0.08 * n(a * 3, 0));
+    c.copy(grass).lerp(dry, 0.5 + 0.5 * n(a * 4, vy * 6)).lerp(rock, cliff).multiplyScalar(0.9 + 0.2 * r());
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  geo.computeVertexNormals();
+  return mesh(geo, mat({ color: "#ffffff", vertexColors: true, ir: 0.6, surface: "grass", vary: 0.08, rough: 0.9 }), { pos: [x, SEA - 0.5, z] });
+}
+
 /** @type {import("../place.js").PlaceModule} */
 export default {
   id: "pier",
@@ -166,14 +188,14 @@ export default {
     group.add(surface({ color: "#0e3a52", water: true, flashes, ir: 0.15, uv: 0.2 }, { y: SEA, reflective: true }));
 
     // Shore: sand, a promenade, beach huts and a pastel town on the hill.
-    group.add(box(420, 1.6, 40, { color: "#e3c08f", ir: 0.6, uv: 0.2 }, [0, SEA - 0.2, 52]));
-    group.add(box(260, 0.5, 18, { color: "#c9b49a", ir: 0.4, grid: { color: "#b39d82", spacing: 1.5, width: 1, glow: 0 } }, [0, -0.25, 49]));
+    group.add(box(420, 1.6, 40, { color: "#e3c08f", ir: 0.6, uv: 0.2, surface: "sand" }, [0, SEA - 0.2, 52]));
+    group.add(box(260, 0.5, 18, { color: "#c9b49a", ir: 0.4, surface: "paving" }, [0, -0.25, 49]));
     for (let i = 0; i < 24; i++) {
       const x = -118 + i * 10;
       if (Math.abs(x) < 10) continue;
       const c = BRIGHT[i % BRIGHT.length];
       group.add(box(3, 2.6, 2.6, { color: c, ir: 0.5 }, [x, 1.3, 45]));
-      group.add(box(3.4, 0.25, 3, { color: "#ffffff", ir: 0.5 }, [x, 2.7, 45]));
+      group.add(box(3.4, 0.25, 3, { color: "#ffffff", ir: 0.5, surface: "paint" }, [x, 2.7, 45]));
       group.add(box(1, 1.8, 0.05, { color: "#ffffff", ir: 0.5 }, [x, 0.9, 43.68]));
     }
     const facades = ["#f7a8a0", "#9ee0c8", "#ffe08a", "#a8cdf0", "#d4b8f0", "#ffc49a", "#f5f0e6"];
@@ -185,15 +207,15 @@ export default {
     for (let x = -110; x <= 110; x += 12) group.add(lampPost(x, 41, { h: 4.2, switched: true, fancy: true, pole: "#23465a", color: "#ffe6b0" }));
 
     // The pier: honey boards, white rails, dark pilings.
-    const plank = { color: "#b8834f", ir: 0.6, uv: 0.1, planks: true };
+    const plank = { color: "#b8834f", ir: 0.6, uv: 0.1, planks: true, surface: "wood", rough: 0.75 };
     group.add(box(10, 0.5, 160, plank, [0, -0.25, -40]));
     group.add(box(64, 0.5, 52, plank, [0, -0.25, -146]));
-    group.add(box(10.4, 0.18, 160, { color: "#f4f1ea", ir: 0.5 }, [0, -0.45, -40]));
-    group.add(box(64.4, 0.18, 52.4, { color: "#f4f1ea", ir: 0.5 }, [0, -0.45, -146]));
+    group.add(box(10.4, 0.18, 160, { color: "#f4f1ea", ir: 0.5, surface: "paint" }, [0, -0.45, -40]));
+    group.add(box(64.4, 0.18, 52.4, { color: "#f4f1ea", ir: 0.5, surface: "paint" }, [0, -0.45, -146]));
     for (let z = 40; z >= -170; z -= 8) {
-      for (const x of z > -118 ? [-4.6, 4.6] : [-31, -15, 0, 15, 31]) group.add(box(0.5, 6, 0.5, { color: "#3a2c22", ir: 0.4 }, [x, -3.2, z]));
+      for (const x of z > -118 ? [-4.6, 4.6] : [-31, -15, 0, 15, 31]) group.add(box(0.5, 6, 0.5, { color: "#3a2c22", ir: 0.4, surface: "wood" }, [x, -3.2, z]));
     }
-    const rail = { color: "#f6f2ea", ir: 0.5, uv: 0.2 };
+    const rail = { color: "#f6f2ea", ir: 0.5, uv: 0.2, surface: "paint" };
     for (const x of [-4.9, 4.9]) group.add(box(0.12, 0.12, 156, rail, [x, 1.05, -42]));
     for (let z = 36; z > -120; z -= 2) for (const x of [-4.9, 4.9]) group.add(box(0.07, 1.05, 0.07, rail, [x, 0.52, z]));
     for (const [x0, z0, x1, z1] of [[-31, -120, -5, -120], [5, -120, 31, -120], [-31, -172, 31, -172], [-31, -172, -31, -120], [31, -172, 31, -136]]) {
@@ -203,11 +225,11 @@ export default {
 
     // Entrance arch with neon.
     for (const s of [-1, 1]) {
-      group.add(box(1.4, 7, 1.4, { color: "#f6f2ea", ir: 0.5 }, [s * 5.6, 3.5, 37]));
-      group.add(mesh(G.sphere, mat({ color: "#e84a5f", ir: 0.5 }), { pos: [s * 5.6, 7.4, 37], scale: [0.9, 1.1, 0.9] }));
+      group.add(box(1.4, 7, 1.4, { color: "#f6f2ea", ir: 0.5, surface: "plaster" }, [s * 5.6, 3.5, 37]));
+      group.add(mesh(G.sphere, mat({ color: "#e84a5f", ir: 0.5, surface: "paint" }), { pos: [s * 5.6, 7.4, 37], scale: [0.9, 1.1, 0.9] }));
       group.add(mesh(G.cyl, mat({ color: "#ffd166", emissive: 0.6, ir: 0.8 }), { pos: [s * 5.6, 8.7, 37], scale: [0.06, 0.8, 0.06] }));
     }
-    group.add(box(12.6, 1.6, 0.6, { color: "#23465a", ir: 0.4 }, [0, 6.6, 37]));
+    group.add(box(12.6, 1.6, 0.6, { color: "#23465a", ir: 0.4, surface: "paint" }, [0, 6.6, 37]));
     {
       const n = neon("PIER", { size: 0.32, color: "#ff5fa2", switched: true, width: 0.1 });
       n.position.set(-n.textWidth / 2, 6.0, 37.35);
@@ -231,8 +253,8 @@ export default {
     for (let z = 22; z > -112; z -= 18) {
       for (const s of [-1, 1]) {
         const x = s * 4.25;
-        group.add(box(0.5, 0.08, 1.8, { color: "#a0663a", ir: 0.5 }, [x, 0.45, z]));
-        group.add(box(0.08, 0.5, 1.8, { color: "#a0663a", ir: 0.5 }, [x + s * 0.24, 0.75, z]));
+        group.add(box(0.5, 0.08, 1.8, { color: "#a0663a", ir: 0.5, surface: "wood" }, [x, 0.45, z]));
+        group.add(box(0.08, 0.5, 1.8, { color: "#a0663a", ir: 0.5, surface: "wood" }, [x + s * 0.24, 0.75, z]));
         for (const lz of [-0.8, 0.8]) group.add(box(0.5, 0.45, 0.08, { color: "#23465a", ir: 0.3 }, [x, 0.22, z + lz]));
         const n = rand() < 0.45 ? 1 : 0;
         for (let k = 0; k < n; k++) group.add(person(randomLook(rand), { pose: "sit", pos: [x - s * 0.05, 0, z - 0.45 + k * 0.85], rotY: s * Math.PI / 2 }));
@@ -278,8 +300,8 @@ export default {
     // Two rims, well clear of the gondolas that swing between them.
     const RIM_Z = 1.6;
     for (const dz of [-RIM_Z, RIM_Z]) {
-      group.add(mesh(new THREE.TorusGeometry(WHEEL_R, 0.18, 12, 240), spin({ color: "#f6f2ea", ir: 0.4, uv: 0.3 }), { pos: [WHEEL.x, WHEEL.y, WHEEL.z + dz] }));
-      group.add(mesh(new THREE.TorusGeometry(WHEEL_R * 0.55, 0.1, 10, 160), spin({ color: "#f6f2ea", ir: 0.4, uv: 0.3 }), { pos: [WHEEL.x, WHEEL.y, WHEEL.z + dz] }));
+      group.add(mesh(new THREE.TorusGeometry(WHEEL_R, 0.18, 12, 240), spin({ color: "#f6f2ea", ir: 0.4, uv: 0.3, surface: "paint" }), { pos: [WHEEL.x, WHEEL.y, WHEEL.z + dz] }));
+      group.add(mesh(new THREE.TorusGeometry(WHEEL_R * 0.55, 0.1, 10, 160), spin({ color: "#f6f2ea", ir: 0.4, uv: 0.3, surface: "paint" }), { pos: [WHEEL.x, WHEEL.y, WHEEL.z + dz] }));
       for (let i = 0; i < 16; i++) {
         const a = (i / 16) * Math.PI * 2;
         group.add(mesh(G.box, spin({ color: BRIGHT[i % 4], ir: 0.4, uv: 0.3 }), { pos: [WHEEL.x + (Math.cos(a) * WHEEL_R) / 2, WHEEL.y + (Math.sin(a) * WHEEL_R) / 2, WHEEL.z + dz], scale: [WHEEL_R, 0.1, 0.1], rot: [0, 0, a] }));
@@ -335,11 +357,11 @@ export default {
     {
       const hub = new THREE.CylinderGeometry(0.35, 0.35, 5.2, 16, 4);
       hub.rotateX(Math.PI / 2);
-      group.add(mesh(hub, mat({ color: "#d9dde6", ir: 0.4 }), { pos: [WHEEL.x, WHEEL.y, WHEEL.z] }));
+      group.add(mesh(hub, mat({ color: "#d9dde6", ir: 0.4, surface: "metal" }), { pos: [WHEEL.x, WHEEL.y, WHEEL.z] }));
     }
     for (const dz of [-2.4, 2.4]) for (const sx of [-1, 1]) {
       const foot = new THREE.Vector3(WHEEL.x + sx * 7.5, 0, WHEEL.z + dz);
-      const leg = mesh(G.box, mat({ color: "#e6e2da", ir: 0.4 }), { scale: [0.4, foot.distanceTo(WHEEL), 0.4] });
+      const leg = mesh(G.box, mat({ color: "#e6e2da", ir: 0.4, surface: "paint" }), { scale: [0.4, foot.distanceTo(WHEEL), 0.4] });
       leg.position.copy(foot).add(WHEEL).multiplyScalar(0.5);
       leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), WHEEL.clone().sub(foot).normalize());
       group.add(leg);
@@ -383,7 +405,7 @@ export default {
     // Roller coaster.
     const curve = new THREE.CatmullRomCurve3(TRACK.map((q) => new THREE.Vector3(...q)), true, "catmullrom", 0.4);
     const prof = coasterProfile(curve);
-    const railMat = mat({ color: "#2ec4b6", ir: 0.4, uv: 0.4 });
+    const railMat = mat({ color: "#2ec4b6", ir: 0.4, uv: 0.4, surface: "metal" });
     for (const off of [-0.55, 0.55]) {
       const pts = [];
       for (let i = 0; i <= 600; i++) {
@@ -396,13 +418,13 @@ export default {
     for (let i = 0; i < 120; i++) {
       const u = i / 120, q = curve.getPointAt(u);
       const ground = q.z < -170 ? SEA : 0;
-      group.add(box(0.2, q.y - ground, 0.2, { color: "#f6f2ea", ir: 0.4 }, [q.x, (q.y + ground) / 2, q.z]));
+      group.add(box(0.2, q.y - ground, 0.2, { color: "#f6f2ea", ir: 0.4, surface: "paint" }, [q.x, (q.y + ground) / 2, q.z]));
       if (i % 2 === 0) group.add(box(1.3, 0.12, 0.2, { color: "#ff4d6d", ir: 0.4 }, [q.x, q.y - 0.2, q.z]));
       if (i % 3 === 0) group.add(mesh(G.ball, mat({ color: i % 2 ? "#ff9a6b" : "#fff0b0", emissive: 1, ir: 1, uv: 1.5, switched: true }), { pos: [q.x, q.y - 0.3, q.z], scale: 0.09 }));
     }
-    group.add(box(4, 0.3, 14, { color: "#b07a4a", ir: 0.5 }, [24.4, 0.6, -131]));
+    group.add(box(4, 0.3, 14, { color: "#b07a4a", ir: 0.5, surface: "wood" }, [24.4, 0.6, -131]));
     for (const dz of [-6.5, 6.5]) group.add(box(0.2, 3, 0.2, { color: "#f6f2ea" }, [26.2, 2.1, -131 + dz]));
-    group.add(box(4.4, 0.2, 14.4, { color: "#ff4d6d", ir: 0.5 }, [24.4, 3.6, -131]));
+    group.add(box(4.4, 0.2, 14.4, { color: "#ff4d6d", ir: 0.5, surface: "paint" }, [24.4, 3.6, -131]));
     group.add(box(0.12, 0.12, 14, { color: "#ffd38a", emissive: 1, ir: 1, switched: true }, [26.4, 3.4, -131]));
     for (let k = 0; k < 2; k++) group.add(person(randomLook(rand), { pos: [27.3, 0, -127 - k * 0.9], rotY: Math.PI }));
     const cars = ["#ffbe0b", "#3a86ff", "#8338ec"].map((c) => { const car = coasterCar(c, rand); group.add(car); return car; });
@@ -419,9 +441,9 @@ export default {
     const carVel = (k, t) => curve.getTangentAt(carS(k)(t) / prof.L).multiplyScalar(coaster.k * prof.speed(carS(k)(t)) * (((ct(t) % prof.T) + prof.T) % prof.T > 4 ? 1 : 0));
 
     // Lighthouse on a rock, its beam turning through the evening mist.
-    group.add(mesh(new THREE.DodecahedronGeometry(9, 0), mat({ color: "#4a4650", ir: 0.4 }), { pos: [LIGHTHOUSE.x, SEA, LIGHTHOUSE.z], scale: [1.4, 0.6, 1.4] }));
+    group.add(mesh(new THREE.DodecahedronGeometry(9, 0), mat({ color: "#5a5660", ir: 0.4, surface: "rock" }), { pos: [LIGHTHOUSE.x, SEA, LIGHTHOUSE.z], scale: [1.4, 0.6, 1.4] }));
     for (let i = 0; i < 6; i++) {
-      group.add(mesh(G.cyl, mat({ color: i % 2 ? "#d63a3a" : "#f6f2ea", ir: 0.5 }), { pos: [LIGHTHOUSE.x, 1 + i * 3.2 + 1.6, LIGHTHOUSE.z], scale: [2.4 - i * 0.18, 3.2, 2.4 - i * 0.18] }));
+      group.add(mesh(G.cyl, mat({ color: i % 2 ? "#d63a3a" : "#f6f2ea", ir: 0.5, surface: "plaster" }), { pos: [LIGHTHOUSE.x, 1 + i * 3.2 + 1.6, LIGHTHOUSE.z], scale: [2.4 - i * 0.18, 3.2, 2.4 - i * 0.18] }));
     }
     group.add(mesh(G.cyl, mat({ color: "#22252c" }), { pos: [LIGHTHOUSE.x, LAMP_Y - 1.2, LIGHTHOUSE.z], scale: [2.2, 0.3, 2.2] }));
     const lampMat = mat({ color: "#fff3c4", emissive: 1, ir: 1.2, uv: 0.6, unique: true });
@@ -489,7 +511,7 @@ export default {
     for (let i = 0; i < 4; i++) {
       const dir = i % 2 ? -1 : 1;
       const m = new Mover(new THREE.Vector3(dir * (0.12 + 0.05 * i) * C, 0, 0));
-      m.add(G.box, { color: "#f4f1ea", ir: 0.5 }, { pos: [0, SEA + 0.3, 0], scale: [5, 0.8, 1.8] });
+      m.add(G.box, { color: "#f4f1ea", ir: 0.5, surface: "paint" }, { pos: [0, SEA + 0.3, 0], scale: [5, 0.8, 1.8] });
       m.add(G.box, { color: BRIGHT[i + 1], ir: 0.5 }, { pos: [0, SEA + 0.75, 0], scale: [5.05, 0.15, 1.85] });
       m.add(G.cyl, { color: "#e8e4dc", ir: 0.4 }, { pos: [0.3, SEA + 3.2, 0], scale: [0.06, 5, 0.06] });
       const sail = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0.35, SEA + 1.2, 0), new THREE.Vector3(0.35, SEA + 5.5, 0), new THREE.Vector3(2.6 * dir, SEA + 1.2, 0)]);
@@ -505,15 +527,16 @@ export default {
     }
 
     // Fireworks barge, and distant headlands with their own village lights.
-    group.add(box(10, 1, 6, { color: "#2b2d33", ir: 0.3 }, [BARGE.x, SEA + 0.4, BARGE.z]));
+    group.add(box(10, 1, 6, { color: "#2b2d33", ir: 0.3, surface: "metal" }, [BARGE.x, SEA + 0.4, BARGE.z]));
     const fw = new Fireworks(group, flashes, { c: C });
     const log = new EventLog();
     let nextShell = 0, nextTwin = 0;
     const twins = [];
     for (const [x, z, s] of [[-260, -420, 60], [-120, -520, 40], [240, -460, 70], [330, -300, 45]]) {
-      group.add(mesh(new THREE.SphereGeometry(1, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat({ color: "#6a5068", ir: 0.6 }), { pos: [x, SEA, z], scale: [s * 2.2, s * 0.5, s] }));
+      group.add(headland(x, z, s));
       for (let k = 0; k < 8; k++) {
-        group.add(mesh(G.ball, mat({ color: "#ffd59a", emissive: 1, ir: 1, switched: true }), { pos: [x + (rand() - 0.5) * s * 2.6, SEA + 1 + rand() * 4, z + s * 0.75 + rand() * 4], scale: 0.5 }));
+        const f = (rand() - 0.5) * 1.3; // along the shore, as a fraction of the half-width
+        group.add(mesh(G.ball, mat({ color: "#ffd59a", emissive: 1, ir: 1, switched: true }), { pos: [x + f * s * 2.2, SEA + 1 + rand() * 3, z + s * Math.sqrt(1 - f * f) * 1.1 + 1], scale: 0.5 }));
       }
     }
 

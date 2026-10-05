@@ -624,11 +624,21 @@ void main() {
     {
       float big = fbm2(sq * 0.05), mid = fbm2(sq * 0.4), blade = vnoise(sq * 11.0);
       base *= 0.72 + 0.45 * mid + 0.14 * (blade - 0.5) * fine;
+      base *= 1.0 + 0.22 * (hash12(floor(sq * 32.0)) - 0.5) * (1.0 - smoothstep(0.008, 0.025, px)); // blades, close up
       base = mix(base, base * vec3(1.25, 1.1, 0.55), smoothstep(0.5, 0.75, big) * 0.75);
       base = mix(base, base * vec3(0.7, 0.92, 0.72), smoothstep(0.45, 0.2, big) * 0.6);
+      // Patches a few metres across, sun-bleached or lush.
+      float patchy = fbm2(sq * 0.22 + 4.0);
+      base = mix(base, base * vec3(1.22, 1.16, 0.62), smoothstep(0.55, 0.7, patchy) * 0.8);
+      base = mix(base, base * vec3(0.62, 0.82, 0.6), smoothstep(0.42, 0.28, patchy) * 0.7);
+      // Clumps a stride or so across, fading to their average far off.
+      base *= 0.8 + 0.4 * mix(0.5, fbm2(sq * 1.6), 1.0 - smoothstep(0.08, 0.5, px));
+      // Drifts of wildflowers that tint the meadow from afar.
+      float bloom = smoothstep(0.6, 0.7, fbm2(sq * 0.11 + 9.0));
+      base = mix(base, base * vec3(1.18, 1.12, 1.05) + vec3(0.05, 0.04, 0.03), bloom * 0.6);
       // Tiny flowers, close by.
       vec2 fc = floor(sq * 4.0);
-      float flower = step(0.985, hash12(fc)) * (1.0 - smoothstep(0.0, 0.18, length(fract(sq * 4.0) - 0.5))) * fine;
+      float flower = step(0.985 - 0.04 * bloom, hash12(fc)) * (1.0 - smoothstep(0.0, 0.18, length(fract(sq * 4.0) - 0.5))) * fine;
       base = mix(base, hash12(fc + 1.0) > 0.5 ? vec3(1.0, 0.95, 0.6) : vec3(1.0, 1.0, 1.0), flower * 0.9);
       hgt = mid + blade * 0.5 * fine; bumpK = 0.5;
     }
@@ -723,16 +733,32 @@ void main() {
     #ifdef SURF_PLASTER
     {
       base *= 0.92 + 0.12 * fbm2(sq * 0.6) + 0.05 * (vnoise(sq * 14.0) - 0.5) * fine;
+      base *= 1.0 - 0.14 * smoothstep(0.45, 0.8, fbm2(vec2(sq.x * 1.5, sq.y * 0.12))) * step(abs(sN.y), 0.5); // rain streaks
       hgt = vnoise(sq * 14.0); bumpK = 0.2 * fine;
     }
     #endif
     #ifdef SURF_ASPHALT
     {
-      base *= 0.84 + 0.26 * fbm2(sq * 0.11) + 0.14 * (hash12(floor(sq * 45.0)) - 0.5) * fine;
-      float puddle = smoothstep(0.6, 0.68, fbm2(sq * 0.08 + 5.0));
-      base *= 1.0 - 0.4 * puddle;
-      rough = mix(rough, 0.06, puddle);
-      hgt = hash12(floor(sq * 45.0)) * (1.0 - puddle); bumpK = 0.3 * fine;
+      float mid = fbm2(sq * 0.15), grain = hash12(floor(sq * 45.0));
+      base *= 0.78 + 0.4 * mid + 0.16 * (grain - 0.5) * fine;
+      // Patched repairs, a shade lighter or darker than the road round them.
+      vec2 pc = floor(sq / vec2(2.6, 6.0));
+      base *= mix(1.0, 0.72 + 0.5 * hash12(pc + 9.1), step(0.86, hash12(pc + 4.2)) * CELLS(2.0));
+      // Hairline cracks.
+      float cr = abs(fbm2(sq * 0.6 + 3.3) - 0.5);
+      base *= 1.0 - 0.55 * (1.0 - smoothstep(0.004, 0.014, cr)) * (1.0 - smoothstep(0.01, 0.04, px));
+      // Rain pooled in the dips: darker, and glassy enough to catch the lamps.
+      float puddle = smoothstep(0.56, 0.62, fbm2(sq * 0.09 + 5.0));
+      base *= 1.0 - 0.45 * puddle;
+      rough = mix(rough, 0.04, puddle);
+      hgt = grain * (1.0 - puddle) * 0.6; bumpK = 0.35 * fine;
+    }
+    #endif
+    #ifdef SURF_MARKINGS
+    {
+      // Road paint, scuffed and chipped back to the asphalt.
+      float wear = fbm2(sq * 2.2) + 0.3 * (vnoise(sq * 14.0) - 0.5) * fine;
+      base = mix(vec3(0.07, 0.07, 0.08), base * (0.88 + 0.12 * vnoise(sq * 3.0)), smoothstep(0.18, 0.28, wear));
     }
     #endif
     #ifdef SURF_WOOD
@@ -858,18 +884,38 @@ void main() {
     }
   #endif
   #ifdef WINDOWS
-    // A grid of windows on the wall, some lit, some dark.
+    // A facade: storeys of framed windows with sills, some rooms lit, the rest
+    // dark glass. Lit windows spill a little light onto their frames and wall.
     {
       vec3 Ng = normalize(vNormalW); // the wall's own facing, not its bumpy surface
+      float wall = step(abs(Ng.y), 0.5);
       vec2 wc = vec2(dot(vWorld.xz, vec2(abs(Ng.z), abs(Ng.x))), vWorld.y) / uWindows.xy;
-      vec2 cell = floor(wc);
-      vec2 f = fract(wc);
-      float inside = step(0.18, f.x) * step(f.x, 0.82) * step(0.22, f.y) * step(f.y, 0.78) * step(0.5, abs(Ng.y) < 0.5 ? 1.0 : 0.0);
+      vec2 cell = floor(wc), f = fract(wc);
+      float sharp = 1.0 - smoothstep(0.015, 0.06, max(length(fwidth(wc)), 1e-5)); // trim, close up
+      float inside = step(0.18, f.x) * step(f.x, 0.82) * step(0.22, f.y) * step(f.y, 0.78) * wall;
+      float outer = step(0.15, f.x) * step(f.x, 0.85) * step(0.19, f.y) * step(f.y, 0.81) * wall;
+      float frame = (outer - inside) * sharp;
+      float sill = step(0.13, f.x) * step(f.x, 0.87) * step(0.15, f.y) * step(f.y, 0.19) * wall * sharp;
+      float under = step(0.15, f.x) * step(f.x, 0.85) * smoothstep(0.15, 0.1, f.y) * step(0.06, f.y) * wall * sharp;
+      float ledge = (1.0 - step(0.045, f.y)) * wall;
       float h = fract(sin(dot(cell + uWindows.w, vec2(41.3, 289.1))) * 43758.5);
-      float lit = step(1.0 - uWindows.z, h) * inside;
-      rgb = mix(rgb, uWindowColor * (0.25 + 0.45 * fract(h * 7.0)), lit);
-      rgb = mix(rgb, rgb * 0.35, inside * (1.0 - lit));
-      ir += lit * 0.3;
+      float lit = step(1.0 - uWindows.z, h);
+      rgb *= (1.0 + 0.22 * ledge + 0.3 * frame + 0.45 * sill) * (1.0 - 0.3 * under);
+      // Glow from a lit room on its frame, its sill and the wall around it.
+      float d = max(abs(f.x - 0.5) - 0.32, abs(f.y - 0.5) - 0.28);
+      rgb += uWindowColor * lit * (0.18 * (frame + 1.5 * sill) + 0.07 * exp(-max(d, 0.0) * 22.0) * (1.0 - inside)) * wall;
+      // The room: brighter toward its ceiling; blinds, curtains, a window cross.
+      float y = (f.y - 0.22) / 0.56;
+      vec3 room = uWindowColor * (0.25 + 0.45 * fract(h * 7.0)) * (0.7 + 0.4 * y);
+      float blind = step(0.6, fract(h * 13.0)) * step(1.0 - (0.3 + 0.5 * fract(h * 29.0)), y);
+      room *= 1.0 - blind * (0.3 + 0.2 * step(0.5, fract(y * 16.0)) * sharp);
+      float curtain = step(fract(h * 13.0), 0.6) * step(0.5, fract(h * 17.0)) * (1.0 - smoothstep(0.0, 0.09, min(f.x - 0.18, 0.82 - f.x)));
+      room = mix(room, room * vec3(0.95, 0.6, 0.55), curtain);
+      // Unlit: dark glass with the sky in it, and now and then a dim lamp or a TV.
+      vec3 glass = rgb * 0.25 + mix(uSky, uSkyTop, y) * 0.3 + uWindowColor * 0.06 * step(0.88, fract(h * 31.0)) * vec3(0.7, 0.8, 1.2);
+      float mull = clamp((1.0 - smoothstep(0.0, 0.01, abs(f.x - 0.5))) + (1.0 - smoothstep(0.0, 0.01, abs(f.y - 0.62))), 0.0, 1.0) * sharp;
+      rgb = mix(rgb, mix(glass, room, lit) * (1.0 - 0.7 * mull), inside);
+      ir += lit * inside * 0.3;
     }
   #endif
 
@@ -1110,7 +1156,7 @@ const idOf = (o) => { if (!ids.has(o)) ids.set(o, nextId++); return ids.get(o); 
 // Each surface's default roughness and large-scale variation.
 const FINISH = {
   grass: [0.95, 0.04], paving: [0.8, 0.04], cobble: [0.65, 0.03], brick: [0.85, 0.05], stone: [0.85, 0.05],
-  rock: [0.85, 0.08], gravel: [0.95, 0.03], tiles: [0.6, 0.05], plaster: [0.9, 0.05], asphalt: [0.5, 0.04], wood: [0.7, 0.05], metal: [0.32, 0.03],
+  rock: [0.85, 0.08], gravel: [0.95, 0.03], tiles: [0.6, 0.05], plaster: [0.9, 0.05], asphalt: [0.5, 0.04], markings: [0.6, 0.02], wood: [0.7, 0.05], metal: [0.32, 0.03],
   paint: [0.32, 0.02], fabric: [1, 0.05], sand: [0.95, 0.06],
 };
 
