@@ -4,12 +4,25 @@ import { chromium } from "playwright-core";
 export const URL = process.env.URL ?? "http://localhost:5180/";
 let shotCount = 0;
 
-export async function open({ hash = "", size = [1440, 860], gpu = true } = {}) {
+// The dev server's log, where build errors show up.
+export const DEV_LOG = process.env.PACETIME_LOG ?? "/tmp/pacetime-dev.log";
+
+// fixed: the same random numbers and the same date on every run, for
+// screenshots that can be compared.
+export async function open({ hash = "", size = [1440, 860], gpu = true, fixed = false } = {}) {
   const browser = await chromium.launch({
     channel: "chrome",
     args: gpu ? ["--use-angle=metal", "--enable-gpu", "--autoplay-policy=no-user-gesture-required"] : [],
   });
   const page = await browser.newPage({ viewport: { width: size[0], height: size[1] } });
+  if (fixed) {
+    await page.addInitScript(() => {
+      let s = 12345;
+      Math.random = () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+      const day = Date.UTC(2026, 9, 4, 12);
+      Date.now = () => day;
+    });
+  }
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -18,10 +31,11 @@ export async function open({ hash = "", size = [1440, 860], gpu = true } = {}) {
     // With a place in the address, wait for it; otherwise the title screen is enough.
     await page.waitForFunction((h) => (h ? window.pacetime?.instance : window.pacetime), hash, { timeout: 15000 });
   } catch (e) {
-    // Bun serves its error page when the build fails; it's a script, so ask
-    // the dev server log why instead.
-    const { execSync } = await import("node:child_process");
-    const log = execSync("tail -8 /tmp/pacetime-dev.log 2>/dev/null || true").toString().replace(new RegExp(String.fromCharCode(27) + "\\[[0-9;]*m", "g"), "");
+    // Bun serves its error page when the build fails; it's a script, so read
+    // the dev server log for why instead.
+    const { readFileSync } = await import("node:fs");
+    let log = "";
+    try { log = readFileSync(DEV_LOG, "utf8").split("\n").slice(-8).join("\n").replace(new RegExp(String.fromCharCode(27) + "\\[[0-9;]*m", "g"), ""); } catch {}
     console.error("Page didn't start. Build error?\n" + log);
     throw e;
   }

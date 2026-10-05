@@ -237,7 +237,10 @@ export function fps() {
 const MAX_RATIO = Math.min(devicePixelRatio, 2);
 let ratio = MAX_RATIO, slowFor = 0, fastFor = 0;
 export const pixelRatio = () => ratio;
+let adaptive = true;
+export function setAdaptiveResolution(on) { adaptive = on; }
 export function adaptResolution(dt) {
+  if (!adaptive) return;
   const f = frameTimes.length > 31 ? fps() : 0;
   if (f && f < 42) { slowFor += dt; fastFor = 0; }
   else if (f > 57) { fastFor += dt; slowFor = 0; }

@@ -9,7 +9,7 @@ import { motion } from "./motion.js";
 import { Minimap } from "./minimap.js";
 import { Carried, Sparkler } from "./toys.js";
 import { isMuted, setAmbience, setListener, setMuted, sfx, unlockAudio, updateAudio } from "./audio.js";
-import { adaptExposure, adaptResolution, applyEnv, applyPost, bloom, camera, draw, fps, frameTick, pickLamps, pixelRatio, renderer, root, sky } from "./render.js";
+import { adaptExposure, adaptResolution, applyEnv, applyPost, bloom, camera, draw, fps, frameTick, pickLamps, pixelRatio, renderer, root, setAdaptiveResolution, sky } from "./render.js";
 import { linkFor, linkKeeper, readLink } from "./link.js";
 import { TitleScreen } from "./title.js";
 import railway from "./scenes/railway.js";
@@ -391,6 +391,7 @@ window.pacetime = {
   get pixelRatio() { return pixelRatio(); },
   get warp() { return warp; },
   set warp(k) { warp = Math.max(0, Math.min(k, 40)); },
+  set adaptiveResolution(on) { setAdaptiveResolution(on); },
   // Jump ahead: run the world for `seconds` of your own time without drawing.
   advance(seconds) {
     const steps = Math.ceil(seconds / 0.05);

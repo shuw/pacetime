@@ -4,8 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "bun scripts/serve.ts",
-    "build": "rm -rf dist && bun build ./index.html --outdir dist --minify",
+    "check": "eslint . && bun test",
     "test": "node scripts/test.mjs",
+    "build": "rm -rf dist && bun build ./index.html --outdir dist --minify",
     "shot": "node scripts/shot.mjs"
   },
   "dependencies": {

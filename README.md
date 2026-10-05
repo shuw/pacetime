@@ -72,15 +72,18 @@ Needs [Bun](https://bun.sh) and, for the browser tests, Google Chrome.
 ```sh
 bun install
 bun run dev        # http://localhost:5180, rebuilds on change (refresh to see it)
-bun run test       # every place's goals played through in Chrome, about 35 seconds
+bun run check      # lint and unit tests, in a few seconds
+bun run test       # the browser tests, about 35 seconds
 bun run build      # a static site in dist/
 ```
 
+- `bun run test` starts the dev server if it isn't running. It checks the controls and links, plays every place's goals with the world fast-forwarded, and compares a set of views against the reference screenshots in `tests/looks/`. After a deliberate change to how things look, `bun run test --update` saves new ones.
 - `bun run shot '#city@1,14,0,0'` saves a screenshot of any spot to `shots/`. Add `--advance 30` to fast-forward, `--js '…'` to run code first, `--hud` to keep the interface.
 - `node scripts/perf.mjs` prints frame rate and draw calls per place.
 - `window.pacetime` in the browser console exposes the player, world, effects, `advance(seconds)` and `warp`.
+- Each place is a module in `src/scenes/`; `src/place.js` describes everything a place can provide.
 
-Pushing to `main` deploys to GitHub Pages.
+Pushing to `main` runs the lint and unit tests, then deploys to GitHub Pages.
 
 ## Prior art
 
