@@ -85,14 +85,14 @@ export function taxi(m, { body = "#f2c230", heading = 0 } = {}) {
     const s = heading % Math.PI === 0 ? scale : [scale[2], scale[1], scale[0]];
     return m.add(G.box, opts, { pos: [x, pos[1], z], scale: s });
   };
-  add([1.9, 0.8, 4.4], [0, 0.7, 0], { color: body, ir: 0.5, uv: 0.15 });
+  add([1.9, 0.8, 4.4], [0, 0.7, 0], { color: body, ir: 0.5, uv: 0.15, surface: "paint" });
   add([1.7, 0.65, 2.3], [0, 1.4, 0.2], { color: "#20232b", ir: 0.2, uv: 0.2 });
-  add([1.72, 0.45, 2.2], [0, 1.42, 0.2], { color: "#ffe2a0", emissive: 0.35, ir: 0.4 });
-  add([0.9, 0.25, 0.4], [0, 1.85, 0.2], { color: "#fff3b0", emissive: 1, ir: 1, uv: 0.3 });
-  add([0.4, 0.25, 0.08], [-0.65, 0.75, -2.22], { color: "#d8d8d0", emissive: 1, ir: 1.2, uv: 0.5 });
-  add([0.4, 0.25, 0.08], [0.65, 0.75, -2.22], { color: "#d8d8d0", emissive: 1, ir: 1.2, uv: 0.5 });
-  add([0.5, 0.2, 0.08], [-0.6, 0.8, 2.22], { color: "#ff2020", emissive: 1, ir: 1.4 });
-  add([0.5, 0.2, 0.08], [0.6, 0.8, 2.22], { color: "#ff2020", emissive: 1, ir: 1.4 });
+  add([1.72, 0.45, 2.2], [0, 1.42, 0.2], { color: "#ffe2a0", emissive: 0.22, ir: 0.4 });
+  add([0.9, 0.25, 0.4], [0, 1.85, 0.2], { color: "#fff3b0", emissive: 0.75, ir: 1, uv: 0.3 });
+  add([0.4, 0.22, 0.08], [-0.65, 0.75, -2.22], { color: "#c8c8c0", emissive: 0.6, ir: 1.2, uv: 0.5 });
+  add([0.4, 0.22, 0.08], [0.65, 0.75, -2.22], { color: "#c8c8c0", emissive: 0.6, ir: 1.2, uv: 0.5 });
+  add([0.5, 0.2, 0.08], [-0.6, 0.8, 2.22], { color: "#ff2020", emissive: 0.8, ir: 1.4 });
+  add([0.5, 0.2, 0.08], [0.6, 0.8, 2.22], { color: "#ff2020", emissive: 0.8, ir: 1.4 });
   for (const [x, z] of [[-0.9, -1.4], [0.9, -1.4], [-0.9, 1.4], [0.9, 1.4]]) add([0.3, 0.6, 0.6], [x, 0.3, z], { color: "#111114", ir: 0.1 });
   return m;
 }

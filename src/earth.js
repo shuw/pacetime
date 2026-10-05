@@ -50,7 +50,7 @@ export function reflection(obj, y0 = 0, strength = 0.45, { stretch = 1 } = {}) {
   obj.traverse((m) => {
     if (!m.isMesh || !m.material.userData?.opts) return;
     const o = m.material.userData.opts;
-    if ((o.emissive ?? 0) < 0.5 && !o.reflect) return;
+    if (o.ghost || ((o.emissive ?? 0) < 0.5 && !o.reflect)) return; // never the hidden x-ray copies
     let r = null;
     if (o.rotor) {
       if (!rotors.has(o.rotor.uRotCenter)) {
@@ -118,8 +118,8 @@ export function stringLights(a, b, { n = 14, sag = 0.8, colors = ["#ffd38a", "#f
   return g;
 }
 
-export function building(x, z, w, d, h, { color = "#2a2d36", lit = 0.45, window = "#ffcf8a", seed = 1, cell = [2.2, 3] } = {}) {
-  return box(w, h, d, { color, ir: 0.2, uv: 0.05, windows: { size: cell, lit, color: window, seed } }, [x, h / 2, z]);
+export function building(x, z, w, d, h, { color = "#2a2d36", lit = 0.45, window = "#ffcf8a", seed = 1, cell = [2.2, 3], surface = null } = {}) {
+  return box(w, h, d, { color, ir: 0.2, uv: 0.05, surface, windows: { size: cell, lit, color: window, seed } }, [x, h / 2, z]);
 }
 
 // Neon tubes spelling a word, from a small stroke font on a 2×4 grid.

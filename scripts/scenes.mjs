@@ -13,19 +13,29 @@ const run = async (id, fn) => {
 };
 
 await run("city", async () => {
-  await t.place(0, 0, 0);
-  for (let i = 0; i < 40 && !(await t.q(() => slowlight.instance.goals[0].done)); i++) await t.advance(0.5);
-  await t.place(1, 40, 0);
-  for (let i = 0; i < 60 && !(await t.q(() => slowlight.instance.goals[1].done)); i++) await t.advance(0.5);
-  // Face south... watch taxis coming north toward us on the east lane.
-  await t.place(1.5, -20, Math.PI);
-  // Keep looking at the nearest taxi we can see.
+  const AVE = 7, ZEBRA = AVE + 1.8;
+  // Get bonked: step off the west curb into the fast lane and wait there.
+  await t.place(-(AVE + 0.6), ZEBRA, -Math.PI / 2);
+  await t.advance(0.1);
+  await t.place(-1.75, ZEBRA, Math.PI / 2 + 0.3, 0.05);
+  for (let i = 0; i < 1500 && !(await t.q(() => slowlight.instance.goals[0].done)); i++) await t.advance(0.05);
+  console.log("  bonked:", await t.q(() => slowlight.instance.note), await t.snap("city-bonk"));
+  // Cross on the guard's GO.
+  await t.advance(1);
+  await t.place(-(AVE + 0.6), ZEBRA, -Math.PI / 2);
+  for (let i = 0; i < 1200 && !(await t.q(() => slowlight.instance.guardGo)); i++) await t.advance(0.05);
+  await t.page.keyboard.down("w");
+  for (let i = 0; i < 80 && !(await t.q(() => slowlight.instance.goals[1].done)); i++) await t.advance(0.05);
+  await t.page.keyboard.up("w");
+  console.log("  crossed:", await t.q(() => ({ bonks: slowlight.instance.bonks, crossings: slowlight.instance.crossings })), await t.snap("city-crossed"));
+  // From the east sidewalk, watch a fast taxi come north at you, then leave.
+  await t.place(AVE + 1.5, -20, Math.PI);
   let shotNear = false;
-  for (let i = 0; i < 400 && !(await t.q(() => slowlight.instance.goals[3].done)); i++) {
+  for (let i = 0; i < 600 && !(await t.q(() => slowlight.instance.goals[2].done)); i++) {
     await t.advance(0.1);
     const d = await t.q(() => {
       const eye = slowlight.player.eye;
-      const near = slowlight.instance.cabs.map((c) => ({ c, s: c.m.seen(eye) })).filter((x) => x.s.pos.distanceTo(eye) > 6).sort((a, b) => a.s.pos.distanceTo(eye) - b.s.pos.distanceTo(eye))[0];
+      const near = slowlight.instance.cabs.filter((c) => c.lane.beta > 0.8).map((c) => ({ c, s: c.m.seen(eye) })).filter((x) => x.s.pos.distanceTo(eye) > 6).sort((a, b) => a.s.pos.distanceTo(eye) - b.s.pos.distanceTo(eye))[0];
       const p = near.s.pos;
       slowlight.player.yaw = Math.atan2(-(p.x - eye.x), -(p.z - eye.z));
       slowlight.player.pitch = -0.05;
@@ -34,24 +44,28 @@ await run("city", async () => {
     });
     if (!shotNear && d > 15 && d < 25) { shotNear = true; console.log("  oncoming taxi:", await t.snap("city-oncoming")); }
   }
-  // The secret billboard: walk at it, then walk away looking back.
-  await t.place(1, -5, 0, 0.25);
+  // Signals from the centre line, then the power flicker from the sidewalk.
+  await t.place(0, 0, 0, 0.1);
+  for (let i = 0; i < 40 && !(await t.q(() => slowlight.instance.goals[3].done)); i++) await t.advance(0.5);
+  await t.place(-(AVE + 2), 40, 0);
+  for (let i = 0; i < 60 && !(await t.q(() => slowlight.instance.goals[4].done)); i++) await t.advance(0.5);
+  // The secret billboard: run at it along the centre line, then away looking back.
+  await t.place(0, -5, 0, 0.25);
   await t.page.keyboard.down("w"); await t.advance(1); await t.page.keyboard.up("w");
-  await t.place(1, -18, Math.PI, 0);
+  await t.place(0, -18, Math.PI, 0);
   await t.page.keyboard.down("w"); await t.page.keyboard.down("b");
   await t.advance(0.6);
   await t.q(() => { slowlight.player.pitch = -0.35; });
   await t.advance(0.6);
   await t.page.keyboard.up("w"); await t.page.keyboard.up("b");
-  await t.place(0, 0, 0, 0.3);
+  // Thunder, then the taxi ride.
+  await t.place(-(AVE + 2), 14, 0, 0.35);
   for (let i = 0; i < 120 && !(await t.q(() => slowlight.instance.goals[5].done)); i++) await t.advance(0.5);
-  await t.place(-AVE_FIX(), 12, 0);
+  await t.place(-(AVE + 0.6), 14, 0);
   await t.q(() => slowlight.act());
   await t.advance(4);
   console.log("  taxi ride:", await t.q(() => !!slowlight.player.vehicle), await t.snap("city-ride"));
 });
-
-function AVE_FIX() { return 7.6; }
 
 await run("pier", async () => {
   // Watch the lights come on, looking down the pier.

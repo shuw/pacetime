@@ -618,6 +618,8 @@ void main() {
     // How many metres one pixel covers here: fine detail fades out with distance.
     float px = max(length(fwidth(sq)), 1e-5);
     float fine = 1.0 - smoothstep(0.02, 0.08, px);
+    // Cell-by-cell variation (bricks, stones) fades out before it can shimmer.
+    #define CELLS(size) (1.0 - smoothstep(0.12 * (size), 0.4 * (size), px))
     #ifdef SURF_GRASS
     {
       float big = fbm2(sq * 0.05), mid = fbm2(sq * 0.4), blade = vnoise(sq * 11.0);
@@ -639,8 +641,9 @@ void main() {
       g.x += hash12(vec2(floor(g.y), 3.0)) ;
       vec2 cell = floor(g), f = fract(g);
       float h = hash12(cell);
-      base *= 0.84 + 0.26 * h + 0.1 * (fbm2(sq * 2.5) - 0.5) + 0.05 * (vnoise(sq * 25.0) - 0.5) * fine;
-      base = mix(base, base * vec3(1.06, 1.0, 0.9), step(0.7, hash12(cell + 8.0))); // a few warmer stones
+      float cv = CELLS(0.6);
+      base *= mix(1.0, 0.84 + 0.26 * h, cv) + 0.1 * (fbm2(sq * 2.5) - 0.5) + 0.05 * (vnoise(sq * 25.0) - 0.5) * fine;
+      base = mix(base, base * vec3(1.06, 1.0, 0.9), step(0.7, hash12(cell + 8.0)) * cv); // a few warmer stones
       float edge = min(min(f.x, 1.0 - f.x) * size.x, min(f.y, 1.0 - f.y) * size.y);
       float joint = (1.0 - smoothstep(0.006, 0.02, edge)) * (1.0 - smoothstep(0.015, 0.05, px));
       base *= 1.0 - 0.3 * joint;
@@ -655,7 +658,7 @@ void main() {
       vec2 jit = vec2(hash12(cell + 7.7), hash12(cell + 1.3)) * 0.1 - 0.05;
       float r = length((f - jit) * vec2(1.0, 1.1));
       float stone = 1.0 - smoothstep(0.34, 0.47, r);
-      base *= mix(0.42, 0.8 + 0.34 * hash12(cell + 3.1), mix(1.0, stone, fine));
+      base *= mix(0.68, mix(0.42, 0.8 + 0.34 * hash12(cell + 3.1), mix(1.0, stone, fine)), CELLS(0.24));
       base *= 0.94 + 0.12 * vnoise(sq * 16.0) * fine;
       hgt = stone * (1.0 - r); bumpK = 1.4 * fine;
     }
@@ -667,8 +670,11 @@ void main() {
       g.x += mod(floor(g.y), 2.0) * 0.5;
       vec2 cell = floor(g), f = fract(g);
       float edge = min(min(f.x, 1.0 - f.x) * size.x, min(f.y, 1.0 - f.y) * size.y);
-      float mortar = (1.0 - smoothstep(0.004, 0.011, edge)) * fine;
-      vec3 brick = base * (0.74 + 0.4 * hash12(cell + 11.0)) * (0.94 + 0.12 * vnoise(sq * 30.0));
+      // Thin mortar lines dissolve into an even shade once they're finer than a pixel.
+      float far = smoothstep(0.006, 0.02, px);
+      float mortar = (1.0 - smoothstep(0.004, 0.011, edge)) * (1.0 - far);
+      base *= 1.0 - 0.1 * far;
+      vec3 brick = base * mix(0.94, (0.74 + 0.4 * hash12(cell + 11.0)) * (0.94 + 0.12 * vnoise(sq * 30.0)), CELLS(0.085));
       base = mix(brick, vec3(0.6, 0.58, 0.54) * (0.6 + 0.4 * dot(base, vec3(0.33))), mortar);
       hgt = 1.0 - mortar; bumpK = 0.6 * fine;
     }
@@ -681,7 +687,7 @@ void main() {
       vec2 cell = floor(g), f = fract(g);
       float edge = min(min(f.x, 1.0 - f.x) * size.x, min(f.y, 1.0 - f.y) * size.y);
       float joint = (1.0 - smoothstep(0.01, 0.028, edge)) * fine;
-      base *= (0.78 + 0.34 * hash12(cell + 5.0)) * (0.86 + 0.28 * fbm2(sq * 1.6));
+      base *= mix(0.95, 0.78 + 0.34 * hash12(cell + 5.0), CELLS(0.42)) * (0.86 + 0.28 * fbm2(sq * 1.6));
       base *= 1.0 - 0.45 * joint;
       hgt = 1.0 - joint + 0.3 * fbm2(sq * 4.0); bumpK = 0.7 * fine;
     }
@@ -699,7 +705,7 @@ void main() {
       vec2 g = sq / 0.07, cell = floor(g);
       vec2 f = fract(g) - 0.5 - (vec2(hash12(cell), hash12(cell + 9.0)) - 0.5) * 0.4;
       float pebble = 1.0 - smoothstep(0.25, 0.5, length(f));
-      base *= mix(0.55, 0.75 + 0.5 * hash12(cell + 2.0), mix(0.7, pebble, fine));
+      base *= mix(0.78, mix(0.55, 0.75 + 0.5 * hash12(cell + 2.0), mix(0.7, pebble, fine)), CELLS(0.07));
       base *= 0.9 + 0.2 * fbm2(sq * 0.7);
       hgt = pebble; bumpK = 0.8 * fine;
     }
@@ -710,7 +716,7 @@ void main() {
       g.x += mod(floor(g.y), 2.0) * 0.5;
       vec2 cell = floor(g), f = fract(g);
       float lap = smoothstep(0.0, 0.4, f.y) * (0.75 + 0.25 * sin(f.x * 3.1416));
-      base *= (0.8 + 0.3 * hash12(cell + 4.0)) * mix(1.0, 0.55 + 0.45 * lap, fine);
+      base *= mix(0.92, 0.8 + 0.3 * hash12(cell + 4.0), CELLS(0.22)) * mix(1.0, 0.55 + 0.45 * lap, fine);
       hgt = lap; bumpK = 0.9 * fine;
     }
     #endif
@@ -779,7 +785,7 @@ void main() {
   vec3 light = mix(uGround, uSky, N.y * 0.5 + 0.5) + uSunColor * ndl;
   vec3 V = normalize(uCam - vWorld);
   float shin = mix(160.0, 8.0, rough);
-  float shine = (1.0 - rough) * (1.0 - rough) * uFinish.z * (shin + 8.0) / 25.0;
+  float shine = (1.0 - rough) * (1.0 - rough) * uFinish.z * (shin + 8.0) / 70.0;
   vec3 gloss = uSunColor * pow(max(dot(N, normalize(uSun + V)), 0.0), shin) * ndl * shine;
   // Walls darken toward the ground they stand on, which seats them in the scene.
   light *= mix(1.0, mix(0.55, 1.0, smoothstep(0.0, 1.8, abs(vWorld.y))), step(abs(N.y), 0.6));
@@ -854,10 +860,11 @@ void main() {
   #ifdef WINDOWS
     // A grid of windows on the wall, some lit, some dark.
     {
-      vec2 wc = vec2(dot(vWorld.xz, vec2(abs(N.z), abs(N.x))), vWorld.y) / uWindows.xy;
+      vec3 Ng = normalize(vNormalW); // the wall's own facing, not its bumpy surface
+      vec2 wc = vec2(dot(vWorld.xz, vec2(abs(Ng.z), abs(Ng.x))), vWorld.y) / uWindows.xy;
       vec2 cell = floor(wc);
       vec2 f = fract(wc);
-      float inside = step(0.18, f.x) * step(f.x, 0.82) * step(0.22, f.y) * step(f.y, 0.78) * step(0.5, abs(N.y) < 0.5 ? 1.0 : 0.0);
+      float inside = step(0.18, f.x) * step(f.x, 0.82) * step(0.22, f.y) * step(f.y, 0.78) * step(0.5, abs(Ng.y) < 0.5 ? 1.0 : 0.0);
       float h = fract(sin(dot(cell + uWindows.w, vec2(41.3, 289.1))) * 43758.5);
       float lit = step(1.0 - uWindows.z, h) * inside;
       rgb = mix(rgb, uWindowColor * (0.25 + 0.45 * fract(h * 7.0)), lit);

@@ -415,6 +415,12 @@ export const sfx = {
     tone(415, 0, 0.35, { type: "square", gain: 0.03 * gain, pan, attack: 0.01 });
     tone(523, 0, 0.35, { type: "square", gain: 0.025 * gain, pan, attack: 0.01 });
   },
+  // A cartoon bonk: a thump and a wobbly boing.
+  bonk() {
+    burst(0.12, { gain: 0.25, from: 900, to: 120 });
+    tone(140, 0.02, 0.55, { type: "triangle", gain: 0.14, slide: 2.6 });
+    tone(520, 0.05, 0.4, { type: "sine", gain: 0.05, slide: 0.45 });
+  },
   // A hit at the shooting gallery: a bright clang.
   clang(pos) {
     const { pan, gain } = placed(pos, 20);
