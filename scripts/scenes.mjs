@@ -135,28 +135,29 @@ await run("pier", async () => {
 });
 
 await run("highway", async () => {
-  // From a standstill, fire a pulse and watch it go.
+  // From a standstill, switch on the beam and watch its pulses go.
   await t.page.keyboard.press("KeyF");
   await t.advance(0.6);
   console.log("  pulse from rest:", await t.snap("highway-pulse-rest"));
   await t.advance(2);
-  // Up past 99%, then cruise while the Comet catches up.
+  // Up past 99%, overtaking the Comet (a steady 99%), then ease off to ride level with it.
   await t.page.keyboard.down("w"); await t.page.keyboard.down("Shift");
-  await t.advance(3.5);
+  for (let i = 0; i < 100 && (await t.q(() => slowlight.player.beta)) < 0.991; i++) await t.advance(0.05);
   await t.page.keyboard.up("w"); await t.page.keyboard.up("Shift");
+  await t.q(() => { slowlight.instance.comet.dz = 30; });
   for (let i = 0; i < 40 && !(await t.q(() => slowlight.instance.goals[2].done)); i++) await t.advance(0.5);
   console.log("  alongside:", await t.snap("highway-comet"));
   // Brake hard: it shoots ahead.
   await t.page.keyboard.down("s"); await t.advance(1.4); await t.page.keyboard.up("s");
   for (let i = 0; i < 20 && !(await t.q(() => slowlight.instance.goals[3].done)); i++) await t.advance(0.25);
   console.log("  ahead:", await t.snap("highway-comet-ahead"));
-  // Past 99.99%, then cruise, fire a pulse and chase it.
+  // Past 99.99%, then cruise, set the beacon down again and chase its pulses.
   await t.page.keyboard.down("w"); await t.page.keyboard.down("Shift");
   for (let i = 0; i < 60 && (await t.q(() => slowlight.player.omb)) > 5e-5; i++) await t.advance(0.2);
   await t.page.keyboard.up("w"); await t.page.keyboard.up("Shift");
   await t.page.keyboard.press("KeyF");
   for (let i = 0; i < 20 && !(await t.q(() => slowlight.instance.goals[5].done)); i++) await t.advance(0.25);
-  console.log("  chase:", await t.q(() => slowlight.instance.readouts().filter(([k]) => /beam|roadside|pulling/.test(k)).map((r) => r.join(" ")).join(", ")), await t.snap("highway-pulse-chase"));
+  console.log("  chase:", await t.q(() => slowlight.instance.readouts().filter(([k]) => /pulse|roadside|pulling/.test(k)).map((r) => r.join(" ")).join(", ")), await t.snap("highway-pulse-chase"));
   // Full throttle until nine nines, glancing back on the way.
   await t.page.keyboard.down("w"); await t.page.keyboard.down("Shift");
   await t.advance(4);
