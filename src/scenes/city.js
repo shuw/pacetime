@@ -6,7 +6,8 @@ import { SOUND_SPEED } from "../earth.js";
 import { Mover, taxi } from "../movers.js";
 import { Train } from "../rail.js";
 import { building, Emitter, lampPost, neon, reflection, surface } from "../earth.js";
-import { dopplerFactor, kmh } from "../relativity.js";
+import { dopplerFactor } from "../relativity.js";
+import { kmh } from "../format.js";
 import { retardedTime, world } from "../relativity.js";
 import { sfx } from "../audio.js";
 
@@ -60,6 +61,7 @@ function signalHead(group, x, z, rotY) {
   };
 }
 
+/** @type {import("../place.js").PlaceModule} */
 export default {
   id: "city",
   title: "Neon Crossroads",

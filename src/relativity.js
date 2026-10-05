@@ -50,6 +50,31 @@ export function dopplerFactor(observer, v, src) {
   return gammaOf(b.length()) * (1 + b.dot(r) / d);
 }
 
+// Doppler factor of light travelling from a source to an observer, where n is
+// the unit vector from the observer toward the source and both velocities are
+// in m/s: γo(1 + βo·n) / (γs(1 + βs·n)). For sound pitches and such; the
+// shaders use an exact form near light speed.
+export function dopplerBetween(n, vObserver, vSource) {
+  const bo = vObserver.clone().divideScalar(world.c), bs = vSource.clone().divideScalar(world.c);
+  return (gammaOf(bo.length()) * (1 + bo.dot(n))) / (gammaOf(bs.length()) * (1 + bs.dot(n)));
+}
+
+// What the shaders need about your motion, exact very close to light speed:
+// γ and 1-β, and the same pair for the bending, which the gentle look softens
+// by scaling rapidity by k (k = 1 is true to life).
+export function observerFactors(gamma, omb, k = 1) {
+  const eta = omb < 1 ? 0.5 * Math.log((2 - omb) / omb) : 0;
+  const ek = eta * k;
+  return [gamma, omb, Math.cosh(ek), 2 / (1 + Math.exp(2 * ek))];
+}
+
+// Doppler factor of light reaching you from an angle θ off your motion, given
+// 1 - cosθ: 1 / (γ(1 - β cosθ)), with 1 - β cosθ = (1-β) + β(1-cosθ) so it
+// stays exact near light speed.
+export function viewDoppler(gamma, omb, oneMinusCos) {
+  return 1 / (gamma * (omb + (1 - omb) * oneMinusCos));
+}
+
 // The world time at which light now arriving at the observer left `src`.
 export function retardedTime(observer, src) {
   if (!effects.delay) return world.t;
@@ -87,13 +112,4 @@ export function seenTimeOf(path, eye, T = world.t, span = 600) {
     else hi = mid;
   }
   return (lo + hi) / 2;
-}
-
-// Speeds for people: km/h, with a decimal while they're small.
-export function kmh(v) {
-  const k = v * 3.6;
-  if (k >= 1e9) return `${Number((k / 1e9).toFixed(2))} billion km/h`;
-  if (k >= 1e6) return `${Number((k / 1e6).toFixed(1))} million km/h`;
-  if (k >= 100) return `${Math.round(k).toLocaleString("en-US")} km/h`;
-  return `${Number(k.toFixed(1))} km/h`;
 }

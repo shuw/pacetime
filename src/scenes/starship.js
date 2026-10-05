@@ -2,11 +2,11 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { G, mesh } from "../geo.js";
 import { mat, shared } from "../shaders.js";
-import { kmh, retardedTime, world } from "../relativity.js";
-import { neon } from "../earth.js";
+import { retardedTime, world } from "../relativity.js";
+import { clockFace, neon } from "../earth.js";
 import { sfx } from "../audio.js";
-import { formatTime, humanTime } from "../hud.js";
-import { buildCabin, clockFace, jellyGeometry, SEAT, WALK } from "./starship-cabin.js";
+import { formatTime, humanTime, kmh } from "../format.js";
+import { buildCabin, jellyGeometry, SEAT, WALK } from "./starship-cabin.js";
 
 // Light at its real speed, and a real trip: from orbit above Earth to
 // Proxima Centauri and back.
@@ -188,8 +188,9 @@ function buildStation() {
   st.add(mesh(G.box, mat({ color: "#3a3f6a", ir: 0.3 }), { pos: [0, -1.7, 2], scale: [0.8, 0.9, 4] }));
   const dockMats = [0, 1, 2].map(() => mat({ color: "#ffd166", emissive: 1, ir: 0.8, uv: 0.4, unique: true }));
   for (let z = z0 + 2, i = 0; z < z1; z += 4, i++) for (const sx of [-1, 1]) st.add(mesh(G.sphere, dockMats[i % 3], { pos: [sx * 0.8, -1.85, z], scale: 0.22 }));
-  const clock = clockFace(9, { rim: "#ff8fd8" });
+  const clock = clockFace(9, { rim: "#ff8fd8", face: "#f2ead8", hands: "#1d1b2e", glow: 0 });
   clock.position.set(STATION.x, STATION.y + 2, STATION.z - 13.2);
+  clock.rotation.y = Math.PI; // facing the dock
   st.add(clock);
   st.add(sign("HALO STATION", { size: 1.4, color: "#ff8fd8", width: 0.32, at: [STATION.x, STATION.y + 26, STATION.z - 4], facing: -1 }));
   st.add(sign("STATION TIME", { size: 0.7, color: "#ffd166", width: 0.18, at: [STATION.x, STATION.y + 12.5, STATION.z - 13], facing: -1 }));
@@ -280,6 +281,7 @@ const dist = (m) => {
   return `${(m / LY).toFixed(3)} light-years`;
 };
 
+/** @type {import("../place.js").PlaceModule} */
 export default {
   id: "starship",
   title: "Starship",
@@ -533,7 +535,7 @@ export default {
 
         const seen = (v) => retardedTime(eye, local(v));
         const ts = seen(STATION);
-        station.clock.show(ts);
+        station.clock.set(ts);
         station.ring.rotation.z = ts * 0.04;
         station.beacon.uniforms.uSpec.value.z = (((ts % 1.5) + 1.5) % 1.5) < 0.2 ? 1 : 0.15;
         station.dockMats.forEach((m, i) => (m.uniforms.uSpec.value.z = ((Math.floor(ts * 4) % 3) + 3) % 3 === i ? 1 : 0.15));

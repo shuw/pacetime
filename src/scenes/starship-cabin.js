@@ -2,8 +2,8 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { mat } from "../shaders.js";
 import { personGeometry } from "../people.js";
-import { neon } from "../earth.js";
-import { formatBeta, formatTime } from "../hud.js";
+import { clockFace, neon } from "../earth.js";
+import { formatBeta, formatTime } from "../format.js";
 import { world } from "../relativity.js";
 
 // The Pacer, inside: a capsule with a glass dome over the bridge and a glass
@@ -54,45 +54,6 @@ function holoPanel(w, h, px = 512) {
 }
 const holo = (color, opacity = 0.8) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
 
-// A clock face of radius r facing -z, with hands; show(t) sets them.
-export function clockFace(r, { comoving = false, face = "#f2ead8", hands = "#1d1b2e", rim = "#ffb36b" } = {}) {
-  const g = new THREE.Group();
-  const m = (o) => mat({ ...o, comoving });
-  const disc = new THREE.CircleGeometry(r, 48);
-  disc.rotateY(Math.PI);
-  const add = (geo, material, pos = [0, 0, 0], rot = [0, 0, 0], s = 1) => {
-    const o = new THREE.Mesh(geo, material);
-    o.position.set(...pos);
-    o.rotation.set(...rot);
-    if (Array.isArray(s)) o.scale.set(...s); else o.scale.setScalar(s);
-    g.add(o);
-    return o;
-  };
-  add(disc, m({ color: face, ir: 0.4, uv: 0.3, unlit: comoving }));
-  add(new THREE.TorusGeometry(r, r * 0.06, 8, 48), m({ color: rim, emissive: 0.8, ir: 0.6, unlit: comoving }));
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    add(BOX, m({ color: hands, unlit: comoving }), [Math.sin(a) * r * 0.82, Math.cos(a) * r * 0.82, -0.02], [0, 0, -a], [r * 0.05, r * (i % 3 ? 0.08 : 0.16), 0.02]);
-  }
-  const hand = (len, w, color, z) => {
-    const p = new THREE.Group();
-    const o = new THREE.Mesh(BOX, m({ color, unlit: comoving }));
-    o.position.set(0, len / 2 - len * 0.12, z);
-    o.scale.set(w, len, 0.02);
-    p.add(o);
-    g.add(p);
-    return p;
-  };
-  g.hour = hand(r * 0.5, r * 0.08, hands, -0.04);
-  g.minute = hand(r * 0.75, r * 0.05, hands, -0.06);
-  g.second = hand(r * 0.85, r * 0.02, "#ff5a4a", -0.08);
-  g.show = (t) => {
-    g.second.rotation.z = (t / 60) * Math.PI * 2;
-    g.minute.rotation.z = (t / 3600) * Math.PI * 2;
-    g.hour.rotation.z = (t / 43200) * Math.PI * 2;
-  };
-  return g;
-}
 
 // A whimsical jellyfish: a soft glowing bell with trailing tentacles.
 export function jellyGeometry(r, color) {
@@ -268,9 +229,9 @@ export function buildCabin() {
   clockLabel.traverse((o) => o.isMesh && o.layers.set(2));
   ship.add(clockLabel);
   // Ship time, on the left wall.
-  const clock = clockFace(0.42, { comoving: true, face: "#1d2136", hands: "#cfd8f0", rim: "#5fe1ff" });
+  const clock = clockFace(0.42, { comoving: true, face: "#1d2136", hands: "#cfd8f0", rim: "#5fe1ff", glow: 0 });
   clock.position.set(-1.78, 1.95, 2.3);
-  clock.rotation.y = -Math.PI / 2;
+  clock.rotation.y = Math.PI / 2; // facing into the cabin
   clock.traverse((o) => o.isMesh && (o.layers.set(2), (o.renderOrder = 3)));
   ship.add(clock);
   const shipLabel = neon("SHIP TIME", { size: 0.06, color: "#5fe1ff", width: 0.015, comoving: true });
@@ -374,7 +335,7 @@ export function buildCabin() {
     // Called every frame with the ship and player state.
     // progress: 0 at home, 1 at the destination. seen: what the panel says about home.
     update({ t, dt, ship: s, player, progress, seen }) {
-      clock.show(player.tau);
+      clock.set(player.tau);
       // Pip drifts to a spot beside you, a little ahead, and looks at you.
       const ly = player.yaw - s.heading;
       const fx = -Math.sin(ly), fz = -Math.cos(ly), rx = Math.cos(ly), rz = -Math.sin(ly);

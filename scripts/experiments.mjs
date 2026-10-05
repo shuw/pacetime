@@ -17,22 +17,10 @@ const state = () => page.evaluate(() => ({
 }));
 const until = (fn, arg, timeout = 120000) => page.waitForFunction(fn, arg, { timeout, polling: 100 });
 const place = (x, z, yaw) => page.evaluate(([x, z, yaw]) => pacetime.player.place(x, z, yaw), [x, z, yaw]);
-const center = () => page.evaluate(() => pacetime.instance.train.centerAt(pacetime.world.t));
-
-async function boardWhenPassing(atX) {
-  // Wait for a fresh run to approach, stand beside it, and hop on.
-  await until((x) => { const tr = pacetime.instance.train; const c = tr.centerAt(pacetime.world.t); return c > x - 6 && c < x; }, atX, 180000);
-  const c = await center();
-  await place(c, 4.6, -Math.PI / 2);
-  await page.evaluate(() => pacetime.act());
-  return page.evaluate(() => !!pacetime.player.vehicle);
-}
-
 await page.evaluate((id) => { pacetime.load(id); pacetime.closeMenu(); }, which);
 await page.evaluate((w) => (pacetime.warp = w), Number(process.env.WARP ?? 6));
 
 if (which === "railway") {
-  const strikes = () => page.evaluate(() => pacetime.instance.log.seen.filter((e) => e.tag === "strike").length);
   const doors = () => page.evaluate(() => pacetime.instance.log.seen.filter((e) => e.tag === "door").length);
   await place(-90, 6.5, 0);
   await until(() => pacetime.instance.log.seen.filter((e) => e.tag === "strike").length >= 2);
@@ -61,27 +49,6 @@ if (which === "railway") {
   await until(() => !pacetime.player.vehicle, null, 180000);
   await page.waitForTimeout(500);
   console.log("after ride", JSON.stringify(await state(), null, 1));
-}
-
-if (which === "pier") {
-  await place(-16, -122, 0);
-  await page.waitForTimeout(3500);
-  await page.screenshot({ path: "shots/pier-wheel.png" });
-  await place(0, -118, 0);
-  await page.evaluate(() => { pacetime.player.pitch = 0.25; });
-  await until(() => pacetime.instance.log.seen.length >= 2, null, 60000);
-  await page.screenshot({ path: "shots/pier-fireworks.png" });
-  console.log("twin", JSON.stringify(await state(), null, 1));
-  await place(24.4, -131, Math.PI);
-  await until(() => pacetime.instance.action()?.label === "Board the coaster", null, 90000);
-  await page.evaluate(() => pacetime.act());
-  console.log("boarded:", await page.evaluate(() => !!pacetime.player.vehicle));
-  await until(() => pacetime.player.pos.y > 12, null, 60000);
-  await page.screenshot({ path: "shots/pier-lift.png" });
-  await until(() => pacetime.player.beta > 0.85, null, 60000);
-  await page.screenshot({ path: "shots/pier-drop.png" });
-  await until(() => pacetime.instance.goals[4].done, null, 90000);
-  console.log("lap", JSON.stringify(await state(), null, 1));
 }
 
 await browser.close();

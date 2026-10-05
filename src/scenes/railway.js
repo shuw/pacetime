@@ -172,6 +172,7 @@ function carMarker(train, local = 0, color = PALETTE.warm) {
   train.carry(ring, mat({ color, emissive: 1, unlit: true, doubleSided: true, mover: train.mover, rect: train.clip }), local, 0.08);
 }
 
+/** @type {import("../place.js").PlaceModule} */
 export default {
   id: "railway",
   title: "Einstein's Railway",
@@ -269,7 +270,7 @@ export default {
       name.rotation.y = Math.PI; // read from the platform side
       name.position.set(sx + name.textWidth / 2, 4.75 + GROUND, sz - 3.82);
       group.add(name);
-      const clock = clockFace(0.9);
+      const clock = clockFace(0.9, { laps: [10, 60, 720] }); // fast hands, so you can see it run behind
       clock.position.set(sx, 7.6 + GROUND, sz - 4.4);
       clock.rotation.y = Math.PI;
       group.add(clock);
@@ -293,7 +294,7 @@ export default {
       group.add(mesh(G.cyl, mat({ color: "#4cb6e0", ir: 0.2, uv: 0.4, emissive: 0.15 }), { pos: [fx, 0.58, fz], scale: [2.35, 0.06, 2.35] }));
       group.add(mesh(G.cyl, mat({ color: "#d8cfbf", ir: 0.5 }), { pos: [fx, 1.1, fz], scale: [0.3, 1.2, 0.3] }));
       group.add(mesh(G.sphere, mat({ color: "#bff0ff", additive: true, opacity: 0.35, emissive: 0.6 }), { pos: [fx, 1.9, fz], scale: [0.7, 0.45, 0.7] }));
-      for (let x = -P + 18; x <= P - 18; x += 24) for (const z of [20.5]) {
+      for (let x = -P + 30; x <= P - 18; x += 24) for (const z of [20.5]) {
         group.add(box(1.2, 0.7, 1.2, { color: "#7a4a2a", ir: 0.4 }, [x, 0.35, z]));
         group.add(mesh(G.sphere, mat({ color: "#3f8a45", ir: 1.3, uv: 0.1 }), { pos: [x, 1.6, z], scale: 0.85 }));
         group.add(mesh(G.sphere, mat({ color: "#3f8a45", ir: 1.3, uv: 0.1 }), { pos: [x, 2.55, z], scale: 0.55 }));

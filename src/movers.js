@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { G, mesh } from "./geo.js";
 import { ghostOf, mat } from "./shaders.js";
-import { effects, gammaOf, world } from "./relativity.js";
+import { dopplerBetween, effects, world } from "./relativity.js";
 import { govern, motion } from "./motion.js";
 
 // Something moving in a straight line at constant velocity, built around its
@@ -73,9 +73,7 @@ export class Mover {
   // Doppler factor of its light at `eye` for an observer moving at v.
   doppler(eye, v = new THREE.Vector3()) {
     const { pos } = this.seen(eye);
-    const n = pos.clone().sub(eye).normalize();
-    const bo = v.clone().divideScalar(world.c), bs = this.vel.clone().divideScalar(world.c);
-    return (gammaOf(bo.length()) * (1 + bo.dot(n))) / (gammaOf(bs.length()) * (1 + bs.dot(n)));
+    return dopplerBetween(pos.clone().sub(eye).normalize(), v, this.vel);
   }
 }
 

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { box, G, mesh } from "./geo.js";
 import { ghostOf, mat } from "./shaders.js";
-import { effects, gammaOf, seenTimeOf, world } from "./relativity.js";
+import { dopplerBetween, effects, gammaOf, seenTimeOf, world } from "./relativity.js";
 import { govern, motion } from "./motion.js";
 import { PALETTE } from "./world.js";
 import { personGeometry, randomLook } from "./people.js";
@@ -176,10 +176,7 @@ export class Train {
     const pos = path(seenTimeOf(path, eye));
     if (this.clip && (pos.x < this.clip[0] - this.halfLength || pos.x > this.clip[2] + this.halfLength)) return null;
     if (riding) return { pos, D: 1, riding };
-    const n = pos.clone().sub(eye).normalize();
-    const bo = player.v.clone().divideScalar(world.c);
-    const bs = this.vehicle.velocity.clone().divideScalar(world.c);
-    const D = (gammaOf(bo.length()) * (1 + bo.dot(n))) / (gammaOf(bs.length()) * (1 + bs.dot(n)));
+    const D = dopplerBetween(pos.clone().sub(eye).normalize(), player.v, this.vehicle.velocity);
     return { pos, D: effects.doppler ? D : 1, riding };
   }
 

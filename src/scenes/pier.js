@@ -147,6 +147,7 @@ function bunting(group, a, b, { n = 16, sag = 0.5, colors = BRIGHT } = {}) {
   group.add(mesh(p.geometry(), mat({ color: "#ffffff", vertexColors: true, doubleSided: true, ir: 0.4, uv: 0.4 })));
 }
 
+/** @type {import("../place.js").PlaceModule} */
 export default {
   id: "pier",
   title: "Seaside Funfair",

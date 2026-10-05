@@ -282,7 +282,6 @@ export class Fireworks {
   }
 }
 
-export { box, G, mesh, mat, rng, retardedTime };
 
 // Many pines in a few draw calls. spots: [x, z, height][]
 export function forest(spots, { snow = true } = {}) {
@@ -308,32 +307,36 @@ export function forest(spots, { snow = true } = {}) {
   return g;
 }
 
-// A clock face whose hands show whatever time `set(t)` is given: the time
-// its light left it. One lap of the big hand is a minute.
-export function clockFace(radius = 1.2, { face = "#f4ead2", rim = "#2b2622", glow = 0.6 } = {}) {
+// A clock face of the given radius, facing +z, whose hands show whatever
+// time set(t) is given (the time its light left it, usually). laps: seconds
+// per lap of the red, long and short hands; the default is a real clock.
+// comoving: carried with you, so drawn without bending or shading.
+export function clockFace(radius = 1.2, { face = "#f4ead2", rim = "#2b2622", hands = "#2b2622", glow = 0.6, comoving = false, laps = [60, 3600, 43200] } = {}) {
   const g = new THREE.Group();
-  g.add(mesh(G.cyl, mat({ color: rim, ir: 0.3 }), { rot: [Math.PI / 2, 0, 0], scale: [radius * 1.12, 0.12, radius * 1.12] }));
-  g.add(mesh(G.cyl, mat({ color: face, emissive: glow, ir: 0.8 }), { pos: [0, 0, 0.04], rot: [Math.PI / 2, 0, 0], scale: [radius, 0.12, radius] }));
-  const tick = mat({ color: "#2b2622" });
+  const m = (o) => mat({ ...o, comoving, unlit: comoving || o.unlit });
+  const add = (geo, material, pos = [0, 0, 0], rot = [0, 0, 0], s = 1) => g.add(mesh(geo, material, { pos, rot, scale: s }));
+  const k = Math.max(1, radius * 0.5); // big clocks keep their hands well off the face
+  add(new THREE.CircleGeometry(radius, 48), m({ color: face, emissive: glow, ir: 0.4, uv: 0.3 }));
+  add(new THREE.TorusGeometry(radius, radius * 0.06, 8, 48), m({ color: rim, emissive: 0.6, ir: 0.6 }));
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
-    g.add(mesh(G.box, tick, { pos: [Math.sin(a) * radius * 0.82, Math.cos(a) * radius * 0.82, 0.12], rot: [0, 0, -a], scale: [0.06, i % 3 ? 0.14 : 0.3, 0.04] }));
+    add(G.box, m({ color: hands }), [Math.sin(a) * radius * 0.82, Math.cos(a) * radius * 0.82, 0.02 * k], [0, 0, -a], [radius * 0.05, radius * (i % 3 ? 0.08 : 0.16), 0.02]);
   }
-  const hand = (len, w, color) => {
+  const hand = (len, w, color, z) => {
     const pivot = new THREE.Group();
-    pivot.position.z = 0.15;
-    pivot.add(mesh(G.box, mat({ color }), { pos: [0, len / 2, 0], scale: [w, len, 0.04] }));
+    pivot.add(mesh(G.box, m({ color }), { pos: [0, len / 2 - len * 0.12, z * k], scale: [w, len, 0.02] }));
     g.add(pivot);
     return pivot;
   };
-  const big = hand(radius * 0.78, 0.07, "#2b2622");
-  const small = hand(radius * 0.5, 0.11, "#2b2622");
-  const sec = hand(radius * 0.85, 0.03, "#c0392b");
+  const short = hand(radius * 0.5, radius * 0.08, hands, 0.04);
+  const long = hand(radius * 0.75, radius * 0.05, hands, 0.06);
+  const red = hand(radius * 0.85, radius * 0.02, "#c0392b", 0.08);
   g.userData.dynamic = true;
+  // Clockwise, as seen from the front.
   g.set = (t) => {
-    sec.rotation.z = -(t % 10) / 10 * Math.PI * 2; // a fast hand, one lap per 10 s
-    big.rotation.z = -(t / 60) * Math.PI * 2;
-    small.rotation.z = -(t / 720) * Math.PI * 2;
+    red.rotation.z = -(t / laps[0]) * Math.PI * 2;
+    long.rotation.z = -(t / laps[1]) * Math.PI * 2;
+    short.rotation.z = -(t / laps[2]) * Math.PI * 2;
   };
   return g;
 }

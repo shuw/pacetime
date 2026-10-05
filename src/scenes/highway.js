@@ -2,9 +2,9 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { followDisc, G, mesh } from "../geo.js";
 import { mat } from "../shaders.js";
-import { kmh, world } from "../relativity.js";
+import { world } from "../relativity.js";
 import { sfx } from "../audio.js";
-import { formatBeta } from "../hud.js";
+import { formatBeta, kmh } from "../format.js";
 
 const C = 20; // light speed here, m/s
 const L = 40; // one tile of road
@@ -82,6 +82,7 @@ function instanced(geo, opts, count) {
   return m;
 }
 
+/** @type {import("../place.js").PlaceModule} */
 export default {
   id: "highway",
   title: "Endless Road",

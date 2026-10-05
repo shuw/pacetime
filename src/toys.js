@@ -161,3 +161,63 @@ export class Sparkler {
     this.last = tip.clone();
   }
 }
+
+// Everything you carry: the torch and the sparkler in your hand, and the
+// handlebars or cockpit of what you ride, which face where you're heading
+// rather than where you look. One beam history serves the torch and the
+// scooter's headlight.
+export class Carried {
+  constructor(root) {
+    this.hand = new THREE.Group();
+    this.craft = new THREE.Group();
+    this.torch = torchModel();
+    this.wand = wandModel();
+    this.bars = handlebarsModel();
+    this.hand.add(this.torch, this.wand);
+    this.craft.add(this.bars);
+    root.add(this.hand, this.craft);
+    this.beam = new BeamHistory();
+    this.on = { torch: false, sparkler: false };
+    this.cockpit = null;
+  }
+
+  reset() {
+    this.beam.reset();
+  }
+
+  setCockpit(obj) {
+    if (this.cockpit) this.craft.remove(this.cockpit);
+    this.cockpit = obj ?? null;
+    if (obj) this.craft.add(obj);
+  }
+
+  toggle(which) {
+    this.on[which] = !this.on[which];
+    return this.on[which];
+  }
+
+  update({ camera, player, sparkler }) {
+    this.hand.position.copy(camera.position);
+    this.hand.quaternion.copy(camera.quaternion);
+    this.hand.updateMatrixWorld(true);
+    this.craft.position.copy(camera.position);
+    this.craft.rotation.set(0, player.yaw, 0);
+    this.craft.updateMatrixWorld(true);
+    const onBike = !!player.bike;
+    this.torch.visible = this.on.torch && !onBike;
+    this.wand.visible = this.on.sparkler && !onBike;
+    this.bars.visible = onBike;
+    if (onBike) {
+      // The headlight points along the scooter, dipped toward the road.
+      const h = new THREE.Vector3(-Math.sin(player.yaw), -0.07, -Math.cos(player.yaw)).normalize();
+      const lamp = player.eye.clone().add(new THREE.Vector3(0, -0.55, 0)).addScaledVector(h, 0.6);
+      shared.uBeamCone.value.set(0.975, 0.9, 30);
+      this.beam.push(world.t, lamp, h, true, 0.8);
+    } else {
+      const lens = this.torch.lens.getWorldPosition(new THREE.Vector3());
+      shared.uBeamCone.value.set(0.988, 0.955, 22);
+      this.beam.push(world.t, lens, camera.getWorldDirection(new THREE.Vector3()), this.on.torch, 1);
+    }
+    sparkler?.update(world.t, this.wand.tip.getWorldPosition(new THREE.Vector3()), this.on.sparkler && !onBike);
+  }
+}
