@@ -44,22 +44,27 @@ function cometTrain(material) {
   const CARS = 6, LEN = 11.4, GAP = 0.7;
   for (let i = 0; i < CARS; i++) {
     const cz = (i - (CARS - 1) / 2) * (LEN + GAP);
-    add("body", box, { color: "#f4f1ea", ir: 0.4, uv: 0.3 }, M(0, 1.95, cz, 2.8, 2.5, LEN));
-    add("roof", box, { color: "#ff6b6b", ir: 0.5, uv: 0.4 }, M(0, 3.25, cz, 2.6, 0.18, LEN - 0.4));
-    add("glow", box, { color: "#8fdcff", emissive: 0.55, ir: 0.6, uv: 1 }, M(0, 2.3, cz, 2.84, 0.62, LEN - 1.2));
-    add("skirt", box, { color: "#2b2d33", ir: 0.2 }, M(0, 0.8, cz, 2.5, 0.4, LEN - 0.4));
+    add("body", box, { color: "#f4f1ea", ir: 0.4, uv: 0.3, surface: "paint", rough: 0.25 }, M(0, 1.95, cz, 2.8, 2.5, LEN));
+    add("roof", box, { color: "#ff6b6b", ir: 0.5, uv: 0.4, surface: "paint" }, M(0, 3.25, cz, 2.6, 0.18, LEN - 0.4));
+    // A band of dark glass down each side, with a lit window per passenger.
+    add("band", box, { color: "#1a1d2a", ir: 0.2, uv: 0.2, surface: "paint", rough: 0.08 }, M(0, 2.32, cz, 2.82, 0.78, LEN - 0.8));
+    for (let k = 0; k < 4; k++) add("glow", box, { color: "#bfe6ff", emissive: 0.3, ir: 0.6, uv: 1 }, M(0, 2.32, cz - LEN / 2 + 2.1 + k * 2.4, 2.84, 0.6, 1.8));
+    // A stripe of livery, and a door near each end.
+    add("stripe", box, { color: "#ff5cf0", emissive: 0.25, ir: 0.5, uv: 0.8 }, M(0, 1.45, cz, 2.82, 0.14, LEN - 0.4));
+    for (const dz of [-LEN / 2 + 0.7, LEN / 2 - 0.7]) for (const e of [-0.48, 0.48]) add("seam", box, { color: "#8a8780", ir: 0.3 }, M(0, 1.85, cz + dz + e, 2.83, 2.0, 0.035));
+    add("skirt", box, { color: "#2b2d33", ir: 0.2, surface: "metal" }, M(0, 0.8, cz, 2.5, 0.4, LEN - 0.4));
     add("under", box, { color: "#ff5cf0", emissive: 1, ir: 0.6, uv: 1.2 }, M(0, 0.55, cz, 1.8, 0.06, LEN - 1));
     // Passengers at the windows, each side.
     for (let k = 0; k < 4; k++) for (const sx of [-1, 1]) {
       const look = looks[(i * 7 + k * 3 + (sx > 0 ? 1 : 0)) % looks.length];
-      add("p" + look, ball, { color: look, ir: 0.4, uv: 0.3 }, M(sx * 1.38, 2.32, cz - LEN / 2 + 1.6 + k * 2.6, 0.3, 0.3, 0.3));
+      add("p" + look, ball, { color: look, ir: 0.4, uv: 0.3 }, M(sx * 1.38, 2.32, cz - LEN / 2 + 2.1 + k * 2.4, 0.3, 0.3, 0.3));
     }
   }
   // A rounded nose with a headlight, and red lamps at the tail.
   const front = -((CARS - 1) / 2) * (LEN + GAP) - LEN / 2, back = -front;
-  add("body", ball, { color: "#f4f1ea", ir: 0.4, uv: 0.3 }, M(0, 1.95, front, 1.4, 1.25, 3.2));
+  add("body", ball, { color: "#f4f1ea", ir: 0.4, uv: 0.3, surface: "paint", rough: 0.25 }, M(0, 1.95, front, 1.4, 1.25, 3.2));
   add("head", ball, { color: "#fff6d8", emissive: 1, ir: 1, uv: 1 }, M(0, 1.9, front - 3.0, 0.35, 0.35, 0.35));
-  add("body", ball, { color: "#f4f1ea", ir: 0.4, uv: 0.3 }, M(0, 1.95, back, 1.4, 1.25, 1.2));
+  add("body", ball, { color: "#f4f1ea", ir: 0.4, uv: 0.3, surface: "paint", rough: 0.25 }, M(0, 1.95, back, 1.4, 1.25, 1.2));
   for (const sx of [-0.7, 0.7]) add("tail", ball, { color: "#ff2a2a", emissive: 1, ir: 1.2, uv: 0.2 }, M(sx, 2.1, back + 1.1, 0.18, 0.18, 0.18));
   const g = new THREE.Group();
   for (const { opts, geos } of parts.values()) {
@@ -110,7 +115,17 @@ export default {
     let base = 0; // the road's distance coordinate of local z = 0 (grows negative as you go)
 
     // Desert floor with the road painted on; it follows you.
-    group.add(followDisc(2e5, mat({ color: "#1b1824", ir: 0.25, uv: 0.15, road: { half: 6, color: "#0c0c12", line: "#7fe8ff" } })));
+    const ground = mat({ color: "#2a2433", ir: 0.25, uv: 0.15, road: { half: 6, color: "#24242f", line: "#7fe8ff" } });
+    group.add(followDisc(2e5, ground));
+    const P = 40000; // the ground's texture repeats every 40 km of road
+    // The nearest street lamps light the road round you. They fade out at
+    // speed, where they'd only flicker past.
+    const lampLights = Array.from({ length: 8 }, () => {
+      const o = new THREE.Group();
+      o.userData.lamp = { pos: new THREE.Vector3(), color: new THREE.Color("#ffd9a0"), range: 12, power: 0 };
+      group.add(o);
+      return o.userData.lamp;
+    });
 
     const n = AHEAD + BEHIND + 2;
     const arches = instanced(new THREE.TorusGeometry(7.5, 0.22, 10, 72, Math.PI), { color: "#ffffff", emissive: 1, ir: 0.8, uv: 1.2 }, n);
@@ -295,7 +310,7 @@ export default {
         vary: 0, night: 1, space: 1, sun: [0.55, 0.18, -0.82], sunColor: [0.5, 0.5, 0.6], sky: [0.06, 0.06, 0.1], ground: [0.02, 0.02, 0.03],
         fog: "#05060c", fogRange: [700, 6000], skyTop: "#000000", skyHorizon: "#000000",
       },
-      post: { bloom: { strength: 0.8, radius: 0.5, threshold: 0.5 } },
+      post: { bloom: { strength: 0.6, radius: 0.4, threshold: 0.72 } },
       goals,
       tips: [
         "F fires a pulse of light down the road. You see it only by the dust it lights up, so from a standstill its glow seems to crawl away at half speed. Chase it at 99.99% and it still pulls away at exactly light speed, by your own watch and rulers.",
@@ -333,6 +348,16 @@ export default {
       },
       update({ eye, t, dTau }) {
         layout();
+        ground.uniforms.uRoad.value.y = ((base % P) + P) % P;
+        {
+          const s0 = Math.floor(roadAt() / (L / 2)) * (L / 2), fade = 1 - THREE.MathUtils.smoothstep(player.beta, 0.25, 0.6);
+          let k = 0;
+          for (const ds of [-L / 2, 0, L / 2, L]) for (const sx of [-1, 1]) {
+            const l = lampLights[k++];
+            l.pos.set(sx * 8, 5.15, -(s0 + ds) - base);
+            l.power = 0.9 * fade;
+          }
+        }
         // Your own change of speed shows up as the Comet's change relative to you.
         const c = world.c;
         comet.zeta -= player.eta - comet.eta;

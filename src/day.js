@@ -35,10 +35,20 @@ export class DayCycle {
     this.offset = p - t / this.length;
   }
 
-  // A wall clock for the current time of day, from keys' `hour` values.
-  clock() {
+  // Jump to time of day p (0 to one period), keeping today's date.
+  jumpTo(p, t) {
+    this.set(this.dayOf() * this.period + p, t);
+    this.apply(t);
+  }
+
+  // The sky's colours through the day, for a CSS gradient.
+  gradient() {
+    return this.keys.map((k) => `${k.hor.clone().lerp(k.top, 0.45).getStyle()} ${((100 * k.p) / this.period).toFixed(1)}%`).join(", ");
+  }
+
+  // A wall clock for the current time of day (or phase p), from keys' `hour` values.
+  clock(p = this.now) {
     const ks = this.keys.filter((k) => k.hour !== undefined);
-    const p = this.now;
     let i = 0;
     while (i < ks.length - 2 && ks[i + 1].p < p) i++;
     const a = ks[i], b = ks[i + 1];

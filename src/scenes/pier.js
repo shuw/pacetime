@@ -672,6 +672,15 @@ export default {
       ],
       get note() { return note; },
       clock: () => day.clock(),
+      // Pick a time of day from the clock.
+      time: {
+        day,
+        marks: [["Golden hour", 0.05], ["Sunset", 0.42], ["Fireworks", 0.72], ["Midnight", 1.02], ["Sunrise", 1.45], ["Midday", 1.78]],
+        set(p) {
+          day.jumpTo(p, world.t);
+          nextShell = nextTwin = world.t; // the show carries on from now, without a backlog of shells
+        },
+      },
       onKey(code) {
         if (code === "KeyX" && mirrors.inside(player.pos)) { doWave(); return true; }
         return false;

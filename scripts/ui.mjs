@@ -69,6 +69,12 @@ ok("N unmutes", await q(() => document.getElementById("sound-toggle").checked));
 await page.evaluate(() => { location.hash = "#city"; });
 await page.waitForTimeout(800);
 ok("editing the hash to #city switches place", await q(() => document.getElementById("scene-title").textContent === "Neon Crossroads"));
+await page.keyboard.press("Escape");
+await page.waitForTimeout(200);
+ok("Esc to the title screen clears the address", await q(() => !document.getElementById("menu").hidden && location.hash === ""));
+await page.keyboard.press("Escape");
+await page.waitForTimeout(900);
+ok("going back in puts the place back in the address", (await q(() => location.hash)).startsWith("#city@"));
 
 await page.evaluate(() => { history.replaceState(null, "", location.pathname); slowlight.effects.doppler = true; });
 console.log(errors.length ? "ERRORS:\n" + [...new Set(errors)].join("\n") : "no console errors");

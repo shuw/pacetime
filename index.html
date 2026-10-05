@@ -24,11 +24,15 @@
 
       <div class="top-right">
         <div class="buttons">
-          <span id="clock" hidden title="Time of day"><span id="clock-icon"></span><b id="clock-time"></b></span>
+          <button id="clock" hidden title="Change the time of day"><span id="clock-icon"></span><b id="clock-time"></b></button>
           <button id="help-btn" title="Help (?)" aria-label="Help">?</button>
           <button id="lab-btn" title="Lab (L)">Lab</button>
           <button id="menu-btn" title="Scenes (M)">Scenes</button>
         </div>
+        <section class="panel" id="time-pop" hidden>
+          <input type="range" id="time-range" min="0" max="1" step="0.001" aria-label="Time of day" />
+          <div id="time-marks"></div>
+        </section>
         <section class="panel log" id="log-panel" hidden>
           <div class="log-head"><span>observed</span><span>seen</span><span>happened</span></div>
           <ol id="log"></ol>
@@ -91,51 +95,72 @@
           <h2 id="help-title">Help</h2>
           <button id="help-close" aria-label="Close help"><kbd>?</kbd> close</button>
         </div>
-        <section id="place-help" hidden>
-          <h3 id="place-help-title"></h3>
-          <ul id="place-tips"></ul>
-        </section>
-        <dl class="keys">
-          <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Move (arrow keys work too)</dd>
-          <dt>Pace</dt><dd>You sprint by default, up to 95% of light speed. Click Walk, Sprint or Boost to change it</dd>
-          <dt><kbd>Shift</kbd></dt><dd>Hold for one pace faster: from a sprint, the afterburner at 99.5% of light speed</dd>
-          <dt><kbd>Alt</kbd> / <kbd>Option</kbd></dt><dd>Hold for one pace slower: from a sprint, a walk</dd>
-          <dt>Drag</dt><dd>Look around</dd>
-          <dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Turn</dd>
-          <dt><kbd>B</kbd> or right-click</dt><dd>Hold to look back</dd>
-          <dt><kbd>E</kbd></dt><dd>Board or step off a ride</dd>
-          <dt>Press and hold</dt><dd>Walk forward; keep dragging to steer</dd>
-          <dt>Scroll / swipe</dt><dd>Up for the afterburner, down to slow to a walk</dd>
-          <dt><kbd>F</kbd></dt><dd>Throw a glowing ball at 60% of light speed</dd>
-          <dt><kbd>R</kbd></dt><dd>Torch on or off</dd>
-          <dt><kbd>V</kbd></dt><dd>Light a sparkler and draw in the air</dd>
-          <dt><kbd>X</kbd></dt><dd>On the Endless Road, ease back to a walking pace</dd>
-          <dt><kbd>T</kbd></dt><dd>Back to the start of the platform</dd>
-          <dt><kbd>L</kbd></dt><dd>Lab: change the speed of light, switch effects on and off</dd>
-          <dt><kbd>M</kbd></dt><dd>Choose a place</dd>
-          <dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>On the title screen, go to that place</dd>
-          <dt><kbd>N</kbd></dt><dd>Sound on or off</dd>
-          <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Slow light down or speed it up</dd>
-          <dt><kbd>G</kbd></dt><dd>Show all goals</dd>
-          <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Slow motion: ¼×, ½× or normal speed for everything</dd>
-          <dt><kbd>H</kbd></dt><dd>Hide the interface, for photos</dd>
-          <dt><kbd>?</kbd></dt><dd>This help</dd>
-          <dt><kbd>Esc</kbd></dt><dd>Close this panel</dd>
-        </dl>
-        <h3>Goals</h3>
-        <p>Click any goal in the top-left list to jump to a good spot for it.</p>
-        <h3>Touch</h3>
-        <p>Left thumb moves; push far for the afterburner. Right thumb looks. Buttons on screen board trains and look back.</p>
-        <h3>Flashing lights</h3>
-        <p>Some places have lightning and fireworks, which flash brightly.</p>
-        <h3>Coming back</h3>
-        <p>The address bar keeps your place, position and Lab settings, so a refresh (or a shared link) puts you back where you were.</p>
-        <h3>Reading the screen</h3>
-        <p><b>Your watch</b> runs on your own time. The <b>platform clock</b> runs on the station's. The gap between them is how much younger you are. In the observation log, <b>seen</b> is when an event's light reached you, and <b>happened</b> is when it took place in your frame, with the light's travel time taken out.</p>
+        <div class="help-cols">
+          <section class="help-about">
+            <p class="help-label">What you're seeing</p>
+            <div id="about-place" hidden>
+              <h3 id="place-help-title"></h3>
+              <p class="lede" id="place-lede"></p>
+              <ul id="place-tips"></ul>
+            </div>
+            <div id="about-game">
+              <h3>Light at a walking pace</h3>
+              <p class="lede">In Slowlight, light crawls along at about the speed you can run, so the strange effects of Einstein's relativity happen right in front of you.</p>
+              <ul>
+                <li><b>Light takes time to arrive.</b> You see everything as it was when its light set off, so far-off things are seen later, and fast things where they used to be.</li>
+                <li><b>Moving light changes colour.</b> Coming toward you it shifts toward blue, going away toward red, and past the ends of the rainbow it turns invisible.</li>
+                <li><b>Speed bends your view.</b> The faster you go, the more the world crowds into the way ahead.</li>
+                <li><b>Fast clocks run slow, and fast things get shorter.</b> Board a train or a starship and come back younger than everyone who stayed.</li>
+              </ul>
+            </div>
+            <h3>Reading the screen</h3>
+            <p><b>You</b> is your own watch; <b>World</b> is the clock of the place around you. The gap between them is how much younger you are. In the observation log, <b>seen</b> is when an event's light reached you, and <b>happened</b> is when it took place in your frame, with the light's travel time taken out.</p>
+          </section>
+          <section class="help-keys">
+            <p class="help-label">Shortcuts</p>
+          <dl class="keys">
+            <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Move (arrow keys work too)</dd>
+            <dt>Pace</dt><dd>You sprint by default, up to 95% of light speed. Click Walk, Sprint or Boost to change it</dd>
+            <dt><kbd>Shift</kbd></dt><dd>Hold for one pace faster: from a sprint, the afterburner at 99.5% of light speed</dd>
+            <dt><kbd>Alt</kbd> / <kbd>Option</kbd></dt><dd>Hold for one pace slower: from a sprint, a walk</dd>
+            <dt>Drag</dt><dd>Look around</dd>
+            <dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Turn</dd>
+            <dt><kbd>B</kbd> or right-click</dt><dd>Hold to look back</dd>
+            <dt><kbd>E</kbd></dt><dd>Board or step off a ride</dd>
+            <dt>Press and hold</dt><dd>Walk forward; keep dragging to steer</dd>
+            <dt>Scroll / swipe</dt><dd>Up for the afterburner, down to slow to a walk</dd>
+            <dt><kbd>F</kbd></dt><dd>Throw a glowing ball at 60% of light speed (on the Endless Road, fire a pulse of light)</dd>
+            <dt><kbd>R</kbd></dt><dd>Torch on or off</dd>
+            <dt><kbd>V</kbd></dt><dd>Light a sparkler and draw in the air</dd>
+            <dt><kbd>X</kbd></dt><dd>On the Endless Road, ease back to a walking pace</dd>
+            <dt><kbd>T</kbd></dt><dd>Back to where the place starts</dd>
+            <dt>Click the clock</dt><dd>At the Seaside Funfair, change the time of day</dd>
+            <dt><kbd>L</kbd></dt><dd>Lab: change the speed of light, switch effects on and off</dd>
+            <dt><kbd>M</kbd></dt><dd>Choose a place</dd>
+            <dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>On the title screen, go to that place</dd>
+            <dt><kbd>N</kbd></dt><dd>Sound on or off</dd>
+            <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Slow light down or speed it up</dd>
+            <dt><kbd>G</kbd></dt><dd>Show all goals</dd>
+            <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Slow motion: ¼×, ½× or normal speed for everything</dd>
+            <dt><kbd>H</kbd></dt><dd>Hide the interface, for photos</dd>
+            <dt><kbd>?</kbd></dt><dd>This help</dd>
+            <dt><kbd>Esc</kbd></dt><dd>Close this panel</dd>
+          </dl>
+            <h3>Goals</h3>
+            <p>Click any goal in the top-left list to jump to a good spot for it.</p>
+            <h3>Touch</h3>
+            <p>Left thumb moves; push far for the afterburner. Right thumb looks. Buttons on screen board trains and look back.</p>
+            <h3>Flashing lights</h3>
+            <p>Some places have lightning and fireworks, which flash brightly.</p>
+            <h3>Coming back</h3>
+            <p>The address bar keeps your place, position and Lab settings, so a refresh (or a shared link) puts you back where you were.</p>
+          </section>
+        </div>
       </section>
     </div>
 
     <div id="toast"></div>
+    <div id="veil" aria-hidden="true"><h2></h2><i></i><p></p></div>
 
     <div id="menu">
       <canvas id="menu-models"></canvas>

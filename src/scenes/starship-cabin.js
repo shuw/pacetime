@@ -22,11 +22,19 @@ const M = (pos = [0, 0, 0], rot = [0, 0, 0], s = 1) =>
 
 // Bake soft shading into vertex colours (lit from above, a little glow from
 // below), so flat-lit cabin parts still read as solid and rounded.
-function paint(geo, color, m = new THREE.Matrix4(), { inside = false, flat = false } = {}) {
+function paint(geo, color, m = new THREE.Matrix4(), { inside = false, flat = false, panel = null } = {}) {
   const g = geo.index ? geo.toNonIndexed() : geo.clone();
   g.applyMatrix4(m);
   const n = g.attributes.normal, p = g.attributes.position, c = new THREE.Color(color), out = new Float32Array(n.count * 3);
   const s = inside ? -1 : 1;
+  // Panel coordinates, in panels: floor plates laid flat, hull panels round the hull.
+  const pan = new Float32Array(n.count * 3);
+  for (let i = 0; i < n.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    if (panel === "floor") pan.set([x / 0.62, z / 0.62, 1], i * 3);
+    else if (panel === "hull") pan.set([(Math.atan2(x, y - CY) * R) / 0.95, z / 1.15, 1], i * 3);
+  }
+  g.setAttribute("aPanel", new THREE.BufferAttribute(pan, 3));
   for (let i = 0; i < n.count; i++) {
     const d = s * (n.getX(i) * LIGHT.x + n.getY(i) * LIGHT.y + n.getZ(i) * LIGHT.z);
     let k = flat ? 1 : 0.6 + 0.4 * Math.max(0, d) + 0.1 * Math.max(0, -s * n.getY(i));
@@ -34,8 +42,18 @@ function paint(geo, color, m = new THREE.Matrix4(), { inside = false, flat = fal
     out.set([c.r * k, c.g * k, c.b * k], i * 3);
   }
   g.setAttribute("color", new THREE.BufferAttribute(out, 3));
-  for (const name of Object.keys(g.attributes)) if (!["position", "normal", "color"].includes(name)) g.deleteAttribute(name);
+  for (const name of Object.keys(g.attributes)) if (!["position", "normal", "color", "aPanel"].includes(name)) g.deleteAttribute(name);
   return g;
+}
+
+// A distance for the panel: light-years far out, kilometres nearer in.
+function distance(m) {
+  const LY = 9.4607e15;
+  if (m >= 0.01 * LY) return `${(m / LY).toFixed(m < LY ? 3 : 2)} LY`;
+  if (m >= 1e12) return `${(m / 1e12).toLocaleString("en-US", { maximumFractionDigits: m < 1e13 ? 1 : 0 })} BILLION KM`;
+  if (m >= 1e9) return `${(m / 1e9).toLocaleString("en-US", { maximumFractionDigits: m < 1e10 ? 1 : 0 })} MILLION KM`;
+  if (m >= 1e4) return `${Math.round(m / 1e3).toLocaleString("en-US")} KM`;
+  return `${Math.round(m)} M`;
 }
 
 const BOX = new THREE.BoxGeometry(1, 1, 1), BALL = new THREE.SphereGeometry(1, 24, 16), CYL = new THREE.CylinderGeometry(1, 1, 1, 24);
@@ -92,7 +110,7 @@ export function buildCabin() {
     s.absarc(0, -Z0, HW, 0, Math.PI, false);
     const g = new THREE.ShapeGeometry(s, 32);
     g.rotateX(-Math.PI / 2);
-    S(g, FLOOR, M([0, 0.001, 0]));
+    S(g, FLOOR, M([0, 0.001, 0]), { panel: "floor" });
     // Glowing lines: one down the middle, two along the walls.
     Gl(BOX, "#3d9ab8", M([0, 0.006, 0.3], [0, 0, 0], [0.03, 0.01, Z1 - Z0 + 3.8]));
     for (const sx of [-1, 1]) Gl(BOX, "#5a4ea8", M([sx * 1.95, 0.006, 0.25], [0, 0, 0], [0.02, 0.01, Z1 - Z0]));
@@ -103,7 +121,7 @@ export function buildCabin() {
   const band = (t0, t1, color, z0 = Z0, z1 = Z1) => {
     const g = new THREE.CylinderGeometry(R, R, z1 - z0, 48, 1, true, t0, t1 - t0);
     g.rotateX(Math.PI / 2);
-    S(g, color, M([0, CY, (z0 + z1) / 2]), { inside: true });
+    S(g, color, M([0, CY, (z0 + z1) / 2]), { inside: true, panel: "hull" });
   };
   const W0 = 1.55, W1 = 2.75, TAU = Math.PI * 2;
   band(THETA_FLOOR, W0, WALL);
@@ -181,7 +199,11 @@ export function buildCabin() {
   }
 
   const add = (m, order = 2) => { m.layers.set(2); m.renderOrder = order; ship.add(m); return m; };
-  add(new THREE.Mesh(mergeGeometries(solid, false), mat({ color: "#ffffff", vertexColors: true, unlit: true, comoving: true, doubleSided: true })));
+  // Lit by the cabin's own lamps: the ceiling panels, the glowing desk, the
+  // aquarium and the route table.
+  const lamps = [-3.2, -1.4, 0.4, 2.2, 4.0].map((z) => [0, CY + R - 0.2, z, 3.2, "#c4d2f4"]);
+  lamps.push([SEAT[0], 1.0, SEAT[1] - 0.9, 1.5, "#3fb4d8"], [1.5, 1.0, -1.6, 1.6, "#ff8fd8"], [0, 1.0, 0.9, 1.3, "#5fe1ff"]);
+  add(new THREE.Mesh(mergeGeometries(solid, false), mat({ color: "#ffffff", vertexColors: true, unlit: true, comoving: true, doubleSided: true, interior: { lights: lamps, ambient: "#5c6290" } })));
   add(new THREE.Mesh(mergeGeometries(glow, false), mat({ color: "#ffffff", vertexColors: true, emissive: 1, unlit: true, comoving: true })));
 
   // Glass: the long windows and the two domes.
@@ -300,7 +322,7 @@ export function buildCabin() {
 
   // Holograms: the speed panel over the desk, and the route over the table.
   // Off to the left of the view ahead, turned toward the pilot.
-  const speedPanel = add(holoPanel(0.8, 0.34), 9);
+  const speedPanel = add(holoPanel(0.8, 0.42), 9);
   speedPanel.position.set(-0.6, 1.5, SEAT[1] - 1.0);
   speedPanel.rotation.set(-0.2, 0.45, 0);
   const route = new THREE.Group();
@@ -334,7 +356,7 @@ export function buildCabin() {
     group: ship, clock, pip,
     // Called every frame with the ship and player state.
     // progress: 0 at home, 1 at the destination. seen: what the panel says about home.
-    update({ t, dt, ship: s, player, progress, seen }) {
+    update({ t, dt, ship: s, player, progress, seen, dest }) {
       clock.set(player.tau);
       // Pip drifts to a spot beside you, a little ahead, and looks at you.
       const ly = player.yaw - s.heading;
@@ -412,8 +434,20 @@ export function buildCabin() {
           if (fit < 1) { size = Math.floor(size * fit); x.font = `700 ${size}px 'Big Shoulders Display', sans-serif`; }
           x.fillStyle = "#7fd8f0";
           x.fillText(speed, 24, 108 + size * 0.36);
-          x.fillStyle = "rgba(255, 209, 102, 0.95)";
           x.font = "500 20px 'JetBrains Mono', monospace";
+          // How far to go, by the world's rulers, and squeezed short by ours.
+          if (dest) {
+            x.fillStyle = "rgba(127, 255, 176, 0.95)";
+            x.font = "500 18px 'JetBrains Mono', monospace";
+            x.fillText(`${dest.name} ${distance(dest.left)}`, 26, hh - 62);
+            if (player.gamma > 1.05) {
+              x.textAlign = "right";
+              x.fillText(`FOR US ${distance(dest.left / player.gamma)}`, w - 26, hh - 62);
+              x.textAlign = "left";
+            }
+            x.font = "500 20px 'JetBrains Mono', monospace";
+          }
+          x.fillStyle = "rgba(255, 209, 102, 0.95)";
           x.fillText(`SHIP ${formatTime(player.tau, " s")}`, 26, hh - 26);
           x.textAlign = "right";
           x.fillText(seen, w - 26, hh - 26);

@@ -368,6 +368,7 @@ export default {
     group.add(cabin.group);
     const ship = {
       pos: new THREE.Vector3(0, 0, 0), heading: 0, eta: 0, maxEta: 15.8, accel: [0.4, 1.2], helm: false,
+      ease: 1.8, // out of the dock gently, past the jellies and the whale, then ever faster
       local: new THREE.Vector3(0, 0, 2.6), seat: SEAT, walk: WALK,
       colliders: [
         { x: SEAT[0], z: SEAT[1], r: 0.4 }, { x: 1.25, z: SEAT[1] + 0.15, r: 0.4 }, { x: 0, z: 0.9, r: 0.5 },
@@ -379,7 +380,7 @@ export default {
     const fromHome = () => universe().distanceTo(HOME);
     const toBuoy = () => universe().distanceTo(BUOY);
 
-    let reachedBuoy = false, home = false, leftAt = null, cardsIn = 0, approaching = false;
+    let reachedBuoy = false, home = false, leftAt = null, cardsIn = 0, approaching = false, holdOn = false;
     // Where Pip is flying us: the buoy, then home.
     const target = () => (!reachedBuoy ? STOP_OUT : !home ? HOME : null);
     const toTarget = () => { const t = target(); return t ? t.clone().sub(universe()) : null; };
@@ -393,7 +394,8 @@ export default {
       return ((((want - ship.heading + Math.PI) % TAU) + TAU) % TAU) - Math.PI;
     };
     // Pip holds the throttle until we're pointing the right way.
-    ship.canThrust = () => { const to = toTarget(); return !to || Math.abs(bearingError(to)) < 0.3; };
+    // After we arrive, W does nothing until it's let go and pressed again.
+    ship.canThrust = () => { const to = toTarget(); return !holdOn && (!to || Math.abs(bearingError(to)) < 0.3); };
 
     const goals = [
       { text: "Walk to the front seat, take the helm (E) and press W: Pip points us at Proxima Centauri", done: false },
@@ -428,6 +430,7 @@ export default {
         "Light here moves at its real speed, 1.08 billion km/h. To see anything strange, you have to go very, very fast.",
         "At the helm, W sets off: Pip points the ship at where we're going. Shift pushes harder, S slows down, and Pip brakes on the way in so we stop right at the buoy, or home.",
         "At full speed one second for you is about 42 days at home, so 4.24 light-years takes under a minute of your time.",
+        "The panel by the helm gives the distance twice: by the world's rulers, and for us. At speed the way ahead really is shorter for the ship, which is how 4.24 light-years can take a minute.",
         "On the way out, hardly any news from home catches up with you. On the way back you fly into eight years of it at once.",
       ],
       get note() { return note; },
@@ -487,9 +490,11 @@ export default {
           ship.heading += turn;
           player.yaw += turn;
         }
-        // On the way in, Pip brakes along the glide path, and settles us exactly
-        // on the spot (at these speeds even the last moment covers kilometres).
-        if (to && ship.eta > 0 && !ship.throttle) {
+        // On the way in, Pip brakes along the glide path (even with W held), and
+        // settles us exactly on the spot (at these speeds even the last moment
+        // covers kilometres).
+        if (!ship.throttle) holdOn = false;
+        if (to && ship.eta > 0) {
           const r = to.length();
           if (ahead(to) && ship.eta > glide(r)) {
             if (!approaching) note = reachedBuoy ? "Pip: Home dead ahead. Braking!" : "Pip: Proxima dead ahead. Braking!";
@@ -499,13 +504,15 @@ export default {
           if (approaching && (!ahead(to) || C * Math.sinh(ship.eta) * dTau >= r)) {
             ship.pos.copy(local(target()));
             ship.eta = 0;
+            holdOn = ship.throttle;
           }
         }
         const u = universe();
 
         cabin.group.position.copy(ship.pos);
         cabin.group.rotation.y = ship.heading;
-        cabin.update({ t: player.tau, dt: dTau, ship, player, progress: -u.z / D, seen: `HOME SEEN ${dateAt(retardedTime(eye, local(HOME)))}` });
+        const left = target() ? target().distanceTo(u) : 0;
+        cabin.update({ t: player.tau, dt: dTau, ship, player, progress: -u.z / D, seen: `HOME SEEN ${dateAt(retardedTime(eye, local(HOME)))}`, dest: target() ? { name: reachedBuoy ? "HOME" : "PROXIMA", left } : null });
 
         // Everything out there, drawn where its light says it is.
         place(station.group, local(HOME), eye);

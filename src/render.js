@@ -196,7 +196,14 @@ export function draw(place, eye) {
 // Compile a newly loaded place's shaders in the background, so its first
 // frame doesn't stall (most noticeable on slower machines).
 export function warmUp() {
-  return renderer.compileAsync(root, camera).catch(() => {});
+  // Compile for where the scene is really drawn, the composer's buffer: a
+  // shader for the screen is a different program, and every one would
+  // compile again on the first frame.
+  const was = renderer.getRenderTarget();
+  renderer.setRenderTarget(composer.readBuffer);
+  const done = renderer.compileAsync(root, camera);
+  renderer.setRenderTarget(was);
+  return done.catch(() => {});
 }
 
 export function resize() {

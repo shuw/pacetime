@@ -34,17 +34,23 @@ export class Gallery {
       const phases = [[0, 0.62], [0.3, 0.75], [0.15, 0.55]][r % 3];
       for (const ph of phases) {
         const dir = r % 2 ? -1 : 1;
-        const m = new Mover(new THREE.Vector3(dir * frac * c, 0, 0), { clip: [o.x - width / 2 - 0.6, z - 2, o.x + width / 2 + 0.6, z + 2] });
-        const colors = ["#ffd166", "#7bdcff", "#ff7aa8"];
-        m.add(G.cyl, { color: "#fff6e0", ir: 0.6, uv: 0.3 }, { pos: [0, y, 0], rot: [Math.PI / 2, 0, 0], scale: [0.55, 0.12, 0.55] });
-        m.add(G.cyl, { color: colors[r], emissive: 0.5, ir: 0.8, uv: 1 }, { pos: [0, y, 0.07], rot: [Math.PI / 2, 0, 0], scale: [0.38, 0.12, 0.38] });
-        m.add(G.cyl, { color: "#d8344a", emissive: 0.4, ir: 0.6, uv: 0.6 }, { pos: [0, y, 0.12], rot: [Math.PI / 2, 0, 0], scale: [0.15, 0.12, 0.15] });
-        m.add(G.box, { color: "#b8902a", ir: 0.4 }, { pos: [0, y - 0.35, 0], scale: [0.08, 0.4, 0.08] });
-        m.withGhost();
-        m.group.userData.dynamic = true;
-        group.add(m.group);
+        // Two of each target, taking turns lap by lap: when one wraps round to
+        // the start, its last lap's light is still on its way to you, so it
+        // stays in sight until that light has arrived.
+        const ms = [0, 1].map(() => {
+          const m = new Mover(new THREE.Vector3(dir * frac * c, 0, 0), { clip: [o.x - width / 2 - 0.6, z - 2, o.x + width / 2 + 0.6, z + 2] });
+          const colors = ["#ffd166", "#7bdcff", "#ff7aa8"];
+          m.add(G.cyl, { color: "#fff6e0", ir: 0.6, uv: 0.3 }, { pos: [0, y, 0], rot: [Math.PI / 2, 0, 0], scale: [0.55, 0.12, 0.55] });
+          m.add(G.cyl, { color: colors[r], emissive: 0.5, ir: 0.8, uv: 1 }, { pos: [0, y, 0.07], rot: [Math.PI / 2, 0, 0], scale: [0.38, 0.12, 0.38] });
+          m.add(G.cyl, { color: "#d8344a", emissive: 0.4, ir: 0.6, uv: 0.6 }, { pos: [0, y, 0.12], rot: [Math.PI / 2, 0, 0], scale: [0.15, 0.12, 0.15] });
+          m.add(G.box, { color: "#b8902a", ir: 0.4 }, { pos: [0, y - 0.35, 0], scale: [0.08, 0.4, 0.08] });
+          m.withGhost();
+          m.group.userData.dynamic = true;
+          group.add(m.group);
+          return m;
+        });
         const span = width;
-        const tg = { m, y, z, dir, frac, span, phase: ph * span, row: r, hitAt: null, respawn: 0 };
+        const tg = { ms, m: ms[0], lap: 0, y, z, dir, frac, span, phase: ph * span, row: r, hitAt: null, respawn: 0 };
         this.place(tg, 0);
         this.targets.push(tg);
       }
@@ -54,15 +60,18 @@ export class Gallery {
     group.add(this.pops);
   }
 
-  // Put a target on its track: it slides across, then wraps round to the other end.
+  // Put a target on its track: it slides across, then wraps round to the
+  // other end. Each lap is its own mover, alive only for that lap.
   place(tg, t) {
     const half = tg.span / 2;
     const v = tg.frac * this.c;
     const travel = tg.span / v;
     const k = ((((t + tg.phase / v) % travel) + travel) % travel) / travel;
     const x = this.origin.x + tg.dir * (-half + k * tg.span);
+    tg.m = tg.ms[tg.lap++ % 2];
     tg.m.dispatch(t, new THREE.Vector3(x, 0, tg.z));
     tg.wrapAt = t + (1 - k) * travel;
+    tg.m.life.set(tg.lap === 1 ? -1e9 : t, tg.wrapAt); // the first lap has been going all along
   }
 
   throwBall(b) {
@@ -75,7 +84,6 @@ export class Gallery {
     for (const tg of this.targets) {
       if (tg.hitAt !== null && t > tg.respawn) {
         tg.hitAt = null;
-        tg.m.life.set(-1e9, 1e9);
         this.place(tg, t);
       }
       if (tg.hitAt === null && t >= tg.wrapAt) this.place(tg, t);
@@ -94,7 +102,7 @@ export class Gallery {
           b.done = true;
           tg.hitAt = t;
           tg.respawn = t + 4;
-          tg.m.life.set(-1e9, t);
+          tg.m.life.y = t;
           this.score += 1 + tg.row;
           sfx.clang(new THREE.Vector3(q.x, tg.y, tg.z));
           const col = new THREE.Color(["#ffd166", "#7bdcff", "#ff7aa8"][tg.row]);

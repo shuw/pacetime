@@ -4,7 +4,7 @@ import { Player } from "./player.js";
 import { bake } from "./geo.js";
 import { ghosts, shared, sparkField } from "./shaders.js";
 import { addVelocity, effects, lightSpeed, observerFactors, world } from "./relativity.js";
-import { clearToast, initLab, onGoalClick, showScene, syncLab, toast, toggleGoals, toggleLab, updateHud } from "./hud.js";
+import { clearToast, initLab, initTime, onGoalClick, showScene, syncLab, timeOpen, toast, toggleGoals, toggleLab, toggleTime, updateHud } from "./hud.js";
 import { motion } from "./motion.js";
 import { Minimap } from "./minimap.js";
 import { Carried, Sparkler } from "./toys.js";
@@ -101,6 +101,8 @@ const title = new TitleScreen({ places: SCENES, done, onPick: (s) => startScene(
 
 function openMenu() {
   paused = true;
+  // The title screen has no place in the address; going back in puts it back.
+  try { history.replaceState(null, "", location.pathname + location.search); } catch { /* embedded pages may not allow it */ }
   player.enabled = false;
   title.open(current?.instance.started ? current.scene.title : null);
 }
@@ -111,18 +113,32 @@ function closeMenu() {
   player.enabled = true;
 }
 
-// The title screen stays up, still animated, while the place's shaders compile.
+// Going into a place: a veil fades in over the title screen, the place is
+// built and its shaders compiled out of sight, and the veil fades into it.
+const veil = document.getElementById("veil");
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
+const fadeVeil = (on, ms) => new Promise((r) => {
+  veil.style.transitionDuration = `${ms}ms`;
+  veil.classList.toggle("on", on);
+  setTimeout(r, ms);
+});
 let starting = false;
 async function startScene(scene) {
   if (starting) return;
   starting = true;
   unlockAudio();
   sfx.ui();
+  veil.querySelector("h2").textContent = scene.title;
+  veil.querySelector("p").textContent = scene.tag;
+  await fadeVeil(true, 260);
+  await nextFrame(); await nextFrame(); // the veil is on screen before building holds up the page
   load(scene);
   current.instance.started = true;
-  await warmUp();
-  starting = false;
   closeMenu();
+  await warmUp();
+  for (let i = 0; i < 3; i++) await nextFrame(); // the first frames, with their uploads, also behind the veil
+  starting = false;
+  await fadeVeil(false, 650);
 }
 
 // Throw a glowing ball at 60% of light speed (relative to you), from your hand.
@@ -172,11 +188,15 @@ function setPlayback(k) {
 function setHelp(open) {
   if (help.hidden === !open) return;
   sfx.ui();
-  // What's going on in this place, before the controls.
-  const tips = current?.instance.tips ?? [];
-  document.getElementById("place-help").hidden = !tips.length || paused;
-  document.getElementById("place-help-title").textContent = `What's going on in ${current?.scene.title ?? ""}`;
-  document.getElementById("place-tips").innerHTML = tips.map((t) => `<li>${t}</li>`).join("");
+  // What this place shows; from the title screen, what the game is about.
+  const inPlace = !!current && !paused;
+  document.getElementById("about-place").hidden = !inPlace;
+  document.getElementById("about-game").hidden = inPlace;
+  if (inPlace) {
+    document.getElementById("place-help-title").textContent = current.scene.title;
+    document.getElementById("place-lede").textContent = current.scene.blurb;
+    document.getElementById("place-tips").replaceChildren(...(current.instance.tips ?? []).map((t) => Object.assign(document.createElement("li"), { textContent: t })));
+  }
   help.hidden = !open;
   player.enabled = !open && !paused;
 }
@@ -231,7 +251,8 @@ addEventListener("keydown", (e) => {
   if (e.code === "KeyM") menuOpen && current?.instance.started ? closeMenu() : openMenu();
   else if (e.code === "Escape" && menuOpen) { if (current?.instance.started) closeMenu(); }
   else if (menuOpen) return;
-  // Esc closes the Lab if it's open, and otherwise goes back to the title screen.
+  // Esc closes the time picker or the Lab if one is open, and otherwise goes back to the title screen.
+  else if (e.code === "Escape" && timeOpen()) toggleTime(false);
   else if (e.code === "Escape") document.getElementById("lab").hidden ? openMenu() : toggleLab();
   // The Lab needs the mouse, so opening it lets go of the view.
   else if (e.code === "KeyL") toggleLab();
@@ -257,6 +278,7 @@ addEventListener("keydown", (e) => {
 });
 
 initLab(setLight);
+initTime();
 // Clicking a goal takes you to a good spot for it.
 onGoalClick((i) => {
   const at = current?.instance.goals?.[i]?.at;

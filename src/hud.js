@@ -55,6 +55,31 @@ export function initLab(onLight) {
   syncLab();
 }
 
+// The funfair's clock: click it to pick a time of day.
+let timeOf = null, timeFor = null;
+export function toggleTime(open = $("time-pop").hidden) {
+  if (open && !timeOf) return;
+  $("time-pop").hidden = !open;
+  $("clock").classList.toggle("open", open);
+  if (!open || timeFor === timeOf) return;
+  timeFor = timeOf;
+  $("time-range").style.background = `linear-gradient(90deg, ${timeOf.day.gradient()})`;
+  $("time-marks").replaceChildren(...timeOf.marks.map(([label, p]) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.dataset.p = String(p);
+    return b;
+  }));
+}
+export function initTime() {
+  $("clock").addEventListener("click", () => toggleTime());
+  $("time-range").addEventListener("input", (e) => timeOf?.set(Number(e.target.value) * timeOf.day.period));
+  $("time-range").addEventListener("change", (e) => e.target.blur()); // so the keys walk again
+  $("time-marks").addEventListener("click", (e) => { if (e.target.dataset.p) timeOf?.set(Number(e.target.dataset.p)); });
+  $("view").addEventListener("pointerdown", () => toggleTime(false));
+}
+export const timeOpen = () => !$("time-pop").hidden;
+
 export function syncLab() {
   for (const [k] of TOGGLES) $(`fx-${k}`).checked = effects[k];
   const c = lightSpeed();
@@ -195,6 +220,9 @@ export function updateHud({ player, instance, locked, prompt }) {
     $("clock-time").textContent = clock.text;
     $("clock-icon").classList.toggle("moon", !clock.sun);
   }
+  timeOf = instance.time ?? null;
+  if (!timeOf && !$("time-pop").hidden) toggleTime(false);
+  if (timeOf && !$("time-pop").hidden && document.activeElement !== $("time-range")) $("time-range").value = String(timeOf.day.now / timeOf.day.period);
 
   // Places with light at its real speed have no light slider.
   document.querySelector(".gauge .light").hidden = !!instance.fixedC;

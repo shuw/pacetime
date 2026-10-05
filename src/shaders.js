@@ -116,6 +116,10 @@ varying vec3 vTint;
 varying float vDist;
 varying vec3 vPat;  // where this point is on its object at rest: textures stick to moving things
 varying vec3 vPatN;
+#ifdef INTERIOR
+attribute vec3 aPanel;
+varying vec3 vPanel;
+#endif
 
 void main() {
   mat4 m = modelMatrix;
@@ -125,6 +129,10 @@ void main() {
   vec4 wp = m * vec4(position, 1.0);
   vPat = wp.xyz;
   vPatN = mat3(m) * normal;
+  #ifdef INTERIOR
+    // Lit in the ship's own frame, by its own lamps.
+    vPat = position; vPatN = normal; vPanel = aPanel;
+  #endif
   #ifdef MOVER
     // Moving objects are built around the origin. Squash them along their
     // motion (Lorentz contraction), then find where this vertex was when the
@@ -232,8 +240,8 @@ void main() {
   #endif
   vec3 P = x;
   float b = length(uBeta);
-  #ifdef COMOVING
-    b = 0.0; // carried with you: no bending
+  #if defined(COMOVING) || defined(SKY_PIXEL)
+    b = 0.0; // carried with you: no bending (the sky bends itself, pixel by pixel)
   #endif
   if (b > 1e-7 && uFlags.x > 0.5) {
     #ifdef PULSE
@@ -388,6 +396,12 @@ uniform vec4 uBeamInfo;
 uniform vec3 uBeamLight;
 uniform vec3 uBeamCone;
 uniform vec4 uLampPos[8];   // xyz, range
+#ifdef INTERIOR
+uniform vec4 uInLight[8];   // a cabin's own lamps, in its frame: xyz, range
+uniform vec3 uInColor[8];
+uniform vec3 uInAmbient;
+varying vec3 vPanel;        // panel coordinates, and how much the panels show
+#endif
 uniform vec3 uLampColor[8];
 #ifdef ROTOR
 varying vec3 vSrcVel;
@@ -585,12 +599,25 @@ void main() {
       base *= 0.96 + 0.06 * grain;
     }
   #endif
+  float roadWet = 0.0;
   #ifdef ROAD
-    // A road along z: asphalt, glowing edge lines and a dashed centre line.
+    // A road along z across a dusty plain: asphalt, glowing edge lines and a
+    // dashed centre line. uRoad.y is how far along the road local z = 0 is
+    // (mod 40 km), so the texture stays put when the world is moved back.
     {
       float ax = abs(vWorld.x);
       float onRoad = 1.0 - smoothstep(uRoad.x - 0.05, uRoad.x + 0.05, ax);
-      base = mix(base, uRoadColor, onRoad);
+      vec2 rq = vec2(vPat.x, vPat.z + uRoad.y);
+      float rfine = 1.0 - smoothstep(0.02, 0.08, max(length(fwidth(rq)), 1e-5));
+      // The plain: long dunes, darker stony patches, grit close up.
+      vec3 ground = base * (0.6 + 0.8 * fbm2(rq * vec2(0.025, 0.015))) * (0.8 + 0.4 * fbm2(rq * 0.18));
+      ground = mix(ground, ground * 0.55, smoothstep(0.58, 0.7, fbm2(rq * 0.05 + 7.0)));
+      ground *= 1.0 + 0.3 * (hash12(floor(rq * 18.0)) - 0.5) * rfine;
+      // Asphalt, with lighter polished wheel tracks down each lane.
+      float track = 1.0 - smoothstep(0.25, 0.4, abs(abs(abs(vPat.x) - uRoad.x * 0.5) - 0.85));
+      vec3 asphalt = uRoadColor * (0.75 + 0.5 * fbm2(rq * 0.2)) * (1.0 + 0.3 * (hash12(floor(rq * 40.0)) - 0.5) * rfine) * (1.0 + 0.6 * track);
+      base = mix(ground, asphalt, onRoad);
+      roadWet = onRoad;
       float fw = max(fwidth(ax), 1e-4);
       float edge = 1.0 - smoothstep(0.07, 0.07 + fw * 1.5, abs(ax - (uRoad.x - 0.3)));
       // Dashes every 10 m, blurring to an even glow when squeezed too small to draw.
@@ -611,6 +638,9 @@ void main() {
   #endif
   float rough = uFinish.x;
   float hgt = 0.0, bumpK = 0.0;
+  #ifdef ROAD
+    rough = mix(rough, 0.3, roadWet);
+  #endif
   #ifndef UNLIT
   {
     vec3 sN = normalize(vPatN + 1e-6);
@@ -830,6 +860,29 @@ void main() {
   #endif
   #ifdef UNLIT
     light = vec3(1.0);
+  #endif
+  #ifdef INTERIOR
+    {
+      // Hull panels and floor plates: a seam round each, each its own shade.
+      if (vPanel.z > 0.0) {
+        vec2 cell = floor(vPanel.xy), f = fract(vPanel.xy), fw2 = max(fwidth(vPanel.xy), vec2(1e-4));
+        vec2 d = min(f, 1.0 - f) / fw2;
+        float seam = (1.0 - smoothstep(0.6, 1.6, min(d.x, d.y))) * (1.0 - smoothstep(0.12, 0.35, max(fw2.x, fw2.y)));
+        float lip = (1.0 - smoothstep(1.6, 3.5, d.y)) * step(0.5, f.y) * (1.0 - smoothstep(0.12, 0.35, fw2.y)); // a lit edge under each seam
+        base *= mix(1.0, (0.9 + 0.18 * hash12(cell)) * (1.0 - 0.5 * seam) * (1.0 + 0.12 * lip), vPanel.z);
+      }
+      vec3 Nl = normalize(vPatN);
+      #ifdef DOUBLE_SIDED
+        if (!gl_FrontFacing) Nl = -Nl;
+      #endif
+      light = uInAmbient;
+      for (int i = 0; i < 8; i++) {
+        vec3 L = uInLight[i].xyz - vPat;
+        float d2 = dot(L, L), r = uInLight[i].w;
+        float fall = r * r / (r * r + d2 * 3.0);
+        light += uInColor[i] * fall * (0.2 + 0.8 * max(dot(Nl, L * inversesqrt(max(d2, 1e-4))), 0.0));
+      }
+    }
   #endif
   float lum = dot(light, vec3(0.33));
   float waterFres = 0.0;
@@ -1071,6 +1124,20 @@ vec4 clouds(vec3 dir) {
 
 void main() {
   vec3 dir = normalize(vWorld - uCam);
+  // Bending, undone pixel by pixel: which way this light came from in the
+  // world's frame. (Bending the sphere's corners instead goes polygonal when
+  // the whole sky crowds into a small circle ahead.) Inverse of aberrateWith,
+  // kept exact very close to light speed.
+  {
+    float b2 = dot(uBeta, uBeta);
+    if (b2 > 1e-14 && uFlags.x > 0.5) {
+      vec3 n = uBeta * inversesqrt(b2);
+      float xp = dot(dir, n);
+      vec3 perp = dir - n * xp;
+      float s = xp >= 0.0 ? -dot(perp, perp) / (1.0 + xp) : xp - 1.0; // xp - 1, without cancelling
+      dir = normalize(perp + n * (uObs.z * (s + uObs.w)));
+    }
+  }
   float D = doppler(dir);
   float h = clamp(dir.y, -0.2, 1.0);
   // The warm horizon band hugs the horizon and is strongest toward the sun.
@@ -1196,6 +1263,7 @@ export function mat({
   rough = null,     // 0 glossy to 1 matte; each surface has its own default
   vary = null,      // how much large-scale variation (0 for none)
   shine = 1,        // highlight strength
+  interior = null,  // { lights: [[x, y, z, range, color]], ambient }: lit by its own lamps, in its own frame (needs an aPanel attribute)
 } = {}) {
   // Shared uniform objects (a train's motion, a wheel's spin) key by identity,
   // so every part of one train shares a material and can be merged.
@@ -1226,6 +1294,7 @@ export function mat({
   if (windows) defines.WINDOWS = "";
   if (spiral) defines.SPIRAL = "";
   if (doubleSided) defines.DOUBLE_SIDED = "";
+  if (interior) defines.INTERIOR = "";
   if (surface) { defines.SURFACE = ""; defines[`SURF_${surface.toUpperCase()}`] = ""; }
   const m = new THREE.ShaderMaterial({
     vertexShader: vertex,
@@ -1240,6 +1309,11 @@ export function mat({
       uFinish: { value: new THREE.Vector4(rough ?? FINISH[surface]?.[0] ?? 0.75, vary ?? FINISH[surface]?.[1] ?? 0.06, shine, surface === "metal" ? 1 : 0) },
       uCheckerB: { value: new THREE.Color(checker?.b ?? "#000") },
       uCheckerSize: { value: checker?.size ?? 1 },
+      ...(interior && {
+        uInLight: { value: Array.from({ length: 8 }, (_, i) => new THREE.Vector4(...(interior.lights[i]?.slice(0, 4) ?? [0, -100, 0, 0.01]))) },
+        uInColor: { value: Array.from({ length: 8 }, (_, i) => new THREE.Color(interior.lights[i]?.[4] ?? "#000000")) },
+        uInAmbient: { value: new THREE.Color(interior.ambient ?? "#ffffff") },
+      }),
       uGridColor: { value: new THREE.Color(grid?.color ?? "#fff") },
       ...(road && { uRoad: { value: new THREE.Vector2(road.half, 0) }, uRoadColor: { value: new THREE.Color(road.color) }, uRoadLine: { value: new THREE.Color(road.line) } }),
       uGrid: { value: new THREE.Vector3(grid?.spacing ?? 4, grid?.width ?? 1, grid?.glow ?? 0) },
@@ -1272,6 +1346,7 @@ export function skyMaterial() {
     vertexShader: vertex,
     fragmentShader: skyFragment,
     uniforms: shared,
+    defines: { SKY_PIXEL: "" },
     side: THREE.BackSide,
     depthWrite: false,
   });
