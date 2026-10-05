@@ -279,7 +279,7 @@ export default {
       { group: "Ride", text: "Hail a taxi (E at the yellow TAXI sign) and ride up the avenue", done: false, at: [-7.6, 12, 0, 0] },
     ];
     let note = "Light here moves at 36 km/h, slower than a sprinter. The taxis do 30.6 km/h, so you see them where they were seconds ago.";
-    let lastSignal = null, lastSurge = false, cabWatch = { near: false, far: false };
+    let lastSurge = false, cabWatch = { near: false, far: false };
     const fwd = new THREE.Vector3();
 
     return {

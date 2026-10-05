@@ -21,7 +21,7 @@ export async function open({ hash = "", size = [1440, 860], gpu = true } = {}) {
     // Bun serves its error page when the build fails; it's a script, so ask
     // the dev server log why instead.
     const { execSync } = await import("node:child_process");
-    const log = execSync("tail -8 /tmp/pacetime-dev.log 2>/dev/null || true").toString().replace(/\x1b\[[0-9;]*m/g, "");
+    const log = execSync("tail -8 /tmp/pacetime-dev.log 2>/dev/null || true").toString().replace(new RegExp(String.fromCharCode(27) + "\\[[0-9;]*m", "g"), "");
     console.error("Page didn't start. Build error?\n" + log);
     throw e;
   }

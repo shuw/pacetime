@@ -40,7 +40,8 @@ Contains flashing lights (lightning and fireworks).
 | | |
 |---|---|
 | `W` `A` `S` `D` | Move; you sprint by default, up to 95% of light speed |
-| `Shift` | One pace faster: from a sprint, the afterburner at 99.5% |
+| `Shift` | Hold for one pace faster: from a sprint, the afterburner at 99.5% |
+| `Alt` (`Option` on a Mac) | Hold for one pace slower: from a sprint, a walk |
 | Drag / hold the mouse | Look around / move |
 | Scroll, or the Walk / Sprint / Boost buttons | Change pace |
 | `E` | Ride, board, take the helm |

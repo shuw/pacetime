@@ -28,6 +28,15 @@ const boosted = await q(() => pacetime.player.beta);
 await page.keyboard.up("w");
 await page.keyboard.up("Shift");
 ok(`holding Shift steps up to the afterburner, 99.5% (got ${(boosted * 100).toFixed(1)}%)`, Math.abs(boosted - 0.995) < 0.002);
+ok("the mouse hint goes once you've used the movement keys", await q(() => document.getElementById("look-hint").hidden));
+await q(() => { pacetime.player.place(-96, 11, Math.PI / 2); }); // back along the platform
+await page.keyboard.down("Alt");
+await page.keyboard.down("w");
+await page.waitForTimeout(2500);
+const walked = await q(() => pacetime.player.beta);
+await page.keyboard.up("w");
+await page.keyboard.up("Alt");
+ok(`holding Alt steps down to a walk, 53% (got ${(walked * 100).toFixed(1)}%)`, Math.abs(walked - 0.532) < 0.01);
 
 await page.waitForTimeout(2500); // coast to a stop
 const hash = await q(() => location.hash);

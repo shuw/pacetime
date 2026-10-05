@@ -53,21 +53,6 @@ function starfield(scene, n = 260, r = 14) {
   scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: "#dfe6ff", size: 0.05, sizeAttenuation: true })));
 }
 
-// A round little creature, like the ones in the places.
-function critter(parent, color, pos, s = 1) {
-  const c = new THREE.Group();
-  c.position.set(...pos);
-  c.scale.setScalar(s);
-  part(c, new THREE.CapsuleGeometry(0.16, 0.18, 6, 12), std(color, { flat: false, rough: 0.5 }), [0, 0.3, 0]);
-  for (const sx of [-1, 1]) {
-    part(c, BALL, std("#ffffff", { flat: false }), [sx * 0.065, 0.4, 0.13], [0, 0, 0], 0.05);
-    part(c, BALL, std("#111111", { flat: false }), [sx * 0.065, 0.4, 0.17], [0, 0, 0], 0.025);
-    part(c, BOX, std(color), [sx * 0.07, 0.06, 0.02], [0, 0, 0], [0.07, 0.07, 0.12]);
-  }
-  parent.add(c);
-  return c;
-}
-
 function funfair() {
   const s = stand({ accent: "#ffb36b", sky: "#ffcfa0", ground: "#4a2a5a", key: "#ffc890", keyAt: [-4, 3, 3], top: "#2a6f8f" });
   const g = s.group;

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { box, followDisc, G, mesh, rng } from "./geo.js";
 import { mat, sparkField } from "./shaders.js";
-import { retardedTime, world } from "./relativity.js";
+import { world } from "./relativity.js";
 import { sfx } from "./audio.js";
 import { motion } from "./motion.js";
 

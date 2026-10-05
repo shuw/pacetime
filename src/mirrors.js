@@ -176,12 +176,12 @@ export class MirrorHall {
     for (const y of this.yous) {
       y.m.visible = inside;
       if (!inside) continue;
-      let lo = Math.max(h[0].t, t - 14), hi = t, s = null;
+      let lo = Math.max(h[0].t, t - 14), hi = t;
       const seen = (tt) => { const p = this.past(tt); return this.image(y.n, p.x, p.z).setY(0.9).distanceTo(eye) - world.c * (t - tt); };
       if (!effects.delay) lo = hi = t;
       else if (seen(lo) > 0) hi = lo; // older than the history: show the oldest
       else for (let i = 0; i < 28; i++) { const mid = (lo + hi) / 2; if (seen(mid) > 0) hi = mid; else lo = mid; }
-      s = this.past((lo + hi) / 2);
+      const s = this.past((lo + hi) / 2);
       const p = this.image(y.n, s.x, s.z);
       y.m.position.set(p.x, 0, p.z);
       const odd = y.n % 2 !== 0;

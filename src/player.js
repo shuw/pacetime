@@ -109,9 +109,12 @@ export class Player {
   }
 
   bindInput() {
+    const MOVE = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
     addEventListener("keydown", (e) => {
       if (e.target.closest?.("input, select, textarea")) return;
       this.keys.add(e.code);
+      if (MOVE.has(e.code)) this.usedKeys = true; // you've found the keys: no need for the mouse hint
+      if (e.code === "AltLeft" || e.code === "AltRight") e.preventDefault(); // Alt walks; don't open browser menus
     });
     addEventListener("keyup", (e) => this.keys.delete(e.code));
     addEventListener("blur", () => this.keys.clear());
@@ -219,9 +222,12 @@ export class Player {
     fwd -= this.touchMove.y;
     side += this.touchMove.x;
     if (!this.enabled || this.rocket) fwd = side = 0;
-    // The pace you've picked, one step faster while Shift is held.
+    // The pace you've picked, one step faster while Shift is held and one step
+    // slower while Alt (Option) is.
     const shift = k.has("ShiftLeft") || k.has("ShiftRight") || this.touchSprint;
-    const held = Math.min(2, Math.max(this.pace + (shift ? 1 : 0), (shift && k.has("Space")) || this.touchBoost ? 2 : 0));
+    const slow = k.has("AltLeft") || k.has("AltRight");
+    const stepped = Math.min(2, Math.max(0, this.pace + (shift ? 1 : 0) - (slow ? 1 : 0)));
+    const held = (shift && k.has("Space")) || this.touchBoost ? 2 : stepped;
     this.heldPace = held;
     const sprint = held >= 1 && !this.vehicle;
     this.lookBack = this.lookBack && this.enabled;
@@ -236,7 +242,6 @@ export class Player {
 
     // Steer proper velocity toward the target. Proper velocity has no ceiling,
     // so however hard you push you never reach c.
-    const c = world.c;
     const boost = sprint && held >= 2;
     this.paceNow = boost ? 2 : sprint ? 1 : 0;
     const going = (fwd !== 0 || side !== 0) && !this.vehicle;

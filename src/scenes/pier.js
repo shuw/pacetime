@@ -754,7 +754,7 @@ export default {
       },
       update({ eye, camera, t, dTau }) {
         // Sky, light and the moment the lamps come on.
-        const p = day.apply(t);
+        day.apply(t);
         this.bloomNow = day.bloom;
         // Today's (or the coming) evening: lights on at dusk, off after sunrise.
         const P = day.phase, d = Math.floor((P - LIGHTS_ON + 0.25) / day.period);

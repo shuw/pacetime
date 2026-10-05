@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { box, G, mesh } from "./geo.js";
 import { mat, sparkField } from "./shaders.js";
 import { Mover } from "./movers.js";
-import { world } from "./relativity.js";
+
 import { sfx } from "./audio.js";
 
 // A shooting gallery: rows of targets sliding back and forth at a good

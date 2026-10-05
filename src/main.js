@@ -364,7 +364,7 @@ function frame() {
     if (!paused) {
       updateHud({
         player, instance: current.instance,
-        locked: player.dragged || matchMedia("(pointer: coarse)").matches,
+        locked: player.dragged || player.usedKeys || matchMedia("(pointer: coarse)").matches,
         prompt: current.instance.action?.(eye) ?? null,
       });
       keepLink(dTau, currentLink);
