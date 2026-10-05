@@ -126,21 +126,32 @@ function glowDisc(color, intensity = 1, ir = 0.6, uv = 0.8) {
 }
 
 // Neon lettering as a single mesh, centred on `at`, readable from +z
-// (facing 1) or from -z (facing -1).
-function sign(text, { size, color, width, at, facing = 1 }) {
-  const g = neon(text, { size, color, width });
-  g.updateMatrixWorld(true);
-  const geos = [];
-  g.traverse((o) => {
-    if (!o.isMesh) return;
-    const q = o.geometry.toNonIndexed().applyMatrix4(o.matrixWorld);
-    for (const n of Object.keys(q.attributes)) if (n !== "position" && n !== "normal") q.deleteAttribute(n);
-    geos.push(q);
-  });
-  const m = new THREE.Mesh(mergeGeometries(geos, false), g.glow);
-  m.position.set(at[0] - (facing * g.textWidth) / 2, at[1], at[2]);
-  if (facing < 0) m.rotation.y = Math.PI;
-  return m;
+// (facing 1) or from -z (facing -1). With `back`, it's a board with another
+// message on its far side, so nobody reads it backwards.
+function sign(text, { size, color, width, at, facing = 1, back = null, backColor = color }) {
+  const lettering = (words, colour, side, z) => {
+    const g = neon(words, { size, color: colour, width });
+    g.updateMatrixWorld(true);
+    const geos = [];
+    g.traverse((o) => {
+      if (!o.isMesh) return;
+      const q = o.geometry.toNonIndexed().applyMatrix4(o.matrixWorld);
+      for (const n of Object.keys(q.attributes)) if (n !== "position" && n !== "normal") q.deleteAttribute(n);
+      geos.push(q);
+    });
+    const m = new THREE.Mesh(mergeGeometries(geos, false), g.glow);
+    m.position.set(at[0] - (side * g.textWidth) / 2, at[1], z);
+    if (side < 0) m.rotation.y = Math.PI;
+    m.textWidth = g.textWidth;
+    return m;
+  };
+  const front = lettering(text, color, facing, at[2]);
+  if (!back) return front;
+  const g = new THREE.Group();
+  const rear = lettering(back, backColor, -facing, at[2] - facing * 1.6);
+  const w = Math.max(front.textWidth, rear.textWidth) + 4;
+  g.add(front, rear, mesh(G.box, mat({ color: "#1c1f38", ir: 0.2, uv: 0.2, surface: "metal" }), { pos: [at[0], at[1] + 2 * size, at[2] - facing * 0.8], scale: [w, 4 * size + 3, 0.5] }));
+  return g;
 }
 
 // A soft, glowing cloud of gas far beyond the stars.
@@ -194,8 +205,8 @@ function buildStation() {
   st.add(clock);
   st.add(sign("HALO STATION", { size: 1.4, color: "#ff8fd8", width: 0.32, at: [STATION.x, STATION.y + 26, STATION.z - 4], facing: -1 }));
   st.add(sign("STATION TIME", { size: 0.7, color: "#ffd166", width: 0.18, at: [STATION.x, STATION.y + 12.5, STATION.z - 13], facing: -1 }));
-  st.add(sign("SPEED LIMIT C", { size: 2.2, color: "#ff5a4a", width: 0.5, at: [0, 34, -280], facing: 1 }));
-  st.add(sign("WELCOME HOME", { size: 2.2, color: "#5ce1c6", width: 0.5, at: [0, 34, -520], facing: -1 }));
+  st.add(sign("SPEED LIMIT C", { size: 2.2, color: "#ff5a4a", width: 0.5, at: [0, 34, -280], facing: 1, back: "ALMOST HOME", backColor: "#ffd166" }));
+  st.add(sign("WELCOME HOME", { size: 2.2, color: "#5ce1c6", width: 0.5, at: [0, 34, -520], facing: -1, back: "BON VOYAGE", backColor: "#ff8fd8" }));
   // The greenhouse.
   const gh = v3(-20, 2, STATION.z - 6);
   st.add(mesh(G.cyl, mat({ color: "#3a3f6a" }), { pos: [gh.x / 2 - 2, gh.y + 3, gh.z + 3], rot: [0, 0, Math.PI / 2], scale: [0.8, Math.abs(gh.x) - 6, 0.8] }));
@@ -523,7 +534,7 @@ export default {
         const fade = THREE.MathUtils.clamp(1 - Math.log10(player.gamma) / 2, 0, 1);
         for (const n of nebulae) n.material.uniforms.uSpec.value.z = fade;
         backdrop.visible = fade > 0;
-        let brightest = bodies[0], flux = 0;
+        let brightest = bodies.find((b) => b.key === "sun"), flux = 0;
         for (const b of bodies) {
           const d = place(b.mesh, local(b.at), eye, b.r);
           const ang = b.r / d;

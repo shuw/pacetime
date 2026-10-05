@@ -342,8 +342,9 @@ export class Player {
       const hard = this.heldPace >= 2 || k.has("Space");
       // The scene can hold the throttle until the ship is pointing the right way.
       const [soft, strong] = s.accel ?? [0.3, 0.8];
-      let rate = hard ? strong : soft;
+      const rate = hard ? strong : soft;
       const thrust = up && (s.canThrust?.() ?? true);
+      let gain = rate * dTau;
       // A ship that eases away: at low speed it gains speed in proportion to
       // what it has. Once clear, it makes up what the gentle start held back,
       // so the trip takes no longer.
@@ -352,10 +353,10 @@ export class Player {
         s.owed = (s.owed ?? 0) + (rate - eased) * dTau;
         const pay = eased >= rate ? Math.min(s.owed, rate * dTau) : 0;
         s.owed -= pay;
-        rate = eased + pay / dTau;
+        gain = eased * dTau + pay;
       }
       if (s.eta < 1e-6 && !up) s.owed = 0;
-      if (thrust) s.eta = Math.min(s.maxEta, s.eta + rate * dTau);
+      if (thrust) s.eta = Math.min(s.maxEta, s.eta + gain);
       const steer = ((k.has("KeyA") ? 1 : 0) - (k.has("KeyD") ? 1 : 0) - this.touchMove.x) * on;
       s.heading += steer * 0.5 * dTau;
       this.yaw += steer * 0.5 * dTau;

@@ -37,7 +37,7 @@ export class DayCycle {
 
   // Jump to time of day p (0 to one period), keeping today's date.
   jumpTo(p, t) {
-    this.set(this.dayOf() * this.period + p, t);
+    this.set(this.dayOf(this.phaseAt(t)) * this.period + p, t);
     this.apply(t);
   }
 

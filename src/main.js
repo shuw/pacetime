@@ -417,9 +417,11 @@ window.slowlight = {
   set warp(k) { warp = Math.max(0, Math.min(k, 40)); },
   set adaptiveResolution(on) { setAdaptiveResolution(on); },
   // Jump ahead: run the world for `seconds` of your own time without drawing.
-  advance(seconds) {
+  // With live, the last step also updates lamps and sound, as a real frame
+  // would (for recording frame by frame).
+  advance(seconds, { live = false } = {}) {
     const steps = Math.ceil(seconds / 0.05);
-    for (let i = 0; i < steps; i++) simulate(seconds / steps, { realtime: false });
+    for (let i = 0; i < steps; i++) simulate(seconds / steps, { realtime: live && i === steps - 1 });
   },
   load: (id) => { load(SCENES.find((s) => s.id === id)); current.instance.started = true; },
 };

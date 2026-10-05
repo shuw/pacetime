@@ -7,7 +7,8 @@
     "check": "eslint . && bun test",
     "test": "node scripts/test.mjs",
     "build": "rm -rf dist && bun build ./index.html --outdir dist --minify",
-    "shot": "node scripts/shot.mjs"
+    "shot": "node scripts/shot.mjs",
+    "video": "node video/score.mjs && node video/capture.mjs && node video/mux.mjs"
   },
   "dependencies": {
     "three": "^0.186.0"

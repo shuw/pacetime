@@ -2,7 +2,7 @@ import js from "@eslint/js";
 import globals from "globals";
 
 export default [
-  { ignores: ["dist/", "shots/", "node_modules/"] },
+  { ignores: ["dist/", "shots/", "node_modules/", "video/out/"] },
   js.configs.recommended,
   {
     files: ["src/**/*.js"],
@@ -11,6 +11,10 @@ export default [
   {
     files: ["scripts/**", "tests/**", "*.config.js"],
     languageOptions: { globals: { ...globals.node, ...globals.browser, slowlight: "readonly", Bun: "readonly" } },
+  },
+  {
+    files: ["video/**"],
+    languageOptions: { globals: { ...globals.node, ...globals.browser, slowlight: "readonly", V: "readonly" } },
   },
   {
     rules: {

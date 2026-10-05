@@ -641,6 +641,7 @@ export default {
     return {
       group,
       gallery,
+      fw,
       day,
       colliders,
       mirrorY: SEA,

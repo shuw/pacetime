@@ -82,6 +82,7 @@ bun run build      # a static site in dist/
 - `node scripts/perf.mjs` prints frame rate and draw calls per place.
 - `window.slowlight` in the browser console exposes the player, world, effects, `advance(seconds)` and `warp`.
 - Each place is a module in `src/scenes/`; `src/place.js` describes everything a place can provide.
+- `bun run video` remakes the one-minute trailer in `video/out/slowlight.mp4` (needs ffmpeg): it composes the score, records the game frame by frame along the shots in `video/shots.mjs`, and joins the two. `node video/capture.mjs --preview` renders three stills a shot for checking framing.
 
 Pushing to `main` runs the lint and unit tests, then deploys to GitHub Pages.
 
