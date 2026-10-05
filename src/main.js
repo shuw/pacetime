@@ -9,7 +9,7 @@ import { motion } from "./motion.js";
 import { Minimap } from "./minimap.js";
 import { Carried, Sparkler } from "./toys.js";
 import { isMuted, setAmbience, setListener, setMuted, sfx, unlockAudio, updateAudio } from "./audio.js";
-import { adaptExposure, adaptResolution, applyEnv, applyPost, bloom, camera, draw, fps, frameTick, pickLamps, pixelRatio, renderer, root, setAdaptiveResolution, sky } from "./render.js";
+import { adaptExposure, adaptResolution, applyEnv, applyPost, bloom, camera, draw, fps, frameTick, pickLamps, pixelRatio, renderer, root, setAdaptiveResolution, sky, warmUp } from "./render.js";
 import { linkFor, linkKeeper, readLink } from "./link.js";
 import { TitleScreen } from "./title.js";
 import railway from "./scenes/railway.js";
@@ -114,12 +114,18 @@ function closeMenu() {
   player.enabled = true;
 }
 
-function startScene(scene) {
+// The title screen stays up, still animated, while the place's shaders compile.
+let starting = false;
+async function startScene(scene) {
+  if (starting) return;
+  starting = true;
   unlockAudio();
   sfx.ui();
   load(scene);
   store.set("pacetime-last", scene.id);
   current.instance.started = true;
+  await warmUp();
+  starting = false;
   closeMenu();
 }
 

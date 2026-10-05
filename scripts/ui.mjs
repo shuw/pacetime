@@ -14,7 +14,7 @@ const q = (fn, arg) => page.evaluate(fn, arg);
 await page.goto(URL);
 await page.waitForTimeout(1500);
 await page.keyboard.press("Digit5");
-await page.waitForTimeout(400);
+await page.waitForFunction(() => document.getElementById("menu").hidden, null, { timeout: 5000 }).catch(() => {});
 ok("5 on the title screen starts Einstein's Railway", await q(() => document.getElementById("menu").hidden && document.getElementById("scene-title").textContent === "Einstein's Railway"));
 
 await q(() => { pacetime.player.yaw = -Math.PI / 2; }); // along the platform

@@ -173,6 +173,12 @@ export function draw(place, eye) {
   else renderer.render(root, camera);
 }
 
+// Compile a newly loaded place's shaders in the background, so its first
+// frame doesn't stall (most noticeable on slower machines).
+export function warmUp() {
+  return renderer.compileAsync(root, camera).catch(() => {});
+}
+
 export function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false);
