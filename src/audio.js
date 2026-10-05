@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { store } from "./store.js";
 
 let ctx = null, master = null, noiseBuf = null;
+let offset = 0; // when rendering offline: when the effect being scheduled happens
 let muted = false;
 const loops = {};
 const listener = { pos: new THREE.Vector3(), right: new THREE.Vector3(1, 0, 0) };
@@ -68,7 +69,7 @@ function noiseSource(loop = false) {
 
 function tone(freq, start, dur, { type = "sine", gain = 0.1, slide = 0, pan = 0, attack = 0.005 } = {}) {
   if (!ctx) return;
-  const t0 = ctx.currentTime + start;
+  const t0 = ctx.currentTime + offset + start;
   const o = ctx.createOscillator();
   const g = ctx.createGain();
   o.type = type;
@@ -84,7 +85,7 @@ function tone(freq, start, dur, { type = "sine", gain = 0.1, slide = 0, pan = 0,
 
 function burst(dur, { gain = 0.2, from = 2000, to = 200, type = "lowpass", q = 0.7, pan = 0, start = 0, attack = 0.005 } = {}) {
   if (!ctx) return;
-  const t0 = ctx.currentTime + start;
+  const t0 = ctx.currentTime + offset + start;
   const s = noiseSource();
   const f = ctx.createBiquadFilter();
   f.type = type;
@@ -335,7 +336,34 @@ function swoop(up) {
   (up ? run : [...run].reverse()).forEach((st, i) => chime(root * 2 ** (st / 12), { gain: 0.035, start: i * 0.06, pan: (i / 4 - 0.5) * (up ? 0.8 : -0.8), decay: 1.1 }));
 }
 
-export const sfx = {
+// Renders a list of effects to an audio buffer, offline, with the same
+// recipes the game plays live: each { at, name, args, eye, right }, where
+// args that were positions are [x, y, z] arrays.
+export async function renderEffects(events, seconds, sampleRate = 48000) {
+  const live = { ctx, master, noiseBuf, pos: listener.pos.clone(), right: listener.right.clone() };
+  ctx = new OfflineAudioContext(2, Math.ceil(seconds * sampleRate), sampleRate);
+  master = ctx.createGain();
+  master.connect(ctx.destination);
+  noiseBuf = ctx.createBuffer(1, sampleRate * 2, sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  try {
+    for (const e of events) {
+      offset = e.at;
+      listener.pos.fromArray(e.eye);
+      listener.right.fromArray(e.right);
+      recipes[e.name](...e.args.map((a) => (Array.isArray(a) ? new THREE.Vector3().fromArray(a) : a)));
+    }
+    return await ctx.startRendering();
+  } finally {
+    offset = 0;
+    ({ ctx, master, noiseBuf } = live);
+    listener.pos.copy(live.pos);
+    listener.right.copy(live.right);
+  }
+}
+
+const recipes = {
   // Thunder: a sharp crack, then a long low roll.
   strike(pos) {
     const { pan, gain } = placed(pos, 40);
@@ -442,3 +470,5 @@ export const sfx = {
     tone(1200, 0, 0.06, { gain: 0.04 });
   },
 };
+// What the game calls; a recorder can wrap these without touching the recipes.
+export const sfx = { ...recipes };

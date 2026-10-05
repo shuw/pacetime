@@ -3,3 +3,6 @@ dist
 .DS_Store
 shots
 video/out
+video/*.m4a
+video/*.mp3
+video/*.wav

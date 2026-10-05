@@ -8,7 +8,7 @@ import { clearToast, initLab, initTime, onGoalClick, showScene, syncLab, timeOpe
 import { motion } from "./motion.js";
 import { Minimap } from "./minimap.js";
 import { Carried, Sparkler } from "./toys.js";
-import { isMuted, setAmbience, setListener, setMuted, sfx, unlockAudio, updateAudio } from "./audio.js";
+import { isMuted, renderEffects, setAmbience, setListener, setMuted, sfx, unlockAudio, updateAudio } from "./audio.js";
 import { adaptExposure, adaptResolution, applyEnv, applyPost, bloom, camera, draw, fps, frameTick, pickLamps, pixelRatio, renderer, root, setAdaptiveResolution, sky, warmUp } from "./render.js";
 import { linkFor, linkKeeper, readLink } from "./link.js";
 import { TitleScreen } from "./title.js";
@@ -408,7 +408,9 @@ frame();
 
 // Handy for poking at the physics from the console, and for the tests.
 window.slowlight = {
-  player, world, effects, closeMenu, act, shared, bloom, throwBall, pickLamps,
+  player, world, effects, closeMenu, act, shared, bloom, throwBall, pickLamps, camera, sfx, renderEffects,
+  // Draw a frame now (for recording: the canvas can be read straight after).
+  render: () => draw(current?.instance, eye),
   get instance() { return current?.instance; },
   get fps() { return fps(); },
   get drawCalls() { return renderer.info.render.calls; },
