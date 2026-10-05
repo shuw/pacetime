@@ -156,7 +156,7 @@ await run("highway", async () => {
   await t.page.keyboard.up("w"); await t.page.keyboard.up("Shift");
   await t.page.keyboard.press("KeyF");
   for (let i = 0; i < 20 && !(await t.q(() => slowlight.instance.goals[5].done)); i++) await t.advance(0.25);
-  console.log("  chase:", await t.q(() => slowlight.instance.readouts().filter(([k]) => /pulse|pulling/.test(k)).map((r) => r.join(" ")).join(", ")), await t.snap("highway-pulse-chase"));
+  console.log("  chase:", await t.q(() => slowlight.instance.readouts().filter(([k]) => /beam|roadside|pulling/.test(k)).map((r) => r.join(" ")).join(", ")), await t.snap("highway-pulse-chase"));
   // Full throttle until nine nines, glancing back on the way.
   await t.page.keyboard.down("w"); await t.page.keyboard.down("Shift");
   await t.advance(4);

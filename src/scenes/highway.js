@@ -107,7 +107,7 @@ export default {
   id: "highway",
   title: "Endless Road",
   tag: "approaching light speed",
-  blurb: "A road that never ends. Hold the throttle: 90%, 99%, 99.99%… of light speed, as the world folds into the way ahead. Race a train, and fire a pulse of light you can never catch.",
+  blurb: "A road that never ends. Hold the throttle: 90%, 99%, 99.99%… of light speed, as the world folds into the way ahead. Race a train, and chase a beam of light you can never catch.",
 
   build({ player, toast }) {
     world.c = C;
@@ -239,11 +239,30 @@ export default {
     };
 
     const alongside = () => Math.abs(comet.dz - DZ0) < 12 && Math.abs(comet.zeta) < 0.03;
-    // Pulses of light you fire down the road (F). You only see one by the
-    // dust it lights up, and that glow has to come back to you.
+    // A beam of light you switch on down the road (F). You only see it by the
+    // dust it lights up, and that glow has to come back to you: a rainbow
+    // ribbon along the road from where you switched it on to its front, with
+    // a ring of glowing dust where you see the front.
     const pulseMat = mat({ color: "#dff8ff", emissive: 0.9, ir: 0.6, uv: 1.2, pulse: true, additive: true, unlit: true, depthWrite: false });
+    const ribbonMat = mat({ color: "#ffffff", vertexColors: true, emissive: 0.5, ir: 0.6, uv: 1.2, pulse: true, additive: true, unlit: true, depthWrite: false });
     const hoopGeo = new THREE.TorusGeometry(1, 0.025, 8, 160);
-    const HOOP = 6.5, STRIP = 40, LEN = 1.2; // hoop radius; strip columns; the pulse's length in your frame
+    const HOOP = 6.5; // the ring's radius
+    const RIBBON = ["#ff5a5a", "#ffa04a", "#ffe45c", "#6dff8a", "#4ad8ff", "#8b7bff"], RW = 0.3, RY = 0.04; // its bands, their width, height above the road
+    const ribbonGeometry = () => {
+      const n = RIBBON.length * 6, geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+      geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(n * 3).map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
+      const col = new Float32Array(n * 3), c = new THREE.Color(), idx = [];
+      RIBBON.forEach((hex, k) => {
+        c.set(hex);
+        for (let j = 0; j < 6; j++) col.set([c.r, c.g, c.b], (k * 6 + j) * 3);
+        // Three pairs of vertices along each band: where it starts, under you, and the front.
+        for (const q of [0, 2]) idx.push(k * 6 + q, k * 6 + q + 1, k * 6 + q + 2, k * 6 + q + 1, k * 6 + q + 3, k * 6 + q + 2);
+      });
+      geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+      geo.setIndex(idx);
+      return geo;
+    };
     const pulses = [];
     const roadAt = () => -(base + player.pos.z); // how far along the road you are
     const ahead = () => Math.sqrt((2 - player.omb) / player.omb); // e^η: lengths ahead in your frame, per metre in the road's
@@ -251,20 +270,16 @@ export default {
     const fire = () => {
       // Fired 1.5 m ahead of the nose in your frame: in the road's frame that
       // event is further ahead and a little later.
+      // Pressing it again starts the beam afresh from here.
       const g = player.gamma;
-      const strip = new THREE.Mesh(new THREE.BufferGeometry(), pulseMat);
-      strip.geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array((STRIP + 1) * 6), 3));
-      strip.geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array((STRIP + 1) * 6).map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
-      const idx = [];
-      for (let i = 0; i < STRIP; i++) idx.push(2 * i, 2 * i + 1, 2 * i + 2, 2 * i + 1, 2 * i + 3, 2 * i + 2);
-      strip.geometry.setIndex(idx);
+      const ribbon = new THREE.Mesh(ribbonGeometry(), ribbonMat);
       const hoop = mesh(hoopGeo, pulseMat);
-      for (const o of [hoop, strip]) { o.frustumCulled = false; o.userData.dynamic = true; o.renderOrder = 5; o.visible = false; group.add(o); }
-      pulses.push({ sEm: roadAt() + g * 1.5, tEm: world.t + (g * player.beta * 1.5) / C, hoop, strip, slow: player.beta < 0.3, tau: player.tau, gap: null, rate: 0 });
-      if (pulses.length > 4) {
+      for (const o of [hoop, ribbon]) { o.frustumCulled = false; o.userData.dynamic = true; o.renderOrder = 5; o.visible = false; group.add(o); }
+      pulses.push({ sEm: roadAt() + g * 1.5, tEm: world.t + (g * player.beta * 1.5) / C, hoop, ribbon, slow: player.beta < 0.3, tau: player.tau, gap: null, rate: 0 });
+      if (pulses.length > 1) {
         const old = pulses.shift();
-        group.remove(old.hoop, old.strip);
-        old.strip.geometry.dispose();
+        group.remove(old.hoop, old.ribbon);
+        old.ribbon.geometry.dispose();
       }
       sfx.zap(player.eye);
     };
@@ -274,15 +289,16 @@ export default {
 
     const goals = [
       { text: "Hold W (or click and hold) to speed up. Pass 90% of light speed", done: false, test: () => player.beta > 0.9 },
-      { text: "Stop, and fire a pulse of light down the road (F): its glow seems to crawl away at half speed", done: false, test: () => { const p = newest(); return !!p && p.slow && player.beta < 0.3 && player.tau - p.tau > 2; } },
+      { text: "Stop, and switch on the rainbow beam (F): its front seems to crawl away at half speed", done: false, test: () => { const p = newest(); return !!p && p.slow && player.beta < 0.3 && player.tau - p.tau > 2; } },
       { text: "Cruise above 99% with the Comet alongside: it looks perfectly ordinary", done: false, test: () => player.omb < 0.01 && alongside() },
       { text: "Brake hard (S) at speed and watch the Comet shoot ahead", done: false, test: () => comet.dz > DZ0 + 25 && player.beta > 0.5 },
       { text: "Pass 99.9%: the stars crowd into a ring ahead of you", done: false, test: () => player.omb < 1e-3 },
-      { text: "Fire a pulse at 99.99% and chase it: it still pulls away at exactly light speed", done: false, test: () => { const p = newest(); return !!p && player.omb < 1e-4 && cruiseFor > 1.5 && Math.abs(p.rate - C) < 0.03 * C; } },
+      { text: "Switch the beam on at 99.99% and chase it: its front still pulls away at exactly light speed", done: false, test: () => { const p = newest(); return !!p && player.omb < 1e-4 && cruiseFor > 1.5 && Math.abs(p.rate - C) < 0.03 * C; } },
       { text: "Glance back (hold B) above 99%: behind you is almost empty", done: false, test: () => player.looking && player.omb < 0.01 },
       { text: "Cross 1,000 km of road before your watch shows a minute", done: false, test: () => -(base + player.pos.z) > 1e6 && player.tau < 60 },
     ];
     const dist = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toLocaleString("en-US", { maximumFractionDigits: m < 1e4 ? 1 : 0 })} km`);
+    const fine = (m) => (m < 10 ? `${m.toFixed(m < 1 ? 2 : 1)} m` : dist(m));
     const fmtG = () => Math.round(player.gamma).toLocaleString("en-US");
     const perSecond = () => dist(Math.sqrt(player.u.lengthSq()));
     const milestones = [
@@ -313,7 +329,8 @@ export default {
       post: { bloom: { strength: 0.6, radius: 0.4, threshold: 0.72 } },
       goals,
       tips: [
-        "F fires a pulse of light down the road. You see it only by the dust it lights up, so from a standstill its glow seems to crawl away at half speed. Chase it at 99.99% and it still pulls away at exactly light speed, by your own watch and rulers.",
+        "F switches on a rainbow beam of light down the road. You see it only by the dust it lights up, so from a standstill its front seems to crawl away at half speed.",
+        "Chase the beam at 99.99%: from the roadside you're barely half a metre behind its front, yet from your seat it pulls away at exactly light speed. Your watch runs slow and your rulers shrink by just enough.",
         "W speeds up, Shift pushes harder. S brakes to a stop in about two seconds from any speed. X, or clicking Walk, eases you back to a walking pace and coasts there.",
         "Each second on the throttle adds the same amount of rapidity. Speed is the tanh of rapidity, so you get ever closer to light speed without reaching it.",
         "At 99.9% almost everything you can see is squeezed into a small circle ahead. Glance back and the road behind has spread across the sky.",
@@ -331,7 +348,8 @@ export default {
           ["distance", `${km < 1000 ? km.toFixed(2) : Math.round(km).toLocaleString("en-US")} km`],
           ["per second of yours", `${u < 1000 ? u.toFixed(0) + " m" : (u / 1000).toLocaleString("en-US", { maximumFractionDigits: 1 }) + " km"}`],
           ["light speed", kmh(world.c)],
-          ["pulse ahead", newest() ? `${dist(gapOf(newest()))} (your frame)` : "none yet (F)"],
+          ["beam's front", newest() ? `${dist(gapOf(newest()))} ahead of you` : "switch it on (F)"],
+          ["from the roadside", newest() ? `${fine(newest().sEm + C * (world.t - newest().tEm) - roadAt())} ahead` : "–"],
           ["pulling away", newest() ? kmh(newest().rate) : "–"],
           ["scenery", BIOMES[lastBiome < 0 ? 0 : lastBiome].name],
         ];
@@ -371,32 +389,38 @@ export default {
         cometU.uNow.value.set(TRACK_X, 0, eye.z - comet.dz);
         const wasDone = goals.map((g) => g.done);
 
-        // The pulses: the dust glowing in a hoop round the road, and in a band
-        // across it, wherever the light reaching you now left it.
+        // The beam: the dust glowing in a ring round the road where you see its
+        // front, and all along the road behind that, as the light reaching you
+        // now shows it.
         cruiseFor = Math.abs(player.eta - lastEta) < 1e-9 ? cruiseFor + dTau : 0;
         lastEta = player.eta;
         const se = roadAt();
         for (const p of pulses) {
           const front = p.sEm + C * (t - p.tEm);
-          const D = front - se, back = D - LEN / ahead();
+          const D = front - se;
           // Dust r metres from your line of sight that you see lit up right now.
           const seen = (r, d) => se + (d * d - r * r) / (2 * d);
           const sHoop = seen(HOOP, D);
           p.hoop.visible = t >= p.tEm && D > 0 && sHoop >= p.sEm;
           p.hoop.position.set(eye.x, eye.y, -sHoop - base);
           p.hoop.scale.setScalar(HOOP);
-          const pos = p.strip.geometry.attributes.position;
+          // Each band runs from where the beam was switched on (or a few km
+          // back) to the farthest lit dust you can see ahead of you.
+          const pos = p.ribbon.geometry.attributes.position;
           let any = false;
-          for (let i = 0; i <= STRIP; i++) {
-            const x = -6 + (12 * i) / STRIP, r = Math.hypot(x - eye.x, eye.y - 0.03);
-            const s1 = seen(r, D), s0 = back > 0 ? Math.max(seen(r, back), p.sEm) : s1;
-            const lit = t >= p.tEm && s1 >= p.sEm;
+          RIBBON.forEach((_, k) => {
+            const xa = (k - RIBBON.length / 2) * RW, xb = xa + RW;
+            const sFront = seen(Math.hypot(xa + RW / 2 - eye.x, eye.y - RY), D);
+            const lit = t >= p.tEm && D > 0 && sFront >= p.sEm;
             any ||= lit;
-            pos.setXYZ(2 * i, x, 0.03, -s1 - base);
-            pos.setXYZ(2 * i + 1, x, 0.03, -(lit ? s0 : s1) - base);
-          }
+            const s0 = Math.max(p.sEm, se - 5000), s2 = lit ? sFront : s0, s1 = Math.min(Math.max(se, s0), s2);
+            [s0, s1, s2].forEach((sv, j) => {
+              pos.setXYZ(k * 6 + 2 * j, xa, RY, -sv - base);
+              pos.setXYZ(k * 6 + 2 * j + 1, xb, RY, -sv - base);
+            });
+          });
           pos.needsUpdate = true;
-          p.strip.visible = any;
+          p.ribbon.visible = any;
           // How fast it pulls away by your own watch, while you're cruising.
           const gap = gapOf(p);
           if (p.gap !== null && dTau > 0 && cruiseFor > 0.2) p.rate += ((gap - p.gap) / dTau - p.rate) * Math.min(1, dTau * 4);
@@ -409,8 +433,8 @@ export default {
           lastBiome = biome;
         }
         for (const g of goals) if (!g.done && g.test()) g.done = true;
-        if (goals[1].done && !wasDone[1]) note = "A pulse leaving at light speed seems to crawl away at half that: each bit of road it lights up has farther for its glow to come back.";
-        if (goals[5].done && !wasDone[5]) note = `You're doing ${formatBeta(player.beta, player.omb)} of light speed, and the pulse still pulls away at ${Math.round(newest().rate * 3.6)} km/h: exactly light speed. Your clock runs slow and your rulers shrink by just enough.`;
+        if (goals[1].done && !wasDone[1]) note = "The beam's front leaves at light speed but seems to crawl away at half that: each bit of road it lights up has farther for its glow to come back.";
+        if (goals[5].done && !wasDone[5]) note = `You're doing ${formatBeta(player.beta, player.omb)} of light speed, and the beam's front still pulls away at ${Math.round(newest().rate * 3.6)} km/h: exactly light speed. Your clock runs slow and your rulers shrink by just enough.`;
         if (goals[2].done && !wasDone[2]) note = `The Comet is doing ${formatBeta(player.beta, player.omb)} of light speed too. Relative to you it's standing still, so it looks perfectly ordinary while the world around you bends.`;
         if (goals[3].done && !wasDone[3]) note = "You slowed down; the Comet kept going, so it shot ahead. Its back end looks squashed and reddened as it pulls away.";
         while (nextMilestone < milestones.length && player.omb < milestones[nextMilestone][0]) {
