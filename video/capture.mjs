@@ -194,7 +194,7 @@ const wordsAt = (time) => {
   return c.text.split(" ").map((w, i) => {
     const at = c.from + i * (c.per ?? 0.25);
     const pop = Math.max(0, Math.min(1, (time - at) / 0.12)); // pops in, then just fades out
-    return { text: w.replace(/^\*|\*$/g, ""), hot: /^\*.*\*$/.test(w), pop, k: pop * out };
+    return { text: w.replaceAll("*", ""), hot: w.includes("*"), pop, k: pop * out };
   });
 };
 

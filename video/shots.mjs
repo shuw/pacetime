@@ -311,16 +311,30 @@ export const SHOTS = [
       await t.page.keyboard.down("w"); await t.page.keyboard.down("Shift");
       for (let i = 0; i < 60 && !(await t.q(() => slowlight.instance.goals[3].done)); i++) await t.q(() => slowlight.advance(5));
       await t.page.keyboard.up("w"); await t.page.keyboard.up("Shift");
-      await t.q(() => slowlight.advance(1));
+      // Up from the helm, to whichever end of the cabin faces the buoy.
+      await t.q(() => {
+        slowlight.advance(1);
+        slowlight.act();
+        const s = slowlight.player.ship, d = slowlight.instance.nav.where("buoy").sub(s.pos);
+        const ahead = -Math.sin(s.heading) * d.x - Math.cos(s.heading) * d.z > 0;
+        s.local.set(0, 0, ahead ? -5.3 : 5.0);
+        slowlight.advance(0.1);
+      });
     },
-    frame: (u) => { const p = slowlight.player; p.yaw = p.ship.heading + V.mix(0.8, 0.62, u); p.pitch = 0.12; },
+    // Looking at the buoy, with Proxima b beside it.
+    frame: (u) => {
+      const p = slowlight.player, d = slowlight.instance.nav.where("buoy").sub(p.eye);
+      p.yaw = Math.atan2(-d.x, -d.z) + V.mix(-0.12, -0.2, u); p.pitch = Math.atan2(d.y, Math.hypot(d.x, d.z)) - 0.05;
+    },
   },
   {
     id: "starship-cards", place: "starship", from: bar(37), to: bar(40), speed: 3,
     setup: async (t) => {
-      // Home again: W at the helm, and years of cards from the crew catch up with us.
+      // Home again: back to the helm and W, and years of cards from the crew catch up with us.
+      await t.q(() => { const s = slowlight.player.ship; if (!s.helm) { s.local.set(0, 0, -4); slowlight.act(); } });
       await t.page.keyboard.down("w"); await t.page.keyboard.down("Shift");
-      await t.q(() => slowlight.advance(30));
+      for (let i = 0; i < 60 && (await t.q(() => slowlight.player.ship.eta)) < 15.7; i++) await t.q(() => slowlight.advance(0.5));
+      await t.q(() => slowlight.advance(4));
       await t.page.keyboard.up("w"); await t.page.keyboard.up("Shift");
       await t.q(() => { window.__cards = []; window.__note = slowlight.instance.note; });
     },

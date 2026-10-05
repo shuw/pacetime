@@ -366,9 +366,14 @@ function buildBuoy() {
   for (const [rot, c] of [[[0, 0, 0], "#ffd166"], [[0, Math.PI / 2, 0], "#ff8fd8"], [[Math.PI / 2, 0, 0], "#5fe1ff"]]) b.add(mesh(new THREE.TorusGeometry(36, 1.4, 12, 96), mat({ color: c, emissive: 0.9, ir: 1, uv: 0.8 }), { rot }));
   const beams = new THREE.Group();
   for (const dir of [1, -1]) {
-    const g = new THREE.ConeGeometry(30, 600, 32, 1, true);
+    const g = new THREE.ConeGeometry(30, 600, 32, 12, true);
     g.translate(0, -300, 0);
-    beams.add(mesh(g, mat({ color: "#fff1c4", additive: true, emissive: 0.12, ir: 0.2, uv: 0.3, doubleSided: true, depthWrite: false }), { rot: [0, 0, (dir * Math.PI) / 2] }));
+    // Bright at the lamp, fading out along its length.
+    const p = g.attributes.position, col = new Float32Array(p.count * 3);
+    for (let i = 0; i < p.count; i++) { const k = Math.pow(1 + p.getY(i) / 600, 2.2); col.set([k, k, k], i * 3); }
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    // Tilted up a little, so they sweep over a ship stopped beside the buoy rather than through it.
+    beams.add(mesh(g, mat({ color: "#fff1c4", vertexColors: true, additive: true, emissive: 0.12, ir: 0.2, uv: 0.3, doubleSided: true, depthWrite: false }), { rot: [0, 0, dir * (Math.PI / 2 + 0.14)] }));
   }
   beams.position.y = 18;
   b.add(beams);
@@ -560,7 +565,7 @@ export default {
         "On the way out, hardly any news from home catches up with you. On the way back you fly into eight years of it at once.",
       ],
       get note() { return note; },
-      nav: { fromHome, toBuoy, cards: () => cardsIn, where: (key) => local(BODIES[key].at) },
+      nav: { fromHome, toBuoy, cards: () => cardsIn, where: (key) => local(key === "buoy" ? BUOY : BODIES[key].at) },
       readouts() {
         return [
           ["from Earth", dist(fromHome())],
