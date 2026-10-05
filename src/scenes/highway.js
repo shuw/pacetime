@@ -129,8 +129,8 @@ export default {
     for (const m of all) group.add(m);
 
     // Planets along the road, real ones you can fly past: a ringed giant
-    // behind the start, a blue world ahead, then one every few kilometres, a
-    // few kilometres off the road. Each slot's planet depends only on its
+    // behind the start, a blue world ahead, then one every few tens of
+    // kilometres, a few kilometres off the road. Each slot's planet depends only on its
     // number, like the road's tiles. Being kilometres away, they're drawn
     // nearer than they are, at the same size in the same direction.
     const planetMat = mat({ color: "#ffffff", vertexColors: true, ir: 0.5, uv: 0.3, fog: false });
@@ -143,12 +143,13 @@ export default {
       { s: -12000, x: -5200, y: 2600, r: 1100, look: ringed },
       { s: 9000, x: 3600, y: 1900, r: 1100, look: blue },
     ];
-    const PW = 7000; // the spacing of planet slots along the road, in metres
+    const PW = 30000; // the spacing of planet slots along the road, in metres (about two in three have a planet)
     const slot = (k) => {
-      const h = (n) => hash(k, 100 + n), side = h(1) < 0.5 ? -1 : 1, r = 300 + h(2) * h(2) * 2200;
-      return { s: 20000 + k * PW + (h(3) - 0.5) * 4000, x: side * (r + 1500 + h(4) * 5000), y: r * 0.3 + h(5) * 2500 - 400, r, look: looks[Math.floor(h(6) * looks.length)], spin: h(7) };
+      const h = (n) => hash(k, 100 + n), side = h(1) < 0.5 ? -1 : 1, r = 250 + h(2) * h(2) * 1300;
+      if (h(8) < 0.35) return null;
+      return { s: 30000 + k * PW + (h(3) - 0.5) * 12000, x: side * (r + 1500 + h(4) * 5000), y: r * 0.3 + h(5) * 2500 - 400, r, look: looks[Math.floor(h(6) * looks.length)], spin: h(7) };
     };
-    const pool = Array.from({ length: 28 }, () => {
+    const pool = Array.from({ length: 8 }, () => {
       const g = new THREE.Group();
       g.userData.dynamic = true;
       g.planet = new THREE.Mesh(looks[0].geo, planetMat);
@@ -162,9 +163,9 @@ export default {
     const apparent = (d) => (d < 1500 ? d : 1500 + 700 * Math.log(d / 1500)); // how far away a planet d metres off is drawn
     const placePlanets = (eye, t) => {
       const se = -(base + player.pos.z);
-      const k0 = Math.max(0, Math.floor((se - 80000) / PW)), k1 = Math.max(-1, Math.floor((se + 160000) / PW));
-      const list = [...LANDMARKS];
-      for (let k = k0; k <= k1; k++) list.push(slot(k));
+      const k0 = Math.max(0, Math.floor((se - 60000) / PW)), k1 = Math.max(-1, Math.floor((se + 120000) / PW));
+      const list = LANDMARKS.filter((p) => Math.abs(p.s - se) < 120000);
+      for (let k = k0; k <= k1; k++) { const p = slot(k); if (p) list.push(p); }
       list.sort((a, b) => Math.abs(a.s - se) - Math.abs(b.s - se));
       pool.forEach((g, i) => {
         const p = list[i];
