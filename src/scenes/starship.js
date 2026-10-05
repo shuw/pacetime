@@ -165,7 +165,7 @@ function buildStation() {
   const ring = new THREE.Group();
   ring.position.copy(STATION);
   st.add(ring);
-  for (let i = 0; i < 16; i++) ring.add(mesh(new THREE.TorusGeometry(52, 4, 14, 10, TAU / 16), mat({ color: i % 2 ? "#ff8fd8" : "#f4f1ea", ir: 0.5, uv: 0.3 }), { rot: [0, 0, (i * TAU) / 16] }));
+  for (let i = 0; i < 16; i++) ring.add(mesh(new THREE.TorusGeometry(52, 4, 14, 10, TAU / 16), mat({ color: i % 2 ? "#ff8fd8" : "#f4f1ea", ir: 0.5, uv: 0.3, surface: "paint", rough: 0.3 }), { rot: [0, 0, (i * TAU) / 16] }));
   ring.add(mesh(new THREE.TorusGeometry(48, 0.6, 8, 128), mat({ color: "#5fe1ff", emissive: 1, ir: 0.6, uv: 1.2 })));
   const windows = mat({ color: "#ffe2a8", emissive: 1, ir: 0.8, uv: 0.4 });
   for (let i = 0; i < 64; i++) {
@@ -177,15 +177,15 @@ function buildStation() {
     ring.add(mesh(G.cyl, mat({ color: "#c9a0ff", emissive: 0.7, ir: 0.6, uv: 1 }), { pos: [Math.cos(a) * 30, Math.sin(a) * 30, 0], rot: [0, 0, a - Math.PI / 2], scale: [0.9, 36, 0.9] }));
   }
   // The hub, with a glowing belt and a beacon on top.
-  st.add(mesh(new THREE.SphereGeometry(13, 48, 32), mat({ color: "#e8ecf8", ir: 0.4, uv: 0.3 }), { pos: STATION.toArray() }));
+  st.add(mesh(new THREE.SphereGeometry(13, 48, 32), mat({ color: "#e8ecf8", ir: 0.4, uv: 0.3, surface: "metal" }), { pos: STATION.toArray() }));
   st.add(mesh(new THREE.TorusGeometry(13.1, 0.8, 8, 64), mat({ color: "#5ce1c6", emissive: 0.9, ir: 0.5, uv: 1 }), { pos: STATION.toArray(), rot: [Math.PI / 2, 0, 0] }));
   st.add(mesh(G.cyl, mat({ color: "#c9d0ea" }), { pos: [STATION.x, STATION.y + 17, STATION.z], scale: [0.3, 8, 0.3] }));
   const beacon = mat({ color: "#ff5a4a", emissive: 1, ir: 1.2, uv: 0.4, unique: true });
   st.add(mesh(G.sphere, beacon, { pos: [STATION.x, STATION.y + 21.5, STATION.z], scale: 1.1 }));
   // The docking arm runs under the ship from the hub, lit by chasing lights.
   const z0 = 4, z1 = STATION.z - 12;
-  st.add(mesh(G.box, mat({ color: "#3a3f6a", ir: 0.3 }), { pos: [0, -2.4, (z0 + z1) / 2], scale: [1.4, 1.0, z1 - z0] }));
-  st.add(mesh(G.box, mat({ color: "#3a3f6a", ir: 0.3 }), { pos: [0, -1.7, 2], scale: [0.8, 0.9, 4] }));
+  st.add(mesh(G.box, mat({ color: "#3a3f6a", ir: 0.3, surface: "metal" }), { pos: [0, -2.4, (z0 + z1) / 2], scale: [1.4, 1.0, z1 - z0] }));
+  st.add(mesh(G.box, mat({ color: "#3a3f6a", ir: 0.3, surface: "metal" }), { pos: [0, -1.7, 2], scale: [0.8, 0.9, 4] }));
   const dockMats = [0, 1, 2].map(() => mat({ color: "#ffd166", emissive: 1, ir: 0.8, uv: 0.4, unique: true }));
   for (let z = z0 + 2, i = 0; z < z1; z += 4, i++) for (const sx of [-1, 1]) st.add(mesh(G.sphere, dockMats[i % 3], { pos: [sx * 0.8, -1.85, z], scale: 0.22 }));
   const clock = clockFace(9, { rim: "#ff8fd8", face: "#f2ead8", hands: "#1d1b2e", glow: 0 });

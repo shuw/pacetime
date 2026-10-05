@@ -32,7 +32,7 @@ function paint(geo, color, m = new THREE.Matrix4(), { inside = false, flat = fal
   for (let i = 0; i < n.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
     if (panel === "floor") pan.set([x / 0.62, z / 0.62, 1], i * 3);
-    else if (panel === "hull") pan.set([(Math.atan2(x, y - CY) * R) / 0.95, z / 1.15, 1], i * 3);
+    else if (panel === "hull") pan.set([(Math.atan2(x, y - CY) * R) / 0.95, z / 1.15, 2], i * 3);
   }
   g.setAttribute("aPanel", new THREE.BufferAttribute(pan, 3));
   for (let i = 0; i < n.count; i++) {
@@ -95,8 +95,12 @@ export function jellyGeometry(r, color) {
 export function buildCabin() {
   const ship = new THREE.Group();
   ship.userData.dynamic = true;
-  const solid = [], glow = [];
-  const S = (geo, color, m, o) => solid.push(paint(geo, color, m, o));
+  const solid = new Map(), glow = []; // solid parts, grouped by surface
+  const S = (geo, color, m, o = {}) => {
+    const k = o.surface ?? "paint";
+    if (!solid.has(k)) solid.set(k, []);
+    solid.get(k).push(paint(geo, color, m, o));
+  };
   const Gl = (geo, color, m) => glow.push(paint(geo, color, m, { flat: true }));
   const WALL = "#40407a", SPINE = "#26264e", FLOOR = "#16142e", WHITE = "#b9bdd6", CUSHION = "#e0804a";
 
@@ -110,7 +114,7 @@ export function buildCabin() {
     s.absarc(0, -Z0, HW, 0, Math.PI, false);
     const g = new THREE.ShapeGeometry(s, 32);
     g.rotateX(-Math.PI / 2);
-    S(g, FLOOR, M([0, 0.001, 0]), { panel: "floor" });
+    S(g, FLOOR, M([0, 0.001, 0]), { panel: "floor", surface: "metal" });
     // Glowing lines: one down the middle, two along the walls.
     Gl(BOX, "#3d9ab8", M([0, 0.006, 0.3], [0, 0, 0], [0.03, 0.01, Z1 - Z0 + 3.8]));
     for (const sx of [-1, 1]) Gl(BOX, "#5a4ea8", M([sx * 1.95, 0.006, 0.25], [0, 0, 0], [0.02, 0.01, Z1 - Z0]));
@@ -139,13 +143,13 @@ export function buildCabin() {
   // The bridge: an egg chair for the pilot, one for the co-pilot, and a
   // curved desk of glowing controls.
   for (const [x, z] of [SEAT, [1.25, SEAT[1] + 0.15]]) {
-    S(CYL, "#3b3f66", M([x, 0.22, z], [0, 0, 0], [0.12, 0.44, 0.12]));
+    S(CYL, "#3b3f66", M([x, 0.22, z], [0, 0, 0], [0.12, 0.44, 0.12]), { surface: "metal" });
     S(new THREE.SphereGeometry(0.55, 24, 16, 0, Math.PI * 2, 0.9, 1.9), WHITE, M([x, 0.85, z + 0.05], [-Math.PI / 2 - 0.25, 0, 0], [1, 1, 0.75]));
-    S(CYL, CUSHION, M([x, 0.5, z], [0, 0, 0], [0.38, 0.1, 0.38]));
+    S(CYL, CUSHION, M([x, 0.5, z], [0, 0, 0], [0.38, 0.1, 0.38]), { surface: "fabric" });
   }
   [-0.55, 0, 0.55].forEach((a) => {
     const x = SEAT[0] + Math.sin(a) * 1.05, z = SEAT[1] - Math.cos(a) * 1.05;
-    S(BOX, "#33366a", M([x, 0.42, z], [0, -a, 0], [0.62, 0.84, 0.36]));
+    S(BOX, "#33366a", M([x, 0.42, z], [0, -a, 0], [0.62, 0.84, 0.36]), { surface: "metal" });
     S(BOX, "#45498a", M([x, 0.86, z + Math.cos(a) * 0.02], [-0.3, -a, 0], [0.62, 0.04, 0.4]));
     Gl(BOX, "#2f8aa6", M([x, 0.885, z], [-0.3, -a, 0], [0.5, 0.01, 0.22]));
   });
@@ -156,24 +160,24 @@ export function buildCabin() {
     Gl(BALL, buttons[i % 5], M([Math.sin(a) * 1.2, 0.9, SEAT[1] - Math.cos(a) * 1.2], [0, 0, 0], 0.03));
   }
   // The lounge: a sofa with cushions on the left.
-  S(BOX, "#3b3f66", M([-1.55, 0.22, -1.7], [0, 0, 0], [0.75, 0.44, 2.4]));
-  S(BOX, WHITE, M([-1.6, 0.5, -1.7], [0, 0, 0], [0.7, 0.14, 2.3]));
-  S(BOX, WHITE, M([-1.88, 0.85, -1.7], [0, 0, -0.18], [0.16, 0.6, 2.3]));
-  ["#ff8fd8", "#5ce1c6", "#ffd166"].forEach((c, i) => S(new THREE.SphereGeometry(0.22, 16, 10), c, M([-1.7, 0.7, -2.5 + i * 0.75], [0, 0.4 * i, 0.3], [0.9, 0.7, 0.4])));
+  S(BOX, "#3b3f66", M([-1.55, 0.22, -1.7], [0, 0, 0], [0.75, 0.44, 2.4]), { surface: "metal" });
+  S(BOX, WHITE, M([-1.6, 0.5, -1.7], [0, 0, 0], [0.7, 0.14, 2.3]), { surface: "fabric" });
+  S(BOX, WHITE, M([-1.88, 0.85, -1.7], [0, 0, -0.18], [0.16, 0.6, 2.3]), { surface: "fabric" });
+  ["#ff8fd8", "#5ce1c6", "#ffd166"].forEach((c, i) => S(new THREE.SphereGeometry(0.22, 16, 10), c, M([-1.7, 0.7, -2.5 + i * 0.75], [0, 0.4 * i, 0.3], [0.9, 0.7, 0.4]), { surface: "fabric" }));
   // The aquarium on the right, the route table in the middle.
   S(CYL, "#ffb36b", M([1.5, 0.15, -1.6], [0, 0, 0], [0.42, 0.3, 0.42]));
   S(CYL, "#ffb36b", M([1.5, 1.68, -1.6], [0, 0, 0], [0.42, 0.06, 0.42]));
-  S(CYL, "#3b3f66", M([0, 0.42, 0.9], [0, 0, 0], [0.32, 0.84, 0.32]));
+  S(CYL, "#3b3f66", M([0, 0.42, 0.9], [0, 0, 0], [0.32, 0.84, 0.32]), { surface: "metal" });
   S(CYL, "#45498a", M([0, 0.86, 0.9], [0, 0, 0], [0.6, 0.05, 0.6]));
   Gl(new THREE.TorusGeometry(0.6, 0.025, 6, 48), "#5fe1ff", M([0, 0.89, 0.9], [Math.PI / 2, 0, 0]));
   // A bench in the rear bubble, facing back.
-  S(BOX, WHITE, M([0, 0.45, 5.2], [0, 0, 0], [1.6, 0.14, 0.55]));
-  S(BOX, "#3b3f66", M([0, 0.2, 5.2], [0, 0, 0], [1.4, 0.4, 0.45]));
+  S(BOX, WHITE, M([0, 0.45, 5.2], [0, 0, 0], [1.6, 0.14, 0.55]), { surface: "fabric" });
+  S(BOX, "#3b3f66", M([0, 0.2, 5.2], [0, 0, 0], [1.4, 0.4, 0.45]), { surface: "metal" });
   // A light clock on the right wall: two mirrors and a tube between.
-  for (const y of [0.45, 2.35]) S(CYL, "#c9d6ff", M([1.7, y, 2.6], [0, 0, 0], [0.16, 0.04, 0.16]));
+  for (const y of [0.45, 2.35]) S(CYL, "#c9d6ff", M([1.7, y, 2.6], [0, 0, 0], [0.16, 0.04, 0.16]), { surface: "metal" });
   // A pot of glowing alien flowers at the back.
-  S(new THREE.CylinderGeometry(0.28, 0.2, 0.45, 16), "#ff8f5c", M([-1.45, 0.22, 3.9]));
-  S(new THREE.SphereGeometry(0.3, 12, 8), "#3f9a5a", M([-1.45, 0.5, 3.9], [0, 0, 0], [1, 0.5, 1]));
+  S(new THREE.CylinderGeometry(0.28, 0.2, 0.45, 16), "#ff8f5c", M([-1.45, 0.22, 3.9]), { surface: "plaster" });
+  S(new THREE.SphereGeometry(0.3, 12, 8), "#3f9a5a", M([-1.45, 0.5, 3.9], [0, 0, 0], [1, 0.5, 1]), { surface: "grass" });
   // Outside: swept fins you can see from the side windows, and engines aft.
   {
     // A swept wing: wide at the hull, raked back to a narrow tip.
@@ -186,7 +190,7 @@ export function buildCabin() {
     }
   }
   for (const sx of [-1, 1]) {
-    S(new THREE.CylinderGeometry(0.45, 0.55, 2.4, 20), "#d8dcef", M([sx * 2.35, 0.55, 5.0], [Math.PI / 2, 0, 0]));
+    S(new THREE.CylinderGeometry(0.45, 0.55, 2.4, 20), "#d8dcef", M([sx * 2.35, 0.55, 5.0], [Math.PI / 2, 0, 0]), { surface: "metal" });
     Gl(new THREE.TorusGeometry(0.5, 0.05, 6, 32), "#5fe1ff", M([sx * 2.35, 0.55, 6.2]));
   }
   // A slim prow in front of the dome, with a glowing keel line.
@@ -203,7 +207,11 @@ export function buildCabin() {
   // aquarium and the route table.
   const lamps = [-3.2, -1.4, 0.4, 2.2, 4.0].map((z) => [0, CY + R - 0.2, z, 3.2, "#c4d2f4"]);
   lamps.push([SEAT[0], 1.0, SEAT[1] - 0.9, 1.5, "#3fb4d8"], [1.5, 1.0, -1.6, 1.6, "#ff8fd8"], [0, 1.0, 0.9, 1.3, "#5fe1ff"]);
-  add(new THREE.Mesh(mergeGeometries(solid, false), mat({ color: "#ffffff", vertexColors: true, unlit: true, comoving: true, doubleSided: true, interior: { lights: lamps, ambient: "#5c6290" } })));
+  const eye = { value: new THREE.Vector3(0, 1.6, 0) }; // you, in the cabin's frame
+  const finish = { paint: { rough: 0.3 }, metal: { rough: 0.35 }, fabric: {}, plaster: {}, grass: {} };
+  for (const [surface, geos] of solid) {
+    add(new THREE.Mesh(mergeGeometries(geos, false), mat({ color: "#ffffff", vertexColors: true, unlit: true, comoving: true, doubleSided: true, surface, ...finish[surface], vary: 0.04, interior: { lights: lamps, ambient: "#5c6290", eye } })));
+  }
   add(new THREE.Mesh(mergeGeometries(glow, false), mat({ color: "#ffffff", vertexColors: true, emissive: 1, unlit: true, comoving: true })));
 
   // Glass: the long windows and the two domes.
@@ -357,6 +365,9 @@ export function buildCabin() {
     // Called every frame with the ship and player state.
     // progress: 0 at home, 1 at the destination. seen: what the panel says about home.
     update({ t, dt, ship: s, player, progress, seen, dest }) {
+      ship.updateMatrixWorld();
+      eye.value.copy(player.eye);
+      ship.worldToLocal(eye.value);
       clock.set(player.tau);
       // Pip drifts to a spot beside you, a little ahead, and looks at you.
       const ly = player.yaw - s.heading;

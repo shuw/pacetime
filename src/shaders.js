@@ -400,6 +400,7 @@ uniform vec4 uLampPos[8];   // xyz, range
 uniform vec4 uInLight[8];   // a cabin's own lamps, in its frame: xyz, range
 uniform vec3 uInColor[8];
 uniform vec3 uInAmbient;
+uniform vec3 uInEye;        // where you are, in the cabin's frame
 varying vec3 vPanel;        // panel coordinates, and how much the panels show
 #endif
 uniform vec3 uLampColor[8];
@@ -641,7 +642,7 @@ void main() {
   #ifdef ROAD
     rough = mix(rough, 0.3, roadWet);
   #endif
-  #ifndef UNLIT
+  #if !defined(UNLIT) || defined(INTERIOR)
   {
     vec3 sN = normalize(vPatN + 1e-6);
     vec2 sq = planar(vPat, sN);
@@ -810,7 +811,13 @@ void main() {
     #endif
     #ifdef SURF_FABRIC
     {
-      base *= 0.92 + 0.08 * vnoise(sq * 40.0) * fine + 0.06 * (fbm2(sq * 0.8) - 0.5);
+      // A fine basket weave, close up only.
+      vec2 g = sq * 70.0, wc = floor(g), wf = fract(g);
+      float over = mod(wc.x + wc.y, 2.0);
+      float thread = over > 0.5 ? sin(wf.x * 3.1416) : sin(wf.y * 3.1416);
+      float closeUp = 1.0 - smoothstep(0.003, 0.009, px);
+      base *= 0.92 + 0.08 * vnoise(sq * 40.0) * fine + 0.06 * (fbm2(sq * 0.8) - 0.5) + 0.1 * (thread - 0.6) * closeUp;
+      hgt = thread * closeUp; bumpK = 0.25 * closeUp;
     }
     #endif
     #ifdef SURF_SAND
@@ -861,33 +868,65 @@ void main() {
   #ifdef UNLIT
     light = vec3(1.0);
   #endif
+  vec3 inGloss = vec3(0.0);
   #ifdef INTERIOR
     {
       // Hull panels and floor plates: a seam round each, each its own shade.
       if (vPanel.z > 0.0) {
         vec2 cell = floor(vPanel.xy), f = fract(vPanel.xy), fw2 = max(fwidth(vPanel.xy), vec2(1e-4));
         vec2 d = min(f, 1.0 - f) / fw2;
-        float seam = (1.0 - smoothstep(0.6, 1.6, min(d.x, d.y))) * (1.0 - smoothstep(0.12, 0.35, max(fw2.x, fw2.y)));
+        float near = 1.0 - smoothstep(0.12, 0.35, max(fw2.x, fw2.y));
+        float seam = (1.0 - smoothstep(0.6, 1.6, min(d.x, d.y))) * near;
         float lip = (1.0 - smoothstep(1.6, 3.5, d.y)) * step(0.5, f.y) * (1.0 - smoothstep(0.12, 0.35, fw2.y)); // a lit edge under each seam
-        base *= mix(1.0, (0.9 + 0.18 * hash12(cell)) * (1.0 - 0.5 * seam) * (1.0 + 0.12 * lip), vPanel.z);
+        base *= (0.9 + 0.18 * hash12(cell)) * (1.0 - 0.5 * seam) * (1.0 + 0.12 * lip);
+        if (vPanel.z > 1.5) {
+          // Hull: quilted padding, a soft pillow in each panel with a button at its middle.
+          vec2 q = f * vec2(2.0, 2.0);
+          vec2 qf = fract(q) - 0.5;
+          float pillow = cos(qf.x * 3.1416) * cos(qf.y * 3.1416);
+          float button = 1.0 - smoothstep(0.03, 0.06, length(qf * vec2(0.95, 1.15)));
+          base *= mix(1.0, (0.78 + 0.3 * pillow) * (1.0 - 0.35 * button), near);
+          hgt += pillow * 0.9 - button * 0.4; bumpK = max(bumpK, 1.2 * near);
+        } else {
+          // Floor: tread plate, raised lozenges laid crosswise by turns.
+          vec2 q = vPat.xz / 0.07, c2 = floor(q), qf = fract(q) - 0.5;
+          float turn = mod(c2.x + c2.y, 2.0);
+          vec2 ax = turn > 0.5 ? vec2(0.707, 0.707) : vec2(0.707, -0.707);
+          float tread = (1.0 - smoothstep(0.06, 0.11, abs(dot(qf, ax)))) * (1.0 - smoothstep(0.22, 0.34, abs(dot(qf, vec2(-ax.y, ax.x)))));
+          float fineT = 1.0 - smoothstep(0.004, 0.012, length(fwidth(vPat.xz)));
+          base *= 1.0 + 0.35 * tread * fineT;
+          hgt += tread * fineT; bumpK = max(bumpK, 0.9 * fineT);
+        }
       }
       vec3 Nl = normalize(vPatN);
       #ifdef DOUBLE_SIDED
         if (!gl_FrontFacing) Nl = -Nl;
       #endif
+      #ifdef SURFACE
+        Nl = bumpN(Nl, vPat, hgt, bumpK);
+      #endif
+      vec3 Vl = normalize(uInEye - vPat);
+      float shinL = mix(160.0, 8.0, rough);
+      float shineL = (1.0 - rough) * (1.0 - rough) * uFinish.z * (shinL + 8.0) / 70.0;
       light = uInAmbient;
       for (int i = 0; i < 8; i++) {
         vec3 L = uInLight[i].xyz - vPat;
         float d2 = dot(L, L), r = uInLight[i].w;
         float fall = r * r / (r * r + d2 * 3.0);
-        light += uInColor[i] * fall * (0.2 + 0.8 * max(dot(Nl, L * inversesqrt(max(d2, 1e-4))), 0.0));
+        vec3 Ln = L * inversesqrt(max(d2, 1e-4));
+        light += uInColor[i] * fall * (0.2 + 0.8 * max(dot(Nl, Ln), 0.0));
+        inGloss += uInColor[i] * fall * pow(max(dot(Nl, normalize(Ln + Vl)), 0.0), shinL) * shineL;
       }
+      inGloss *= mix(vec3(1.0), base * 1.6, uFinish.w);
     }
   #endif
   float lum = dot(light, vec3(0.33));
   float waterFres = 0.0;
   vec3 waterN = vec3(0.0, 1.0, 0.0);
   vec3 rgb = base * mix(light, vec3(1.6), e);
+  #ifdef INTERIOR
+    rgb += inGloss * (1.0 - e);
+  #endif
   float ir = uSpec.x * mix(lum, 1.6, e);
   float uv = uSpec.y * mix(lum, 1.6, e);
   #ifndef UNLIT
@@ -1313,6 +1352,7 @@ export function mat({
         uInLight: { value: Array.from({ length: 8 }, (_, i) => new THREE.Vector4(...(interior.lights[i]?.slice(0, 4) ?? [0, -100, 0, 0.01]))) },
         uInColor: { value: Array.from({ length: 8 }, (_, i) => new THREE.Color(interior.lights[i]?.[4] ?? "#000000")) },
         uInAmbient: { value: new THREE.Color(interior.ambient ?? "#ffffff") },
+        uInEye: interior.eye ?? { value: new THREE.Vector3(0, 1.6, 0) },
       }),
       uGridColor: { value: new THREE.Color(grid?.color ?? "#fff") },
       ...(road && { uRoad: { value: new THREE.Vector2(road.half, 0) }, uRoadColor: { value: new THREE.Color(road.color) }, uRoadLine: { value: new THREE.Color(road.line) } }),
