@@ -316,7 +316,7 @@ export default {
     for (const side of [1, -1]) {
       const n = neon("GO", { size: 0.11, color: "#ffffff", width: 0.045 });
       n.glow.uniforms.uSpec.value.z = 0.3; // readable, not a bloom of white
-      n.position.set((-side * n.textWidth) / 2, -0.22, side * 0.02);
+      n.position.set((-side * n.textWidth) / 2, -0.22, side * 0.05); // clear of the disc, so the far side's GO doesn't show through
       n.rotation.y = side > 0 ? 0 : Math.PI;
       labels.GO.add(n);
     }

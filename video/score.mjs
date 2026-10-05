@@ -1,7 +1,7 @@
-// Composes and renders the hype video's score (video/out/score.wav): a music
-// box over the funfair, a groove for the crossroads and the railway, a riser
-// up the endless road, everything at once for the starship, and one big
-// chord under the title. Rendered offline by the browser's audio engine.
+// Composes and renders the trailer's score (video/out/score.wav): a music box
+// over the funfair, a groove for the crossroads and the railway, a riser up
+// the endless road, everything at once for the starship, and one big chord
+// under the title. Rendered offline by the browser's audio engine.
 import { writeFileSync, mkdirSync } from "node:fs";
 import { chromium } from "playwright-core";
 import { BAR, BPM, LENGTH, SECTIONS, HITS } from "./timeline.mjs";
@@ -89,21 +89,28 @@ const pcm = await page.evaluate(async ({ BAR, BPM, LENGTH, SECTIONS, HITS }) => 
   const ROOTS = [38, 45, 47, 43];
   const HOOK = [[74, 78, 81, 78], [76, 73, 69, 73], [74, 78, 83, 81], [79, 78, 76, 74]];
 
-  for (let b = 0; b < 30; b++) {
+  const BARS = Math.round(LENGTH / BAR);
+  for (let b = 0; b < BARS; b++) {
     const t0 = bar(b), k = b % 4, ch = CHORDS[k], root = ROOTS[k];
-    const intro = inS("intro", b), groove = inS("groove", b), build = inS("build", b), drop = inS("drop", b), outro = inS("outro", b);
-    // The music box: arpeggios through the intro, the hook over the drop and the outro.
-    if (intro || build) for (let i = 0; i < 8; i++) musicBox(ch[i % 3] + 12 + (i >= 4 ? 12 : 0), t0 + i * beat / 2, intro && b < 2 ? 0.17 : 0.2, i % 2 ? 0.3 : -0.3);
-    if (groove || drop || (outro && b < 29)) HOOK[k].forEach((n, i) => musicBox(n, t0 + i * beat, drop ? 0.22 : 0.17, (i - 1.5) / 4));
+    const intro = inS("intro", b), fair = inS("funfair", b), groove = inS("groove", b), build = inS("build", b), drop = inS("drop", b), outro = inS("outro", b);
+    // The music box: arpeggios through the funfair, the hook over the groove, the drop and the outro.
+    if (intro || fair || build) for (let i = 0; i < 8; i++) musicBox(ch[i % 3] + 12 + (i >= 4 ? 12 : 0), t0 + i * beat / 2, intro && b < 2 ? 0.17 : 0.2, i % 2 ? 0.3 : -0.3);
+    if (groove || drop || (outro && b < BARS - 1)) HOOK[k].forEach((n, i) => musicBox(n, t0 + i * beat, drop ? 0.22 : 0.17, (i - 1.5) / 4));
     // Pads from bar 4, opening up toward the drop.
-    if (b >= 2 && !outro) pad(ch, t0, BAR, { gain: drop ? 0.1 : b < 4 ? 0.05 : 0.08, lp: drop ? 2600 : build ? 900 + (b - 15) * 500 : 1200, a: drop ? 0.05 : 0.5 });
+    if (b >= 2 && !outro) pad(ch, t0, BAR, { gain: drop ? 0.1 : b < 4 ? 0.05 : 0.08, lp: drop ? 2600 : build ? 900 + (b - SECTIONS.build[0]) * 500 : 1200, a: drop ? 0.05 : 0.5 });
+    // The funfair: a soft heartbeat, a walking bass and a shaker.
+    if (fair) {
+      kick(t0, 0.4); kick(t0 + 2 * beat, 0.35);
+      bass(root, t0, beat * 1.8, 0.08); bass(root + 7, t0 + 2 * beat, beat * 1.8, 0.07);
+      if (b >= 8) for (let i = 0; i < 8; i++) hat(t0 + i * beat / 2 + (i % 2 ? 0.03 : 0), i % 2 ? 0.05 : 0.025, i % 2 ? 0.35 : -0.35);
+    }
     // Bass and drums.
     if (groove || drop || build) {
-      for (let i = 0; i < 8; i++) if (!(build && b === 18 && i >= 4)) bass(root + (i % 4 === 3 ? 12 : 0), t0 + i * beat / 2, beat / 2 - 0.03, drop ? 0.15 : 0.12);
+      for (let i = 0; i < 8; i++) if (!(build && b === SECTIONS.build[1] - 1 && i >= 4)) bass(root + (i % 4 === 3 ? 12 : 0), t0 + i * beat / 2, beat / 2 - 0.03, drop ? 0.15 : 0.12);
     }
     if (groove || drop) {
       for (let i = 0; i < 4; i++) {
-        if (i % 2 === 0 || b >= 10 || drop) kick(t0 + i * beat, drop ? 0.7 : 0.55);
+        if (i % 2 === 0 || b >= SECTIONS.groove[0] + 2 || drop) kick(t0 + i * beat, drop ? 0.7 : 0.55);
         if (i % 2 === 1) clap(t0 + i * beat, drop ? 0.32 : 0.24);
       }
       for (let i = 0; i < 8; i++) hat(t0 + i * beat / 2 + (i % 2 ? 0.02 : 0), i % 2 ? 0.09 : 0.05, i % 2 ? 0.3 : -0.2);
@@ -111,9 +118,10 @@ const pcm = await page.evaluate(async ({ BAR, BPM, LENGTH, SECTIONS, HITS }) => 
     }
     if (build) {
       // Kick on every beat, then a roll that gets faster into the drop.
-      for (let i = 0; i < 4; i++) if (b < 18 || i < 2) kick(t0 + i * beat, 0.55);
-      const per = b < 17 ? 2 : b < 18 ? 4 : 8;
-      for (let i = 0; i < 4 * per / 2; i++) clap(t0 + i * beat * 2 / per, 0.12 + 0.2 * ((b - 15) / 4 + i / (8 * per)));
+      const last = SECTIONS.build[1] - 1, into = b - SECTIONS.build[0];
+      for (let i = 0; i < 4; i++) if (b < last || i < 2) kick(t0 + i * beat, 0.55);
+      const per = b < last - 1 ? 2 : b < last ? 4 : 8;
+      for (let i = 0; i < 4 * per / 2; i++) clap(t0 + i * beat * 2 / per, 0.12 + 0.2 * (into / 4 + i / (8 * per)));
     }
   }
   // The riser up the endless road, and a cymbal-ish swell into the drop.
