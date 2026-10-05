@@ -8,7 +8,6 @@ import { clockFace, cottage, forest, lampPost, mountain, neon, surface } from ".
 import { person, randomLook, Strollers } from "../people.js";
 import { DayCycle } from "../day.js";
 import { retardedTime, seenTimeOf, world } from "../relativity.js";
-import { carMarker } from "./common.js";
 import { sfx } from "../audio.js";
 
 // A summer valley with a little country station, a nod to Einstein's Bern:
@@ -164,6 +163,13 @@ function hillTunnel(x, dir) {
   g.add(mesh(new THREE.CircleGeometry(3.6, 32, 0, Math.PI), mat({ color: "#0d0c10", unlit: true, doubleSided: true }), { pos: [x + dir * 0.4, GROUND + 3.2, 0], rot: [0, Math.PI / 2, 0] }));
   g.add(box(0.4, 3.4, 7.2, { color: "#0d0c10", unlit: true }, [x + dir * 0.4, GROUND + 1.6, 0]));
   return g;
+}
+
+// A floor ring carried in the middle car, marking where to stand on board.
+function carMarker(train, local = 0, color = PALETTE.warm) {
+  const ring = new THREE.RingGeometry(0.95, 1.05, 80);
+  ring.rotateX(-Math.PI / 2);
+  train.carry(ring, mat({ color, emissive: 1, unlit: true, doubleSided: true, mover: train.mover, rect: train.clip }), local, 0.08);
 }
 
 export default {

@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun scripts/serve.ts",
-    "build": "bun build ./index.html --outdir dist --minify",
+    "build": "rm -rf dist && bun build ./index.html --outdir dist --minify",
     "test": "node scripts/test.mjs",
     "shot": "node scripts/shot.mjs"
   },
@@ -13,5 +13,6 @@
   },
   "devDependencies": {
     "playwright-core": "^1.63.0"
-  }
+  },
+  "license": "MIT"
 }

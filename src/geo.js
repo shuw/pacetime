@@ -52,21 +52,6 @@ export function box(w, h, d, opts, pos = [0, 0, 0], rot = [0, 0, 0]) {
   return mesh(G.box, mat(opts), { pos, rot, scale: [w, h, d] });
 }
 
-export function withEdges(m, opts) {
-  const lines = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 25), mat({ unlit: true, emissive: 1, ...opts }));
-  lines.frustumCulled = false;
-  m.add(lines);
-  return m;
-}
-
-// A thin glowing line between two points.
-export function line(points, opts) {
-  const geo = new THREE.BufferGeometry().setFromPoints(points.map((p) => new THREE.Vector3(...p)));
-  const l = new THREE.Line(geo, mat({ unlit: true, emissive: 1, ...opts }));
-  l.frustumCulled = false;
-  return l;
-}
-
 // A ground disc that follows the player: rings get denser close in, where
 // aberration bends things most. Patterns are drawn in world space, so the
 // mesh moving along with you is invisible.
