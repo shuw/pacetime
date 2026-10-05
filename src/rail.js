@@ -5,6 +5,15 @@ import { dopplerBetween, effects, gammaOf, seenTimeOf, world } from "./relativit
 import { govern, motion } from "./motion.js";
 import { PALETTE } from "./world.js";
 import { personGeometry, randomLook } from "./people.js";
+
+// Passengers come from a shared crowd of 24 looks a pose, built once, so a
+// station's trains don't each build dozens of new creatures.
+const crowd = new Map();
+function passenger(i, pose) {
+  const key = pose + i;
+  if (!crowd.has(key)) crowd.set(key, personGeometry(randomLook(rng(1000 + i * 37)), { scale: 0.62, pose }));
+  return crowd.get(key);
+}
 import { rng } from "./geo.js";
 
 // A glass maglev train on a straight track along x, moving at a fixed fraction
@@ -101,7 +110,7 @@ export class Train {
       for (let k = 0; k < 4; k++) for (const s of [-1, 1]) {
         if (rand() < 0.3) continue;
         const pose = rand() < 0.4 ? "wave" : "ride";
-        const g = personGeometry(randomLook(rand), { scale: 0.62, pose });
+        const g = passenger(Math.floor(rand() * 24), pose);
         const p = this.carry(g, mat(m({ color: "#ffffff", vertexColors: true, ir: 0.4, uv: 0.2 })), cx - carLen / 2 + 1.6 + k * 2.9, 0.55, s * (width / 2 - 0.6));
         this.carry(G.box, mat(m({ color: "#3a5a8a", ir: 0.4 })), cx - carLen / 2 + 1.6 + k * 2.9, 0.4, s * (width / 2 - 0.6), [0.6, 0.12, 0.55]); // the seat
         p.rotation.y = s > 0 ? Math.PI : 0; // facing out of their window

@@ -136,8 +136,7 @@ export const SHOTS = [
     setup: () => {
       slowlight.world.c = 6;
       slowlight.instance.time.set(0.82);
-      slowlight.player.place(24.4, -128, Math.PI);
-      for (let i = 0; i < 600 && slowlight.instance.action()?.label !== "Board the coaster"; i++) slowlight.advance(0.1);
+      slowlight.player.place(17.6, -126, -Math.PI / 2);
       slowlight.act();
       slowlight.advance(50.4); // over the top of the lift hill and down the first drop
     },
@@ -360,8 +359,7 @@ export const SHOTS = [
     setup: () => {
       slowlight.load("pier");
       slowlight.instance.time.set(0.82);
-      slowlight.player.place(24.4, -128, Math.PI);
-      for (let i = 0; i < 600 && slowlight.instance.action()?.label !== "Board the coaster"; i++) slowlight.advance(0.1);
+      slowlight.player.place(17.6, -126, -Math.PI / 2);
       slowlight.act();
       slowlight.advance(58.5); // the second dip
     },

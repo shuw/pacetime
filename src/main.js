@@ -125,12 +125,14 @@ const fadeVeil = (on, ms) => new Promise((r) => {
 let starting = false;
 async function startScene(scene) {
   if (starting) return;
+  // The place you're already in: just go back to it.
+  if (current?.scene === scene && current.instance.started) return closeMenu();
   starting = true;
   unlockAudio();
   sfx.ui();
   veil.querySelector("h2").textContent = scene.title;
   veil.querySelector("p").textContent = scene.tag;
-  await fadeVeil(true, 260);
+  await fadeVeil(true, 150);
   await nextFrame(); await nextFrame(); // the veil is on screen before building holds up the page
   load(scene);
   current.instance.started = true;
@@ -138,7 +140,7 @@ async function startScene(scene) {
   await warmUp();
   for (let i = 0; i < 3; i++) await nextFrame(); // the first frames, with their uploads, also behind the veil
   starting = false;
-  await fadeVeil(false, 650);
+  await fadeVeil(false, 380);
 }
 
 // Throw a glowing ball at 60% of light speed (relative to you), from your hand.

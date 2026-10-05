@@ -150,6 +150,24 @@ export function addCenters(root) {
   });
 }
 
+// A copy of a shape with no index (each triangle its own three vertices) and
+// only the attributes asked for. The flattening is done once per shape and
+// reused, as places build hundreds of parts from the same few shapes.
+const flatCache = new WeakMap();
+export function flat(geo, keep = ["position", "normal"]) {
+  let byKeep = flatCache.get(geo);
+  if (!byKeep) flatCache.set(geo, (byKeep = new Map()));
+  const k = keep.join();
+  let g = byKeep.get(k);
+  if (!g) {
+    g = geo.index ? geo.toNonIndexed() : geo.clone();
+    for (const name of Object.keys(g.attributes)) if (!keep.includes(name)) g.deleteAttribute(name);
+    if (!g.attributes.normal) g.computeVertexNormals();
+    byKeep.set(k, g);
+  }
+  return g.clone();
+}
+
 export function bake(root) {
   addCenters(root);
   root.updateMatrixWorld(true);
@@ -169,9 +187,7 @@ export function bake(root) {
     if (meshes[0].material.vertexColors) keep.push("color");
     if ("ROTOR" in (meshes[0].material.defines ?? {})) keep.push("aCenter");
     const geos = meshes.map((m) => {
-      let g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
-      for (const name of Object.keys(g.attributes)) if (!keep.includes(name)) g.deleteAttribute(name);
-      if (!g.attributes.normal) g.computeVertexNormals();
+      const g = flat(m.geometry, keep);
       const M = new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld);
       g.applyMatrix4(M);
       if (g.attributes.aCenter) g.attributes.aCenter.applyMatrix4(M);

@@ -98,8 +98,7 @@ await run("pier", async () => {
   await t.q(() => slowlight.act());
   await t.place(-16, -122, 0);
   await t.advance(4);
-  await t.place(24.4, -131, Math.PI);
-  for (let i = 0; i < 800 && (await t.q(() => slowlight.instance.action()?.label)) !== "Board the coaster"; i++) await t.advance(0.25);
+  await t.place(17.6, -126, -Math.PI / 2);
   await t.q(() => slowlight.act());
   let shot = false;
   for (let i = 0; i < 600 && !(await t.q(() => slowlight.instance.goals[5].done)); i++) {

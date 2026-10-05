@@ -19,6 +19,7 @@ const C = 6; // light speed here, m/s
 const SEA = -2.4;
 const WHEEL = new THREE.Vector3(-16, 14.5, -146), WHEEL_R = 12;
 const SWING = new THREE.Vector3(-1, 0, -160), SWING_R = 6.4;
+const STATION_X = 17.6, STATION_Z = -128, STATION_CAR_Z = -126; // the coaster's platform, beside its waiting car
 const LIGHTHOUSE = new THREE.Vector3(70, 0, -250), LAMP_Y = 22, BEAM_OMEGA = 0.6;
 const BARGE = new THREE.Vector3(0, SEA, -228);
 const TWIN = [new THREE.Vector3(-36, 30, -224), new THREE.Vector3(36, 30, -224)];
@@ -422,11 +423,29 @@ export default {
       if (i % 2 === 0) group.add(box(1.3, 0.12, 0.2, { color: "#ff4d6d", ir: 0.4 }, [q.x, q.y - 0.2, q.z]));
       if (i % 3 === 0) group.add(mesh(G.ball, mat({ color: i % 2 ? "#ff9a6b" : "#fff0b0", emissive: 1, ir: 1, uv: 1.5, switched: true }), { pos: [q.x, q.y - 0.3, q.z], scale: 0.09 }));
     }
-    group.add(box(4, 0.3, 14, { color: "#b07a4a", ir: 0.5, surface: "wood" }, [24.4, 0.6, -131]));
-    for (const dz of [-6.5, 6.5]) group.add(box(0.2, 3, 0.2, { color: "#f6f2ea" }, [26.2, 2.1, -131 + dz]));
-    group.add(box(4.4, 0.2, 14.4, { color: "#ff4d6d", ir: 0.5, surface: "paint" }, [24.4, 3.6, -131]));
-    group.add(box(0.12, 0.12, 14, { color: "#ffd38a", emissive: 1, ir: 1, switched: true }, [26.4, 3.4, -131]));
-    for (let k = 0; k < 2; k++) group.add(person(randomLook(rand), { pos: [27.3, 0, -127 - k * 0.9], rotY: Math.PI }));
+    // The station: a platform on the pier side of the track, under a striped
+    // canopy with a neon sign, where the cars wait. E there rides any time.
+    {
+      const z0 = STATION_Z, x0 = STATION_X;
+      group.add(box(3.6, 0.12, 12, { color: "#c8925a", ir: 0.5, surface: "wood" }, [x0, 0.06, z0]));
+      group.add(box(0.12, 0.13, 12, { color: "#ffd38a", emissive: 0.6, ir: 0.8 }, [x0 + 1.75, 0.07, z0])); // the platform edge
+      for (const dz of [-5.6, 0, 5.6]) {
+        group.add(box(0.22, 3.6, 0.22, { color: "#f6f2ea", surface: "paint" }, [x0 - 1.6, 1.8, z0 + dz]));
+        colliders.push({ x: x0 - 1.6, z: z0 + dz, r: 0.2 });
+      }
+      for (let k = 0; k < 8; k++) group.add(box(4.4, 0.16, 12.4 / 8, { color: k % 2 ? "#ffffff" : "#ff4d6d", ir: 0.5, surface: "fabric" }, [x0 + 0.3, 3.65, z0 - 6.2 + (k + 0.5) * (12.4 / 8)], [0, 0, -0.08]));
+      group.add(box(0.12, 0.12, 12.4, { color: "#ffd38a", emissive: 1, ir: 1, switched: true }, [x0 - 1.9, 3.45, z0]));
+      const sign = neon("COASTER", { size: 0.3, color: "#ff5fa2", switched: true, width: 0.1 });
+      sign.rotation.y = -Math.PI / 2;
+      sign.position.set(x0 - 1.95, 4.05, z0 - sign.textWidth / 2);
+      group.add(box(0.12, 1.15, sign.textWidth + 0.8, { color: "#1d1b2e", ir: 0.2 }, [x0 - 1.85, 4.6, z0]));
+      group.add(sign);
+      // Where to stand, and a rope for the queue.
+      group.add(mesh(new THREE.RingGeometry(0.55, 0.68, 48), mat({ color: "#ffd38a", emissive: 1, unlit: true, doubleSided: true }), { pos: [x0 + 0.6, 0.14, STATION_CAR_Z], rot: [-Math.PI / 2, 0, 0] }));
+      for (let k = 0; k < 4; k++) group.add(box(0.12, 0.9, 0.12, { color: "#c9a227", surface: "metal" }, [x0 - 0.9, 0.45, z0 - 1.2 - k * 1.3]));
+      group.add(box(0.05, 0.05, 3.9, { color: "#c0485a" }, [x0 - 0.9, 0.82, z0 - 3.15]));
+      for (let k = 0; k < 2; k++) group.add(person(randomLook(rand), { pos: [x0 - 0.2, 0.12, z0 - 1.6 - k * 1.1], rotY: Math.PI }));
+    }
     const cars = ["#ffbe0b", "#3a86ff", "#8338ec"].map((c) => { const car = coasterCar(c, rand); group.add(car); return car; });
     // The coaster keeps its own clock, which only runs slow if light gets
     // slower than its top speed.
@@ -579,7 +598,7 @@ export default {
       { group: "Fireworks", text: "Move to one side: now the nearer shell flashes first", done: false, at: [-26, -160, 0, 0.25] },
       { group: "Fireworks", text: "Notice the bang arrives long before the flash", done: false, at: [0, -166, 0, 0.3] },
       { group: "Rides", text: "Stand before the Ferris wheel: bent spokes, one side bluer, one redder", done: false, at: [-16, -122, 0, 0.12] },
-      { group: "Rides", text: "Ride the roller coaster (E at its station, right of the stalls)", done: false, at: [24.4, -128, Math.PI, 0] },
+      { group: "Rides", text: "Ride the roller coaster (E at its station, under the COASTER sign)", done: false, at: [STATION_X - 0.4, STATION_CAR_Z, -Math.PI / 2, 0] },
       { group: "Rides", text: "Ride the Ferris wheel (E under it) and come off younger", done: false, at: [-16, -142, 0, 0] },
       { group: "Shooting gallery", text: "Knock down 5 targets: aim where they are, not where you see them (F to throw)", done: false, at: [-20, -130.8, 0, 0.02] },
       { group: "Scooter", text: "Ride a scooter (E at the hire stand on the promenade) down the pier at night, headlight on", done: false, at: [10.4, 45.2, Math.PI, -0.1] },
@@ -744,7 +763,7 @@ export default {
             },
           };
         }
-        if (riding) return { label: "Step off the coaster", run: () => { riding = null; player.alight(); player.pos.set(24.4, 0, -131); sfx.alight(); } };
+        if (riding) return { label: "Step off the coaster", run: () => { riding = null; player.alight(); player.pos.set(STATION_X, 0, STATION_CAR_Z); sfx.alight(); } };
         if (Math.hypot(player.pos.x - WHEEL.x, player.pos.z - WHEEL.z) < 6) {
           return {
             label: "Ride the Ferris wheel",
@@ -765,11 +784,13 @@ export default {
             },
           };
         }
-        const near = Math.abs(player.pos.x - 24.4) < 3 && Math.abs(player.pos.z + 131) < 8;
-        if (near && inStation(world.t)) {
+        const near = Math.abs(player.pos.x - STATION_X) < 2.6 && Math.abs(player.pos.z - STATION_Z) < 6.5;
+        if (near) {
           return {
-            label: "Board the coaster",
+            label: "Ride the roller coaster",
             run: () => {
+              // No waiting: the next car comes straight in, and leaves a moment after you sit down.
+              if (!inStation(world.t)) coaster.clock = Math.ceil(coaster.clock / prof.T) * prof.T + 1.5;
               const tan = curve.getTangentAt(carS(0)(world.t) / prof.L);
               player.yaw = Math.atan2(-tan.x, -tan.z);
               player.pitch = 0;
@@ -782,7 +803,6 @@ export default {
             },
           };
         }
-        if (near) return { label: "Wait for the coaster to come in", run: () => {} };
         return null;
       },
       update({ eye, camera, t, dTau }) {

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { Mover } from "./movers.js";
 import { mat } from "./shaders.js";
-import { mesh, rng } from "./geo.js";
+import { flat, mesh, rng } from "./geo.js";
 
 // The pier's regulars are round little creatures: jelly-bean bodies, big
 // eyes, stubby feet, and something on top.
@@ -27,23 +27,26 @@ export function randomLook(rand) {
 // One creature as a single geometry with colors baked in, feet at the origin,
 // facing -z. Poses: "stand", "sit" (on a bench at y = 0.45), "ride" (seated,
 // arms up), "seated" (arms down).
+const SHAPES = {
+  ball: new THREE.SphereGeometry(1, 20, 14),
+  small: new THREE.SphereGeometry(1, 10, 8),
+  cone: new THREE.ConeGeometry(1, 1, 12),
+  cyl: new THREE.CylinderGeometry(1, 1, 1, 12),
+};
+
 export function personGeometry(look, { scale = 1, pose = "stand" } = {}) {
   const parts = [];
   const add = (geo, color, pos, rot = [0, 0, 0], s = [1, 1, 1]) => {
-    const g = geo.index ? geo.toNonIndexed() : geo.clone();
+    const g = flat(geo);
     g.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(...pos), new THREE.Quaternion().setFromEuler(new THREE.Euler(...rot)), new THREE.Vector3(...s)));
     const c = new THREE.Color(color);
     const n = g.attributes.position.count;
     const col = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
     g.setAttribute("color", new THREE.BufferAttribute(col, 3));
-    for (const k of Object.keys(g.attributes)) if (!["position", "normal", "color"].includes(k)) g.deleteAttribute(k);
     parts.push(g);
   };
-  const ball = new THREE.SphereGeometry(1, 20, 14);
-  const small = new THREE.SphereGeometry(1, 10, 8);
-  const cone = new THREE.ConeGeometry(1, 1, 12);
-  const cyl = new THREE.CylinderGeometry(1, 1, 1, 12);
+  const { ball, small, cone, cyl } = SHAPES;
   const sit = pose !== "stand";
   const w = look.wide ?? 1;
   const R = 0.36 * w; // body radius
