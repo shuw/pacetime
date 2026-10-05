@@ -173,7 +173,7 @@ await run("starship", async () => {
   await t.q(() => { slowlight.player.ship.local.set(0, 0, -4); });
   await t.q(() => slowlight.act());
   await t.page.keyboard.down("w"); await t.page.keyboard.down("Shift");
-  await t.advance(14);
+  for (let i = 0; i < 80 && (await t.q(() => slowlight.player.ship.eta)) < 15.7; i++) await t.advance(0.5);
   await t.page.keyboard.up("w"); await t.page.keyboard.up("Shift");
   console.log("  cruising: γ", await t.q(() => Math.round(slowlight.player.gamma)), await t.snap("starship-cruise"));
   // Get up and walk to the back bubble.
@@ -189,7 +189,7 @@ await run("starship", async () => {
   // Home again: back to the helm and W.
   await t.q(() => slowlight.act());
   await t.page.keyboard.down("w"); await t.page.keyboard.down("Shift");
-  await t.advance(16);
+  for (let i = 0; i < 80 && (await t.q(() => slowlight.player.ship.eta)) < 15.7; i++) await t.advance(0.5);
   await t.page.keyboard.up("w"); await t.page.keyboard.up("Shift");
   console.log("  cards at the buoy:", await nav("cards"));
   const arrivals = [];

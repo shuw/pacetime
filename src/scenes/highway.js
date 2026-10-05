@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { followDisc, G, mesh } from "../geo.js";
+import { followDisc, G, mesh, rng } from "../geo.js";
 import { mat } from "../shaders.js";
+import { planetLook } from "../planets.js";
 import { world } from "../relativity.js";
 import { sfx } from "../audio.js";
 import { formatBeta, kmh } from "../format.js";
@@ -87,21 +88,6 @@ function instanced(geo, opts, count) {
   return m;
 }
 
-// Soft colour bands across a planet or its rings: `at` maps a vertex to a
-// position through the list of colours.
-function banded(geo, colors, at) {
-  const p = geo.attributes.position, out = new Float32Array(p.count * 3), q = new THREE.Vector3();
-  const cs = colors.map((c) => new THREE.Color(c)), c = new THREE.Color();
-  for (let i = 0; i < p.count; i++) {
-    const f = at(q.fromBufferAttribute(p, i)), k = Math.floor(f), w = THREE.MathUtils.smoothstep(f - k, 0.3, 0.7);
-    const n = cs.length, a = cs[((k % n) + n) % n], b = cs[(((k + 1) % n) + n) % n];
-    c.copy(a).lerp(b, w);
-    out.set([c.r, c.g, c.b], i * 3);
-  }
-  geo.setAttribute("color", new THREE.BufferAttribute(out, 3));
-  return geo;
-}
-
 /** @type {import("../place.js").PlaceModule} */
 export default {
   id: "highway",
@@ -142,16 +128,58 @@ export default {
     const all = [arches, poles, bulbs, pylons, beacons, halos, rocks, towers, lintels, rails, sleepers];
     for (const m of all) group.add(m);
 
-    // A ringed planet low in the sky behind you, too far away to get closer
-    // to. Above 99.9% it swings round into view ahead.
-    const sky = new THREE.Group();
-    sky.follow = true;
-    sky.userData.dynamic = true;
-    const planetAt = [-250, 95, 430];
-    sky.add(mesh(banded(new THREE.SphereGeometry(1, 96, 64), ["#f0c08a", "#c98a58", "#e8b07a", "#a8704a", "#f4d2a2"], (q) => q.y * 9 + Math.sin(q.x * 6 + q.z * 4) * 0.35), mat({ color: "#ffffff", vertexColors: true, ir: 0.7, uv: 0.3 }), { pos: planetAt, rot: [0.25, 0, 0.3], scale: 62 }));
-    sky.add(mesh(banded(new THREE.RingGeometry(84, 128, 160, 24), ["#e2cfa8", "#a8906a", "#d8c09a", "#6a5a48", "#c8b28a"], (q) => Math.hypot(q.x, q.y) / 4.3), mat({ color: "#ffffff", vertexColors: true, ir: 0.4, uv: 0.3, doubleSided: true, opacity: 0.92 }), { pos: planetAt, rot: [-1.2, 0.35, 0.25] }));
-    sky.add(mesh(new THREE.SphereGeometry(1, 48, 32), mat({ color: "#9fb4d8", ir: 0.4, uv: 0.4 }), { pos: [-120, 160, 470], scale: 11 }));
-    group.add(sky);
+    // Planets along the road, real ones you can fly past: a ringed giant
+    // behind the start, a blue world ahead, then one every few kilometres, a
+    // few kilometres off the road. Each slot's planet depends only on its
+    // number, like the road's tiles. Being kilometres away, they're drawn
+    // nearer than they are, at the same size in the same direction.
+    const planetMat = mat({ color: "#ffffff", vertexColors: true, ir: 0.5, uv: 0.3, fog: false });
+    const ringMat = mat({ color: "#ffffff", vertexColors: true, ir: 0.4, uv: 0.3, doubleSided: true, opacity: 0.92, fog: false });
+    const lookRand = rng(77);
+    const looks = Array.from({ length: 12 }, () => planetLook(lookRand));
+    const ringed = (() => { let l; do l = planetLook(lookRand, "gas"); while (!l.ring); return l; })();
+    const blue = planetLook(rng(5), "ocean");
+    const LANDMARKS = [
+      { s: -12000, x: -5200, y: 2600, r: 1100, look: ringed },
+      { s: 9000, x: 3600, y: 1900, r: 1100, look: blue },
+    ];
+    const PW = 7000; // the spacing of planet slots along the road, in metres
+    const slot = (k) => {
+      const h = (n) => hash(k, 100 + n), side = h(1) < 0.5 ? -1 : 1, r = 300 + h(2) * h(2) * 2200;
+      return { s: 20000 + k * PW + (h(3) - 0.5) * 4000, x: side * (r + 1500 + h(4) * 5000), y: r * 0.3 + h(5) * 2500 - 400, r, look: looks[Math.floor(h(6) * looks.length)], spin: h(7) };
+    };
+    const pool = Array.from({ length: 28 }, () => {
+      const g = new THREE.Group();
+      g.userData.dynamic = true;
+      g.planet = new THREE.Mesh(looks[0].geo, planetMat);
+      g.ring = new THREE.Mesh(looks[0].ring ?? looks[0].geo, ringMat);
+      g.ring.rotation.x = -Math.PI / 2;
+      for (const m of [g.planet, g.ring]) { m.frustumCulled = false; g.add(m); }
+      g.visible = false;
+      group.add(g);
+      return g;
+    });
+    const apparent = (d) => (d < 1500 ? d : 1500 + 700 * Math.log(d / 1500)); // how far away a planet d metres off is drawn
+    const placePlanets = (eye, t) => {
+      const se = -(base + player.pos.z);
+      const k0 = Math.max(0, Math.floor((se - 80000) / PW)), k1 = Math.max(-1, Math.floor((se + 160000) / PW));
+      const list = [...LANDMARKS];
+      for (let k = k0; k <= k1; k++) list.push(slot(k));
+      list.sort((a, b) => Math.abs(a.s - se) - Math.abs(b.s - se));
+      pool.forEach((g, i) => {
+        const p = list[i];
+        g.visible = !!p;
+        if (!p) return;
+        const rel = new THREE.Vector3(p.x - eye.x, p.y - eye.y, -p.s - base - eye.z), d = rel.length(), k = apparent(d) / d;
+        g.position.copy(eye).addScaledVector(rel, k);
+        g.scale.setScalar(p.r * k);
+        g.planet.geometry = p.look.geo;
+        g.ring.visible = !!p.look.ring;
+        if (p.look.ring) g.ring.geometry = p.look.ring;
+        g.rotation.set(...p.look.tilt);
+        g.planet.rotation.y = t * 0.02 * (0.5 + (p.spin ?? 0.5));
+      });
+    };
 
     // The Comet runs on the next track at a steady 99% of light speed. Its
     // state lives in your own frame, so it stays exact however close to light
@@ -164,9 +192,6 @@ export default {
     const ETA_C = Math.atanh(0.99); // the Comet's steady speed, as a rapidity
     const comet = { dz: -110, zeta: ETA_C };
 
-    // A small blue planet ahead and to the right. Racing toward it, it only
-    // shrinks and slides toward the middle of the view.
-    sky.add(mesh(banded(new THREE.SphereGeometry(1, 64, 40), ["#4f8ef0", "#6fa8ff", "#e8f2ff", "#5a9aff", "#3f7ad8"], (q) => q.y * 4 + Math.sin(q.x * 5 + q.y * 7) * 0.8 + Math.sin(q.z * 9) * 0.4), mat({ color: "#ffffff", vertexColors: true, ir: 0.4, uv: 0.6 }), { pos: [260, 140, -440], scale: 34 }));
 
     // Your craft: a sleek nose ahead of you, carried along (so not bent).
     const cockpit = new THREE.Group();
@@ -371,6 +396,7 @@ export default {
       },
       update({ eye, t, dTau }) {
         layout();
+        placePlanets(eye, t);
         ground.uniforms.uRoad.value.y = ((base % P) + P) % P;
         {
           const s0 = Math.floor(roadAt() / (L / 2)) * (L / 2), fade = 1 - THREE.MathUtils.smoothstep(player.beta, 0.25, 0.6);

@@ -1044,6 +1044,9 @@ void main() {
     }
   #endif
   float f = smoothstep(uFogRange.x, uFogRange.y, vDist);
+  #ifdef NOFOG
+    f = 0.0; // far things drawn nearer than they are (planets) mustn't fade in the haze
+  #endif
   #ifdef ADDITIVE
     // Glows add to what's behind them, so haze just dims them.
     rgb *= 1.0 - f;
@@ -1303,6 +1306,7 @@ export function mat({
   vary = null,      // how much large-scale variation (0 for none)
   shine = 1,        // highlight strength
   interior = null,  // { lights: [[x, y, z, range, color]], ambient }: lit by its own lamps, in its own frame (needs an aPanel attribute)
+  fog = true,       // false for far things drawn nearer than they are
 } = {}) {
   // Shared uniform objects (a train's motion, a wheel's spin) key by identity,
   // so every part of one train shares a material and can be merged.
@@ -1334,6 +1338,7 @@ export function mat({
   if (spiral) defines.SPIRAL = "";
   if (doubleSided) defines.DOUBLE_SIDED = "";
   if (interior) defines.INTERIOR = "";
+  if (!fog) defines.NOFOG = "";
   if (surface) { defines.SURFACE = ""; defines[`SURF_${surface.toUpperCase()}`] = ""; }
   const m = new THREE.ShaderMaterial({
     vertexShader: vertex,

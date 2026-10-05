@@ -356,6 +356,8 @@ export class Player {
         gain = eased * dTau + pay;
       }
       if (s.eta < 1e-6 && !up) s.owed = 0;
+      // The scene can hold the ship to a gentler acceleration (for sightseeing).
+      if (s.accelCap) gain = Math.min(gain, s.accelCap() * dTau);
       if (thrust) s.eta = Math.min(s.maxEta, s.eta + gain);
       const steer = ((k.has("KeyA") ? 1 : 0) - (k.has("KeyD") ? 1 : 0) - this.touchMove.x) * on;
       s.heading += steer * 0.5 * dTau;

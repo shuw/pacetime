@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { G, mesh } from "../geo.js";
+import { G, mesh, rng } from "../geo.js";
 import { mat, shared } from "../shaders.js";
 import { retardedTime, world } from "../relativity.js";
 import { clockFace, neon } from "../earth.js";
@@ -28,6 +28,99 @@ const BODIES = {
   alphaA: { at: v3(1.25e15, 0.9e15, 1.1e15).add(BUOY), r: 8.5e8, light: 1.5, color: [1.3, 1.25, 1.15] },
   alphaB: { at: v3(1.25e15 + 3.4e12, 0.9e15, 1.1e15).add(BUOY), r: 6.0e8, light: 0.5, color: [1.4, 1.1, 0.8] },
 };
+// Things to fly past, made up for the trip and set near both ends of it,
+// where the ship is slow enough for them to sweep by rather than flick past
+// inside the crowd of stars ahead: how far along that end of the route, how
+// far off to the side, and how big.
+const along = (d, x, y, fromProxima = false) => v3(x, y, fromProxima ? -D + d : -d);
+Object.assign(BODIES, {
+  rocks: { at: along(6e7, 1.4e7, 0.4e7), r: 2.6e7 },
+  comet: { at: along(9e8, -2.4e8, 1.1e8), r: 6e6 },
+  redDwarf: { at: along(9e9, 3.2e9, -1.2e9), r: 3e8, light: 0.02, color: [1.5, 0.62, 0.42] },
+  blueGiant: { at: along(2.4e10, -7.5e9, 3.5e9), r: 1.6e9, light: 40, color: [0.78, 0.92, 1.5] },
+  rocksP: { at: along(4e8, -1.1e8, 0.6e8, true), r: 3.5e7 },
+  cometP: { at: along(2e9, 3e8, -1.3e8, true), r: 7e6 },
+  binaryA: { at: along(1.6e10, -5e9, 2.2e9, true), r: 5e8, light: 1.5, color: [1.3, 1.25, 1.1] },
+  binaryB: { at: along(1.6e10, -5e9, 2.2e9, true), r: 3e8, light: 0.4, color: [1.45, 1.0, 0.7] },
+  pulsar: { at: along(1.3e11, 3.2e10, 1.1e10, true), r: 3e7 },
+});
+const BINARY = along(1.6e10, -5e9, 2.2e9, true), BINARY_R = 2.4e9, BINARY_T = 40; // the pair's centre, separation and period (s)
+const PULSAR_T = 1; // the pulsar's spin period, in seconds
+const FLYBY_NOTES = {
+  rocks: "Pip: Asteroids! Hold on. At this speed we're through the field before you can blink.",
+  rocksP: "Pip: More rocks, orbiting out here at the edge of Proxima's system.",
+  comet: "Pip: A comet. Its tail always points away from the Sun, whichever way it's going.",
+  cometP: "Pip: A comet of Proxima's, its tail pointing away from the little red star.",
+  redDwarf: "Pip: A red dwarf. See how much bluer it looks while we race toward it, and how deep red once we're past.",
+  blueGiant: "Pip: A blue giant, tens of thousands of times brighter than the Sun. Watch its light swing round the ship as we pass.",
+  binaryA: "Pip: Two stars orbiting each other. We see them where they were when their light left, not where they are now.",
+  pulsar: "Pip: A pulsar! It spins exactly once a second. Racing toward it, its flashes come thick and fast; once we're past they slow to a crawl.",
+};
+
+// A field of tumbling rocks, filling a ball of radius 1.
+function rockField(rand, n = 160) {
+  const geos = [], c = new THREE.Color(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3();
+  const shades = ["#7a746c", "#5c5650", "#8a7a68", "#6a6a72"].map((h) => new THREE.Color(h));
+  for (let i = 0; i < n; i++) {
+    const g = new THREE.IcosahedronGeometry(1, 1);
+    const pos = g.attributes.position;
+    for (let k = 0; k < pos.count; k++) {
+      const x = pos.getX(k), y = pos.getY(k), z = pos.getZ(k), j = 0.7 + 0.5 * Math.abs(Math.sin(x * 12.9 + y * 78.2 + z * 37.7 + i) * 43758.5 % 1);
+      pos.setXYZ(k, x * j, y * j * 0.8, z * j);
+    }
+    do p.set(rand() * 2 - 1, rand() * 2 - 1, rand() * 2 - 1); while (p.lengthSq() > 1);
+    const size = 0.005 + rand() ** 3 * 0.035;
+    g.applyMatrix4(new THREE.Matrix4().compose(p, q.setFromEuler(e.set(rand() * 6, rand() * 6, rand() * 6)), new THREE.Vector3(size, size, size)));
+    const flatG = g.toNonIndexed();
+    flatG.computeVertexNormals();
+    c.copy(shades[i % shades.length]).multiplyScalar(0.8 + 0.4 * rand());
+    flatG.setAttribute("color", new THREE.BufferAttribute(new Float32Array(flatG.attributes.position.count * 3).map((_, k) => [c.r, c.g, c.b][k % 3]), 3));
+    flatG.deleteAttribute("uv");
+    geos.push(flatG);
+  }
+  return new THREE.Mesh(mergeGeometries(geos, false), mat({ color: "#ffffff", vertexColors: true, ir: 0.4, uv: 0.2 }));
+}
+
+// A comet: an icy nucleus, a glowing dust tail and a straight blue ion tail,
+// both streaming away from the star at `away` (a unit vector).
+function comet(away) {
+  const g = new THREE.Group();
+  g.add(mesh(G.sphere, mat({ color: "#cfc8bc", ir: 0.4, uv: 0.3 }), {}));
+  const tail = (len, wide, color, bright) => {
+    const cone = new THREE.ConeGeometry(wide, len, 32, 8, true);
+    cone.translate(0, -len / 2, 0);
+    cone.rotateX(-Math.PI / 2); // from the nucleus out along +z
+    const p = cone.attributes.position, col = new Float32Array(p.count * 3);
+    for (let i = 0; i < p.count; i++) { const k = bright * Math.pow(1 - p.getZ(i) / len, 1.6); col.set([k, k, k], i * 3); }
+    cone.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    return new THREE.Mesh(cone, mat({ color, vertexColors: true, additive: true, emissive: 1, ir: 0.5, uv: 1, doubleSided: true, depthWrite: false }));
+  };
+  g.add(tail(80, 9, "#fff1c8", 0.3), tail(120, 2.5, "#8fd8ff", 0.45));
+  g.quaternion.setFromUnitVectors(v3(0, 0, 1), away);
+  return g;
+}
+
+// A pulsar: a tiny, fiercely hot dead star, with two beams sweeping round
+// once a turn. Spinning about `axis`, so they sweep the plane square to it.
+function pulsar(axis) {
+  const g = new THREE.Group();
+  g.add(mesh(G.sphere, mat({ color: "#eaf6ff", emissive: 1.5, ir: 1, uv: 1.6 }), {}));
+  const spin = new THREE.Group();
+  for (const sx of [1, -1]) {
+    const cone = new THREE.ConeGeometry(30, 260, 24, 6, true);
+    cone.translate(0, -130, 0);
+    cone.rotateZ((sx * Math.PI) / 2); // out along +x, or -x
+    const p = cone.attributes.position, col = new Float32Array(p.count * 3);
+    for (let i = 0; i < p.count; i++) { const k = Math.pow(1 - Math.abs(p.getX(i)) / 260, 2); col.set([k, k, k], i * 3); }
+    cone.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    spin.add(new THREE.Mesh(cone, mat({ color: "#9fd8ff", vertexColors: true, additive: true, emissive: 1, ir: 0.4, uv: 1.4, doubleSided: true, depthWrite: false })));
+  }
+  g.add(spin);
+  g.quaternion.setFromUnitVectors(v3(0, 1, 0), axis);
+  g.spin = spin;
+  return g;
+}
+
 const CARDS = [
   "One year without you! The greenhouse tree has its first blossoms.",
   "Year two: we taught the space jellies to wave. Mostly.",
@@ -358,6 +451,25 @@ export default {
     addBody("alphaA", new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20), mat({ color: "#fff1c8", emissive: 1.4, ir: 1, uv: 1 })), glowDisc("#fff1c8", 1.5, 1, 1), { halo: 6, dot: 0.0065 });
     addBody("alphaB", new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20), mat({ color: "#ffd2a0", emissive: 1.3, ir: 1.2, uv: 0.6 })), glowDisc("#ffd2a0", 1.3, 1.2, 0.6), { halo: 6, dot: 0.005 });
 
+    // The flybys.
+    {
+      const r = rng(41), sun = BODIES.sun.at, prox = BODIES.proxima.at;
+      addBody("rocks", rockField(r), null);
+      addBody("rocksP", rockField(r), null);
+      addBody("comet", comet(BODIES.comet.at.clone().sub(sun).normalize()), glowDisc("#cfeeff", 0.9, 0.4, 1), { halo: 2, dot: 0.003 });
+      addBody("cometP", comet(BODIES.cometP.at.clone().sub(prox).normalize()), glowDisc("#d8f0ff", 0.9, 0.4, 1), { halo: 2, dot: 0.003 });
+      addBody("redDwarf", new THREE.Mesh(new THREE.SphereGeometry(1, 40, 24), mat({ color: "#ff6a3a", emissive: 1.3, ir: 1.6, uv: 0.2 })), glowDisc("#ff5a2a", 1.3, 1.4, 0.2), { halo: 6, dot: 0.004 });
+      addBody("blueGiant", new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), mat({ color: "#bcd8ff", emissive: 1.5, ir: 0.6, uv: 2 })), glowDisc("#a8ccff", 1.5, 0.5, 2), { halo: 5, dot: 0.008 });
+      addBody("binaryA", new THREE.Mesh(new THREE.SphereGeometry(1, 40, 24), mat({ color: "#fff4dc", emissive: 1.4, ir: 1, uv: 1 })), glowDisc("#fff0d0", 1.4, 1, 1), { halo: 6, dot: 0.005 });
+      addBody("binaryB", new THREE.Mesh(new THREE.SphereGeometry(1, 40, 24), mat({ color: "#ffb870", emissive: 1.3, ir: 1.3, uv: 0.5 })), glowDisc("#ffb060", 1.3, 1.3, 0.5), { halo: 6, dot: 0.004 });
+      // The pulsar spins square to the plane we fly through, so its beams sweep across us all the way in and out.
+      const off = BODIES.pulsar.at.clone().setZ(0);
+      addBody("pulsar", pulsar(v3(-off.y, off.x, 0).normalize()), glowDisc("#d4eaff", 1.2, 1, 1.6), { halo: 8, dot: 0.006 });
+    }
+    const flyby = (key) => bodies.find((b) => b.key === key);
+    const binA = flyby("binaryA"), binB = flyby("binaryB"), pul = flyby("pulsar");
+    const noted = new Set();
+
     // Glowing clouds of gas, so far off they never get any closer.
     const backdrop = new THREE.Group();
     backdrop.userData.dynamic = true;
@@ -404,6 +516,8 @@ export default {
       const want = Math.atan2(-to.x, -to.z);
       return ((((want - ship.heading + Math.PI) % TAU) + TAU) % TAU) - Math.PI;
     };
+    // Near either end, where the flybys are, Pip speeds up gently, for the view.
+    ship.accelCap = () => (fromHome() < 3e11 || toBuoy() < 3e11 ? 0.5 : Infinity);
     // Pip holds the throttle until we're pointing the right way.
     // After we arrive, W does nothing until it's let go and pressed again.
     ship.canThrust = () => { const to = toTarget(); return !holdOn && (!to || Math.abs(bearingError(to)) < 0.3); };
@@ -440,12 +554,13 @@ export default {
       tips: [
         "Light here moves at its real speed, 1.08 billion km/h. To see anything strange, you have to go very, very fast.",
         "At the helm, W sets off: Pip points the ship at where we're going. Shift pushes harder, S slows down, and Pip brakes on the way in so we stop right at the buoy, or home.",
-        "At full speed one second for you is about 42 days at home, so 4.24 light-years takes under a minute of your time.",
+        "At full speed one second for you is about 42 days at home, so 4.24 light-years takes about a minute of your time.",
+        "Near Earth and near Proxima, Pip takes it gently so you can see what we pass: asteroids, comets, a red dwarf and a blue giant, a pair of stars, and a pulsar whose flashes speed up and slow down with our speed.",
         "The panel by the helm gives the distance twice: by the world's rulers, and for us. At speed the way ahead really is shorter for the ship, which is how 4.24 light-years can take a minute.",
         "On the way out, hardly any news from home catches up with you. On the way back you fly into eight years of it at once.",
       ],
       get note() { return note; },
-      nav: { fromHome, toBuoy, cards: () => cardsIn },
+      nav: { fromHome, toBuoy, cards: () => cardsIn, where: (key) => local(BODIES[key].at) },
       readouts() {
         return [
           ["from Earth", dist(fromHome())],
@@ -534,6 +649,13 @@ export default {
         const fade = THREE.MathUtils.clamp(1 - Math.log10(player.gamma) / 2, 0, 1);
         for (const n of nebulae) n.material.uniforms.uSpec.value.z = fade;
         backdrop.visible = fade > 0;
+        // The pair of stars, where they were when their light left.
+        {
+          const a = (retardedTime(eye, local(BINARY)) / BINARY_T) * TAU;
+          const dir = v3(Math.cos(a), Math.sin(a) * 0.4, Math.sin(a));
+          binA.at.copy(BINARY).addScaledVector(dir, BINARY_R * 0.35);
+          binB.at.copy(BINARY).addScaledVector(dir, -BINARY_R * 0.65);
+        }
         let brightest = bodies.find((b) => b.key === "sun"), flux = 0;
         for (const b of bodies) {
           const d = place(b.mesh, local(b.at), eye, b.r);
@@ -546,6 +668,22 @@ export default {
             b.glow.scale.setScalar(size * squeeze(d));
           }
           if (b.light && b.light / (d * d) > flux) { flux = b.light / (d * d); brightest = b; }
+        }
+        // The pulsar turns by the time its light left it, and flashes when a beam points at us.
+        {
+          const ang = (retardedTime(eye, local(pul.at)) / PULSAR_T) * TAU;
+          pul.mesh.spin.rotation.y = ang;
+          const toUs = eye.clone().sub(local(pul.at)).normalize();
+          const beam = v3(Math.cos(ang), 0, -Math.sin(ang)).applyQuaternion(pul.mesh.quaternion);
+          const flash = Math.exp(-(1 - Math.abs(beam.dot(toUs))) / 0.02);
+          pul.glow.material.uniforms.uSpec.value.z = 0.8 + 6 * flash;
+          pul.glow.scale.multiplyScalar(1 + 7 * flash);
+        }
+        // Pip points out each flyby as we come up to it.
+        for (const [key, text] of Object.entries(FLYBY_NOTES)) {
+          const b = flyby(key), side = Math.hypot(b.at.x, b.at.y);
+          const tag = key + (reachedBuoy ? (home ? 2 : 1) : 0);
+          if (!noted.has(tag) && universe().distanceTo(b.at) < 1.6 * side) { noted.add(tag); note = text; }
         }
         // Lit by whichever star is brightest from here.
         shared.uSun.value.copy(local(brightest.at)).sub(eye).normalize();
