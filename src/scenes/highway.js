@@ -264,7 +264,7 @@ export default {
     const roadAt = () => -(base + player.pos.z); // how far along the road you are
     const ahead = () => Math.sqrt((2 - player.omb) / player.omb); // e^η: lengths ahead in your frame, per metre in the road's
     let cruiseFor = 0, lastEta = 0;
-    const fire = () => {
+    const fire = (quiet = false) => {
       // Fired 1.5 m ahead of the nose in your frame: in the road's frame that
       // event is further ahead and a little later.
       // Pressing it again sets the beacon down afresh here.
@@ -282,9 +282,10 @@ export default {
         group.remove(old.segs, old.beacon);
         old.segs.geometry.dispose();
       }
-      sfx.zap(player.eye);
+      if (!quiet) sfx.zap(player.eye);
     };
     const newest = () => pulses[pulses.length - 1];
+    fire(true); // the beam is always on: a beacon at the start of the road, which F moves to wherever you are
     // In your own frame, how far ahead the pulse is.
     const gapOf = (p) => (p.sEm + C * (world.t - p.tEm) - roadAt()) * ahead();
     // The road's-frame distance to the pulse that most recently passed you.
@@ -292,7 +293,7 @@ export default {
 
     const goals = [
       { text: "Hold W (or click and hold) to speed up. Pass 90% of light speed", done: false, test: () => player.beta > 0.9 },
-      { text: "Stop, and switch on the rainbow beam (F): its pulses seem to crawl away at half speed", done: false, test: () => { const p = newest(); return !!p && p.slow && player.beta < 0.3 && player.tau - p.tau > 2; } },
+      { text: "Stand still and watch the rainbow light pulses on the right: they seem to crawl away at half speed", done: false, test: () => { const p = newest(); return !!p && p.slow && player.beta < 0.3 && player.tau - p.tau > 5; } },
       { text: "Catch the Comet (a steady 99% of light speed) and ride alongside: it looks perfectly ordinary", done: false, test: () => player.beta > 0.95 && alongside() },
       { text: "Brake hard (S) at speed and watch the Comet shoot ahead", done: false, test: () => comet.dz > DZ0 + 25 && player.beta > 0.5 },
       { text: "Pass 99.9%: the stars crowd into a ring ahead of you", done: false, test: () => player.omb < 1e-3 },
@@ -313,7 +314,7 @@ export default {
       [1e-7, () => `99.99999%. The road is ${fmtG()} times shorter to you than to the world. Light still passes you at exactly ${kmh(world.c)}.`],
       [1e-9, () => `Nine nines. ${perSecond()} per second of yours, and still not light speed.`],
     ];
-    let note = "The road goes on forever. Hold W to speed up and Shift to push harder. S brakes; X (or the Walk button) drops you back to a walking pace.";
+    let note = "The road goes on forever: W speeds up, Shift pushes harder, S brakes. The rainbow pulses on the right are light. The train on the left, the Comet, does 99% of light speed.";
     let nextMilestone = 0, lastBiome = -1;
 
     return {
@@ -332,7 +333,7 @@ export default {
       post: { bloom: { strength: 0.6, radius: 0.4, threshold: 0.72 } },
       goals,
       tips: [
-        "F sets down a beacon that sends rainbow pulses of light along the right of the road. You see them only by the dust they light up, so from a standstill they seem to crawl away at half speed.",
+        "A beacon on the right of the road sends out rainbow pulses of light, and F moves it to wherever you are. You see the pulses only by the dust they light up, so from a standstill they seem to crawl away at half speed.",
         "Chase the pulses at 99.99%: from the roadside you're right on one's heels, yet from your seat it pulls away at exactly light speed. Your watch runs slow and your rulers shrink by just enough. At speed the pulses ahead spread out and the ones behind bunch up: the Doppler effect, in the spacing.",
         "The Comet on the next track runs at a steady 99% of light speed. Catch it and ride alongside and it looks perfectly ordinary. You can catch a train; you can never catch the light.",
         "W speeds up, Shift pushes harder. S brakes to a stop in about two seconds from any speed. X, or clicking Walk, eases you back to a walking pace and coasts there.",
@@ -351,8 +352,8 @@ export default {
           ["distance", `${km < 1000 ? km.toFixed(2) : Math.round(km).toLocaleString("en-US")} km`],
           ["per second of yours", `${u < 1000 ? u.toFixed(0) + " m" : (u / 1000).toLocaleString("en-US", { maximumFractionDigits: 1 }) + " km"}`],
           ["light speed", kmh(world.c)],
-          ["next light pulse", newest() ? `${dist(nextGap() * ahead())} ahead of you` : "switch the beam on (F)"],
-          ["from the roadside", newest() ? `${fine(nextGap())} ahead` : "–"],
+          ["next light pulse", `${dist(nextGap() * ahead())} ahead of you`],
+          ["from the roadside", `${fine(nextGap())} ahead`],
           ["the Comet", `99% c · ${dist(Math.abs(comet.dz - DZ0))} ${comet.dz > DZ0 ? "ahead" : "behind"}`],
           ["pulling away", newest() ? kmh(newest().rate) : "–"],
           ["scenery", BIOMES[lastBiome < 0 ? 0 : lastBiome].name],
