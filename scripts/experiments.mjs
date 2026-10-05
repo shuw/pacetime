@@ -84,23 +84,4 @@ if (which === "pier") {
   console.log("lap", JSON.stringify(await state(), null, 1));
 }
 
-if (which === "beam") {
-  await page.waitForTimeout(9000);
-  await page.screenshot({ path: "shots/exp-beam-watch.png" });
-  console.log("watch", JSON.stringify(await state(), null, 1));
-  // Let a pulse pass, then chase it.
-  await page.evaluate(() => { pacetime.player.place(2, 0, -Math.PI / 2); });
-  await until(() => pacetime.world.t % 5 > 2.4 && pacetime.world.t % 5 < 2.6);
-  await page.keyboard.down("Shift");
-  await page.keyboard.down("w");
-  await page.waitForTimeout(6000);
-  await page.screenshot({ path: "shots/exp-beam-chase.png" });
-  await page.evaluate(() => { pacetime.player.pitch = 0.5; });
-  await page.waitForTimeout(200);
-  await page.screenshot({ path: "shots/exp-beam-starbow.png" });
-  await page.keyboard.up("w");
-  await page.keyboard.up("Shift");
-  console.log("chase", JSON.stringify(await state(), null, 1));
-}
-
 await browser.close();

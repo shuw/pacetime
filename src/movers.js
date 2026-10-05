@@ -14,7 +14,7 @@ export class Mover {
     motion.addMover(this);
     this.anchor = new THREE.Vector3(0, 0, -1e5); // position at world time 0
     this.life = new THREE.Vector2(-1e9, 1e9);
-    this.uniforms = { uVel: { value: this.vel }, uAnchor: { value: this.anchor }, uLife: { value: this.life } };
+    this.uniforms = { uVel: { value: this.vel }, uNow: { value: new THREE.Vector3() }, uLife: { value: this.life } };
     this.clip = clip;
     this.group = new THREE.Group();
   }
@@ -33,6 +33,11 @@ export class Mover {
     const m = mesh(geo, this.mat(opts), transform);
     this.group.add(m);
     return m;
+  }
+
+  // Where it is now, worked out in double precision for the shader.
+  sync(t) {
+    this.uniforms.uNow.value.copy(this.anchor).addScaledVector(this.vel, t);
   }
 
   // Hold the speed under light speed, keeping the position continuous.

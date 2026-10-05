@@ -140,49 +140,69 @@ function startLoops() {
   wind.start();
   loops.wind = { f: windF, g: windG };
 
-  // The drive: two detuned saws through a resonant filter, a sub-bass, and a
-  // shimmering whine that only appears close to light speed.
-  const driveF = ctx.createBiquadFilter();
-  driveF.type = "lowpass";
-  driveF.Q.value = 7;
-  driveF.frequency.value = 200;
-  const driveG = ctx.createGain();
-  driveG.gain.value = 0;
-  driveF.connect(driveG).connect(master);
-  const saws = [0, 1].map((k) => {
+  // Moving: a soft, breathing chord that climbs as you speed up, with
+  // music-box chimes twinkling faster the faster you go, all through a
+  // gentle echo. (The chimes are played from updateAudio.)
+  const echo = ctx.createDelay(1.5), echo2 = ctx.createDelay(1.5);
+  echo.delayTime.value = 0.37;
+  echo2.delayTime.value = 0.53;
+  const echoF = ctx.createBiquadFilter();
+  echoF.type = "lowpass";
+  echoF.frequency.value = 2600;
+  const echoFb = ctx.createGain();
+  echoFb.gain.value = 0.42;
+  const echoOut = ctx.createGain();
+  echoOut.gain.value = 0.55;
+  const send = ctx.createGain();
+  send.connect(echo).connect(echoF);
+  send.connect(echo2).connect(echoF);
+  echoF.connect(echoFb).connect(echo);
+  echoF.connect(echoOut).connect(master);
+  const padF = ctx.createBiquadFilter();
+  padF.type = "lowpass";
+  padF.frequency.value = 700;
+  padF.Q.value = 0.5;
+  const padG = ctx.createGain();
+  padG.gain.value = 0;
+  padF.connect(padG).connect(master);
+  padG.connect(send);
+  // An open, airy chord: root, fifth, ninth and a high third.
+  const voices = [[1, "sine", 0.5], [1.5, "triangle", 0.22], [2.25, "sine", 0.3], [2.52, "sine", 0.18], [0.5, "sine", 0.35]].map(([k, type, gain], i) => {
     const o = ctx.createOscillator();
-    o.type = "sawtooth";
-    o.frequency.value = 45;
-    o.detune.value = k ? 9 : -9;
-    o.connect(driveF);
-    o.start();
-    return o;
+    o.type = type;
+    o.frequency.value = 196 * k;
+    const g = ctx.createGain();
+    g.gain.value = gain;
+    // Each voice breathes and wavers on its own slow cycle.
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.11 + i * 0.07;
+    const lfoG = ctx.createGain();
+    lfoG.gain.value = gain * 0.45;
+    lfo.connect(lfoG).connect(g.gain);
+    const vib = ctx.createOscillator();
+    vib.frequency.value = 0.23 + i * 0.05;
+    const vibG = ctx.createGain();
+    vibG.gain.value = 4;
+    vib.connect(vibG).connect(o.detune);
+    o.connect(g).connect(padF);
+    for (const n of [o, lfo, vib]) n.start();
+    return { o, k };
   });
-  const sub = ctx.createOscillator();
-  sub.type = "sine";
-  sub.frequency.value = 34;
-  const subG = ctx.createGain();
-  subG.gain.value = 0;
-  sub.connect(subG).connect(master);
-  sub.start();
-  const whine = ctx.createOscillator();
-  whine.type = "sine";
-  whine.frequency.value = 900;
-  const vib = ctx.createOscillator();
-  vib.frequency.value = 5.5;
-  const vibG = ctx.createGain();
-  vibG.gain.value = 12;
-  vib.connect(vibG).connect(whine.frequency);
-  vib.start();
-  const whineF = ctx.createBiquadFilter();
-  whineF.type = "bandpass";
-  whineF.Q.value = 3;
-  whineF.frequency.value = 1200;
-  const whineG = ctx.createGain();
-  whineG.gain.value = 0;
-  whine.connect(whineF).connect(whineG).connect(master);
-  whine.start();
-  loops.drive = { saws, driveF, driveG, subG, sub, whine, whineF, whineG, vibG, lastBeta: 0, swoopAt: 0 };
+  // A glassy shimmer that only appears close to light speed.
+  const glass = ctx.createOscillator();
+  glass.type = "sine";
+  const glassVib = ctx.createOscillator();
+  glassVib.frequency.value = 4.2;
+  const glassVibG = ctx.createGain();
+  glassVibG.gain.value = 9;
+  glassVib.connect(glassVibG).connect(glass.detune);
+  const glassG = ctx.createGain();
+  glassG.gain.value = 0;
+  glass.connect(glassG).connect(master);
+  glassG.connect(send);
+  glass.start();
+  glassVib.start();
+  loops.drive = { voices, padF, padG, glass, glassG, send, root: 196, chimeIn: 0, lastNote: -1, lastBeta: 0, swoopAt: 0 };
 
   // Maglev train hum.
   const trainG = ctx.createGain();
@@ -230,30 +250,37 @@ export function setAmbience(kind) {
 let pendingAmbience = null;
 
 // Called every frame. `train` is { pos (where you see it), D (Doppler factor), riding } or null.
-export function updateAudio({ beta, train, dt }) {
+export function updateAudio({ beta, gamma, train, dt }) {
   if (!ctx) return;
   const now = ctx.currentTime;
   // The sea breathes: waves wash in and out.
   if (loops.ambState.kind === "sea") loops.amb.sea.f.frequency.setTargetAtTime(380 + 260 * (0.5 + 0.5 * Math.sin(now * 0.7)) ** 2, now, 0.3);
   if (loops.ambState.kind === "snow") loops.amb.snow.g.gain.setTargetAtTime(0.04 + 0.04 * (0.5 + 0.5 * Math.sin(now * 0.23) * Math.sin(now * 0.61)), now, 0.5);
   const w = loops.wind;
-  w.g.gain.setTargetAtTime(0.07 * beta * beta, now, 0.15);
+  w.g.gain.setTargetAtTime(0.035 * beta * beta, now, 0.3);
   w.f.frequency.setTargetAtTime(400 + 2200 * beta * beta, now, 0.15);
 
-  // The drive rises with γ: pitch climbs, the filter opens, the whine joins in.
+  // The chord climbs gently with γ and the chimes quicken.
   const d = loops.drive;
-  const g = 1 / Math.sqrt(Math.max(1e-6, 1 - beta * beta));
-  const lg = Math.log(g); // 0 at rest, ~1.2 at 95% c, ~2.3 at 99.5% c
-  const on = THREE.MathUtils.smoothstep(beta, 0.08, 0.3);
-  d.saws.forEach((o) => o.frequency.setTargetAtTime(42 + 34 * lg + 30 * beta, now, 0.12));
-  d.driveF.frequency.setTargetAtTime(160 + 900 * beta * beta + 700 * lg, now, 0.12);
-  d.driveG.gain.setTargetAtTime(0.05 * on * (0.5 + 0.5 * beta), now, 0.15);
-  d.subG.gain.setTargetAtTime(0.09 * on * beta, now, 0.2);
-  d.sub.frequency.setTargetAtTime(30 + 10 * lg, now, 0.2);
-  d.whine.frequency.setTargetAtTime(700 + 520 * lg, now, 0.1);
-  d.whineF.frequency.setTargetAtTime(900 + 700 * lg, now, 0.1);
-  d.whineG.gain.setTargetAtTime(0.022 * THREE.MathUtils.smoothstep(beta, 0.75, 0.97), now, 0.2);
-  d.vibG.gain.setTargetAtTime(8 + 30 * lg, now, 0.2);
+  const g = gamma ?? 1 / Math.sqrt(Math.max(1e-12, 1 - beta * beta));
+  const lg = Math.min(5, Math.log(g)); // 0 at rest, ~1.2 at 95% c, ~2.3 at 99.5% c
+  const on = THREE.MathUtils.smoothstep(beta, 0.05, 0.3);
+  d.root = 196 * 2 ** (lg * 0.22 + beta * 0.12);
+  d.voices.forEach(({ o, k }) => o.frequency.setTargetAtTime(d.root * k, now, 0.35));
+  d.padF.frequency.setTargetAtTime(650 + 900 * beta + 400 * lg, now, 0.3);
+  d.padG.gain.setTargetAtTime(on * (0.035 + 0.02 * beta), now, 0.4);
+  d.glass.frequency.setTargetAtTime(d.root * 6, now, 0.3);
+  d.glassG.gain.setTargetAtTime(0.012 * THREE.MathUtils.smoothstep(beta, 0.9, 0.995), now, 0.5);
+  d.chimeIn -= dt ?? 1 / 60;
+  if (on > 0.3 && d.chimeIn <= 0) {
+    // A note from the major pentatonic above the chord, higher as you go.
+    const steps = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];
+    let n = Math.floor(Math.random() * steps.length);
+    if (n === d.lastNote) n = (n + 3) % steps.length;
+    d.lastNote = n;
+    chime(d.root * 2 * 2 ** (steps[n] / 12), { gain: 0.05 * on, pan: Math.random() * 1.2 - 0.6 });
+    d.chimeIn = (0.25 + Math.random() * 0.5) / (0.6 + 1.6 * beta + 0.7 * lg);
+  }
   // A swoop when you surge forward or pull up.
   const dBeta = beta - d.lastBeta;
   if (now > d.swoopAt && Math.abs(dBeta) > 0.012) {
@@ -275,26 +302,36 @@ export function updateAudio({ beta, train, dt }) {
   }
 }
 
-// A filtered sweep: up when speeding up, down when slowing.
-function swoop(up) {
+// One music-box note: a soft sine with a faint octave, ringing out into the echo.
+function chime(f, { gain = 0.05, pan = 0, start = 0, decay = 1.6 } = {}) {
   if (!ctx) return;
-  const t0 = ctx.currentTime;
-  const o = ctx.createOscillator();
-  o.type = "sawtooth";
-  o.frequency.setValueAtTime(up ? 80 : 260, t0);
-  o.frequency.exponentialRampToValueAtTime(up ? 260 : 70, t0 + 0.7);
-  const f = ctx.createBiquadFilter();
-  f.type = "lowpass";
-  f.Q.value = 9;
-  f.frequency.setValueAtTime(up ? 300 : 2400, t0);
-  f.frequency.exponentialRampToValueAtTime(up ? 2400 : 250, t0 + 0.7);
+  const t0 = ctx.currentTime + start;
   const g = ctx.createGain();
   g.gain.setValueAtTime(0, t0);
-  g.gain.linearRampToValueAtTime(0.045, t0 + 0.08);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.8);
-  o.connect(f).connect(g).connect(master);
-  o.start(t0);
-  o.stop(t0 + 0.85);
+  g.gain.linearRampToValueAtTime(gain, t0 + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + decay);
+  const p = ctx.createStereoPanner();
+  p.pan.value = pan;
+  g.connect(p).connect(master);
+  p.connect(loops.drive.send);
+  for (const [k, a] of [[1, 1], [2, 0.18], [3.01, 0.05]]) {
+    const o = ctx.createOscillator();
+    o.type = "sine";
+    o.frequency.value = f * k;
+    const og = ctx.createGain();
+    og.gain.value = a;
+    o.connect(og).connect(g);
+    o.start(t0);
+    o.stop(t0 + decay + 0.05);
+  }
+}
+
+// A little harp run: up when you speed up, down when you slow.
+function swoop(up) {
+  if (!ctx) return;
+  const root = loops.drive.root * 2;
+  const run = [0, 4, 7, 12, 16];
+  (up ? run : [...run].reverse()).forEach((st, i) => chime(root * 2 ** (st / 12), { gain: 0.035, start: i * 0.06, pan: (i / 4 - 0.5) * (up ? 0.8 : -0.8), decay: 1.1 }));
 }
 
 export const sfx = {
@@ -334,11 +371,6 @@ export const sfx = {
     tone(pitch * 2.01, 0, 0.04, { gain: 0.04 * gain, pan });
   },
   // A beacon firing: a bright falling zing.
-  pulse(pos, pitch = 1800) {
-    const { pan, gain } = placed(pos, 25);
-    tone(pitch, 0, 0.6, { gain: 0.08 * gain, slide: 0.45, pan });
-    tone(pitch * 1.5, 0, 0.3, { gain: 0.03 * gain, slide: 0.5, pan });
-  },
   // A pulse sweeping past you.
   zap(pos) {
     const { pan } = placed(pos);
@@ -386,39 +418,6 @@ export const sfx = {
   clang(pos) {
     const { pan, gain } = placed(pos, 20);
     [1568, 2093, 2637].forEach((f, i) => tone(f, i * 0.04, 0.6, { type: "triangle", gain: 0.06 * gain, pan }));
-  },
-  // Light slowing down: a long falling shimmer settling into a low hum.
-  slowdown(dur = 5) {
-    if (!ctx) return;
-    const t0 = ctx.currentTime + 0.8;
-    const s = noiseSource();
-    s.loop = true;
-    const f = ctx.createBiquadFilter();
-    f.type = "bandpass";
-    f.Q.value = 6;
-    f.frequency.setValueAtTime(5000, t0);
-    f.frequency.exponentialRampToValueAtTime(140, t0 + dur);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(0.12, t0 + 0.6);
-    g.gain.setValueAtTime(0.12, t0 + dur - 1);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + 1.5);
-    s.connect(f).connect(g).connect(master);
-    s.start(t0);
-    s.stop(t0 + dur + 2);
-    [[880, 110], [1320, 165], [1760, 220]].forEach(([a, b], i) => {
-      const o = ctx.createOscillator();
-      o.type = "sine";
-      o.frequency.setValueAtTime(a, t0);
-      o.frequency.exponentialRampToValueAtTime(b, t0 + dur);
-      const og = ctx.createGain();
-      og.gain.setValueAtTime(0, t0);
-      og.gain.linearRampToValueAtTime(0.03 / (i + 1), t0 + 1);
-      og.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + 1.8);
-      o.connect(og).connect(master);
-      o.start(t0);
-      o.stop(t0 + dur + 2);
-    });
   },
   toss() {
     tone(320, 0, 0.35, { type: "sine", gain: 0.08, slide: 2.4 });

@@ -5,7 +5,6 @@ import { spawn } from "node:child_process";
 const runs = [
   ["ui", ["scripts/ui.mjs"]],
   ["railway", ["scripts/experiments.mjs", "railway"]],
-  ["beam", ["scripts/experiments.mjs", "beam"]],
   ["scenes", ["scripts/scenes.mjs"]],
 ];
 const t0 = Date.now();

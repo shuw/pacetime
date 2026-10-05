@@ -8,7 +8,7 @@ const EYE_HEIGHT = 1.6;
 // with a realistic c they're just an ordinary walk and sprint.
 const WALK_U = 0.63; // × the place's light speed
 const SPRINT_U = 3.04;
-const BOOST_U = 9.95; // hold Space too: 99.5% of light speed, γ = 10
+const BOOST_U = 9.95; // the afterburner: 99.5% of light speed, γ = 10
 
 export class Player {
   constructor(canvas) {
@@ -26,9 +26,12 @@ export class Player {
     this.touchSprint = false;
     this.vehicle = null; // a train you're riding, if any
     this.mouseWalk = false; // left button held while the mouse is captured
-    this.pace = 0; // 0 walk, 1 sprint, 2 afterburner: set by the scroll wheel
+    this.pace = 1; // 0 walk, 1 sprint, 2 afterburner: set by the buttons or the scroll wheel
     this.legs = 3; // the light speed your stride is sized for, m/s
-    this.autopilot = null; // a proper velocity to hold, for the title screen
+    this.rocket = false; // the endless road: throttle builds rapidity without limit
+    this.eta = 0;
+    this.ship = null; // aboard a starship: { pos, heading, eta, helm, local, seat, walk, colliders, maxEta }
+    this.walkU = new THREE.Vector3();
     this.stride = 0;
     this.bob = 0;
     this.bindInput();
@@ -38,12 +41,33 @@ export class Player {
     return this.v.length() / world.c;
   }
 
+  // From proper velocity when it's your own, which stays exact near light speed.
   get gamma() {
-    return gammaOf(this.beta);
+    if (this.vehicle) return gammaOf(this.beta);
+    return Math.sqrt(1 + this.u.lengthSq() / (world.c * world.c));
+  }
+
+  // 1 - β, exact even at 99.99999…% of light speed.
+  get omb() {
+    if (this.vehicle) return 1 - this.beta;
+    const g = this.gamma, b = Math.sqrt(this.u.lengthSq()) / (world.c * g);
+    return 1 / (g * g * (1 + b));
   }
 
   get eye() {
-    return new THREE.Vector3(this.pos.x, this.pos.y + EYE_HEIGHT + this.bob, this.pos.z);
+    return new THREE.Vector3(this.pos.x, this.pos.y + (this.bike ? 1.35 : EYE_HEIGHT) + this.bob, this.pos.z);
+  }
+
+  // On the scooter: W throttle, S brake, A/D (or drag) steer, Shift/Space for more.
+  mountBike() {
+    this.bike = { u: 0 };
+    this.u.set(0, 0, 0);
+  }
+
+  dismount() {
+    this.bike = null;
+    this.u.set(0, 0, 0);
+    this.v.set(0, 0, 0);
   }
 
   place(x, z, yaw = 0) {
@@ -53,11 +77,18 @@ export class Player {
     this.yaw = yaw;
     this.pitch = 0;
     this.vehicle = null;
+    this.bike = null;
   }
 
   setPace(p) {
     this.pace = Math.max(0, Math.min(2, p));
+    if (this.pace === 0) this.easeToWalk();
     this.onPace?.(this.pace);
+  }
+
+  // On the endless road: drop back to a walking pace and coast there.
+  easeToWalk() {
+    if (this.rocket && this.eta > Math.asinh(WALK_U)) this.easing = true;
   }
 
   board(vehicle) {
@@ -71,6 +102,10 @@ export class Player {
     this.u.set(0, 0, 0);
     this.v.set(0, 0, 0);
     this.pos.y = 0;
+  }
+
+  get busy() {
+    return !!(this.vehicle || this.bike);
   }
 
   bindInput() {
@@ -177,14 +212,18 @@ export class Player {
   update(dTau, scene) {
     const k = this.keys;
     const turn = (k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0);
-    this.yaw += turn * 2.2 * dTau;
+    if (!this.bike) this.yaw += turn * 2.2 * dTau;
 
     let fwd = (k.has("KeyW") || k.has("ArrowUp") || this.mouseWalk ? 1 : 0) - (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0);
     let side = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
     fwd -= this.touchMove.y;
     side += this.touchMove.x;
-    if (!this.enabled) fwd = side = 0;
-    const sprint = (k.has("ShiftLeft") || k.has("ShiftRight") || this.touchSprint || this.pace > 0) && !this.vehicle;
+    if (!this.enabled || this.rocket) fwd = side = 0;
+    // The pace you've picked, one step faster while Shift is held.
+    const shift = k.has("ShiftLeft") || k.has("ShiftRight") || this.touchSprint;
+    const held = Math.min(2, Math.max(this.pace + (shift ? 1 : 0), (shift && k.has("Space")) || this.touchBoost ? 2 : 0));
+    this.heldPace = held;
+    const sprint = held >= 1 && !this.vehicle;
     this.lookBack = this.lookBack && this.enabled;
     const lookBackKey = k.has("KeyB") || k.has("KeyQ");
 
@@ -198,18 +237,61 @@ export class Player {
     // Steer proper velocity toward the target. Proper velocity has no ceiling,
     // so however hard you push you never reach c.
     const c = world.c;
-    const boost = sprint && (k.has("Space") || this.touchBoost || this.pace > 1);
+    const boost = sprint && held >= 2;
     this.paceNow = boost ? 2 : sprint ? 1 : 0;
     const going = (fwd !== 0 || side !== 0) && !this.vehicle;
     this.walkingFor = going && !sprint ? (this.walkingFor ?? 0) + dTau : 0;
     const legs = this.legs;
-    const target = this.autopilot ? this.autopilot.clone() : dir.multiplyScalar((boost ? BOOST_U : sprint ? SPRINT_U : WALK_U) * legs);
-    // Slowing down is quick, so letting go of the keys doesn't coast you far.
-    const braking = target.lengthSq() < this.u.lengthSq();
-    const rate = (braking ? 7 : boost ? 6 : sprint ? 2.7 : 2) * legs * dTau;
-    const delta = target.sub(this.u);
-    if (delta.length() > rate) delta.setLength(rate);
-    this.u.add(delta);
+    if (this.ship) return this.shipUpdate(dTau, dir, held >= 2, lookBackKey);
+
+    if (!this.bike && !this.rocket) {
+      const target = dir.multiplyScalar((boost ? BOOST_U : sprint ? SPRINT_U : WALK_U) * legs);
+      // Slowing down is quick, so letting go of the keys doesn't coast you far.
+      const braking = target.lengthSq() < this.u.lengthSq();
+      const rate = (braking ? 7 : boost ? 6 : sprint ? 2.7 : 2) * legs * dTau;
+      const delta = target.sub(this.u);
+      if (delta.length() > rate) delta.setLength(rate);
+      this.u.add(delta);
+    }
+
+    if (this.rocket) {
+      // Rapidity adds up: each second of throttle multiplies how fast the road
+      // goes by, so you creep ever closer to light speed but never reach it.
+      const up = (k.has("KeyW") || k.has("ArrowUp") || this.mouseWalk || this.touchMove.y < -0.3) && this.enabled;
+      const down = (k.has("KeyS") || k.has("ArrowDown") || this.touchMove.y > 0.3) && this.enabled;
+      const hard = this.heldPace >= 2 || k.has("Space");
+      // Braking takes off a share of your rapidity each second, so it takes
+      // about two seconds from any speed.
+      const brake = (1.5 + 1.3 * this.eta) * dTau;
+      if (up) { this.eta += (hard ? 0.9 : 0.3) * dTau; this.easing = false; }
+      if (down) { this.eta = Math.max(0, this.eta - brake); this.easing = false; }
+      else if (this.easing) {
+        this.eta = Math.max(Math.asinh(WALK_U), this.eta - brake);
+        if (this.eta <= Math.asinh(WALK_U)) this.easing = false;
+      }
+      this.eta = Math.min(this.eta, 15);
+      this.u.set(0, 0, -world.c * Math.sinh(this.eta));
+      this.paceNow = up ? (hard ? 2 : 1) : 0;
+      this.walkingFor = 0;
+    }
+
+    if (this.bike) {
+      const b = this.bike;
+      const legs = this.legs;
+      const steer = (k.has("KeyA") || k.has("ArrowLeft") ? 1 : 0) - (k.has("KeyD") || k.has("ArrowRight") ? 1 : 0) - this.touchMove.x;
+      const speedK = Math.min(1, Math.abs(b.u) / legs);
+      this.yaw += steer * (0.9 + 0.9 * (1 - speedK * 0.6)) * dTau * (this.enabled ? 1 : 0);
+      const throttle = (k.has("KeyW") || k.has("ArrowUp") || this.mouseWalk || this.touchMove.y < -0.3) && this.enabled;
+      const brake = (k.has("KeyS") || k.has("ArrowDown") || this.touchMove.y > 0.3) && this.enabled;
+      const boost = this.heldPace >= 2 || k.has("Space");
+      const top = (boost ? BOOST_U : SPRINT_U) * legs;
+      if (throttle) b.u = Math.min(top, b.u + (b.u < 0 ? 6 : boost ? 3.5 : 2.2) * legs * dTau);
+      else if (brake) b.u = Math.max(-0.4 * legs, b.u - 6 * legs * dTau);
+      else b.u -= Math.sign(b.u) * Math.min(Math.abs(b.u), 1.2 * legs * dTau);
+      this.u.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)).multiplyScalar(b.u);
+      this.paceNow = throttle ? (boost ? 2 : 1) : 0;
+      this.walkingFor = 0;
+    }
 
     // Seats (a coaster, a carousel horse) carry you along their own path.
     if (this.vehicle?.carry) {
@@ -229,13 +311,87 @@ export class Player {
     // A gentle head bob while walking, by your own steps.
     const step = this.u.length() / legs;
     this.stride += step * dTau * 5.5;
-    this.bob = this.vehicle || this.autopilot ? 0 : Math.sin(this.stride) * 0.035 * Math.min(1, step * 1.5);
+    this.bob = this.vehicle || this.bike || this.rocket ? 0 : Math.sin(this.stride) * 0.035 * Math.min(1, step * 1.5);
     if (this.vehicle) this.vehicle.clamp(this.pos, world.t + dT);
-    else this.collide(scene);
+    else {
+      const before = this.u.clone();
+      this.collide(scene);
+      // Running into something on the scooter stops you.
+      if (this.bike && this.u.distanceToSquared(before) > 1e-6) this.bike.u *= 0.2;
+    }
     this.ownVelocity();
     this.tau += dTau;
     this.looking = this.lookBack || lookBackKey;
     return dT;
+  }
+
+  // Aboard a starship. At the helm, W/S change its rapidity and A/D turn it
+  // (and you with it). Away from the helm you walk about the cabin, which is
+  // at rest around you, while the ship carries on at whatever speed it had.
+  shipUpdate(dTau, dir, hurry, lookBackKey) {
+    const s = this.ship, k = this.keys, c = world.c, on = this.enabled ? 1 : 0;
+    let up = false, down = false;
+    if (s.helm) {
+      up = (k.has("KeyW") || k.has("ArrowUp") || this.mouseWalk || this.touchMove.y < -0.3) && on;
+      down = (k.has("KeyS") || k.has("ArrowDown") || this.touchMove.y > 0.3) && on;
+      const hard = this.heldPace >= 2 || k.has("Space");
+      // The scene can hold the throttle until the ship is pointing the right way.
+      const [soft, strong] = s.accel ?? [0.3, 0.8];
+      if (up && (s.canThrust?.() ?? true)) s.eta = Math.min(s.maxEta, s.eta + (hard ? strong : soft) * dTau);
+      const steer = ((k.has("KeyA") ? 1 : 0) - (k.has("KeyD") ? 1 : 0) - this.touchMove.x) * on;
+      s.heading += steer * 0.5 * dTau;
+      this.yaw += steer * 0.5 * dTau;
+      s.local.set(s.seat[0], 0, s.seat[1]);
+      this.walkU.set(0, 0, 0);
+      this.paceNow = up ? (hard ? 2 : 1) : 0;
+    } else {
+      // An easy walk in the ship's own frame.
+      const target = dir.clone().multiplyScalar(on * (hurry ? 3.4 : 2));
+      const rate = (target.lengthSq() < this.walkU.lengthSq() ? 12 : 6) * dTau;
+      const delta = target.sub(this.walkU);
+      if (delta.length() > rate) delta.setLength(rate);
+      this.walkU.add(delta);
+      const ch = Math.cos(s.heading), sh = Math.sin(s.heading);
+      const wx = this.walkU.x * dTau, wz = this.walkU.z * dTau;
+      s.local.x += wx * ch - wz * sh;
+      s.local.z += wx * sh + wz * ch;
+      this.confine(s.local, this.walkU, s);
+      this.paceNow = 0;
+    }
+    s.throttle = up;
+    if (!up && down) s.eta = Math.max(0, s.eta - 1.4 * dTau);
+    const h = s.heading, f = new THREE.Vector3(-Math.sin(h), 0, -Math.cos(h));
+    this.u.copy(f).multiplyScalar(c * Math.sinh(s.eta));
+    this.v.copy(f).multiplyScalar(c * Math.tanh(s.eta));
+    const dT = effects.dilation ? dTau * Math.cosh(s.eta) : dTau;
+    s.pos.addScaledVector(this.v, dT);
+    const ch = Math.cos(h), sh = Math.sin(h);
+    this.pos.set(s.pos.x + s.local.x * ch + s.local.z * sh, s.pos.y, s.pos.z - s.local.x * sh + s.local.z * ch);
+    const step = this.walkU.length();
+    this.stride += step * dTau * 2.6;
+    this.bob = s.helm ? 0 : Math.sin(this.stride) * 0.03 * Math.min(1, step);
+    this.walkingFor = 0;
+    this.tau += dTau;
+    this.looking = this.lookBack || lookBackKey;
+    return dT;
+  }
+
+  // Keep a point on walkable rectangles and out of round obstacles.
+  confine(p, u, { walk = [], colliders = [] }) {
+    for (const o of colliders) {
+      const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz), r = o.r + 0.35;
+      if (d < r && d > 1e-6) { p.x = o.x + (dx / d) * r; p.z = o.z + (dz / d) * r; }
+    }
+    if (walk.length && !walk.some(([x0, z0, x1, z1]) => p.x >= x0 && p.x <= x1 && p.z >= z0 && p.z <= z1)) {
+      let best = null, bd = Infinity;
+      for (const [x0, z0, x1, z1] of walk) {
+        const q = [THREE.MathUtils.clamp(p.x, x0, x1), THREE.MathUtils.clamp(p.z, z0, z1)];
+        const dd = (q[0] - p.x) ** 2 + (q[1] - p.z) ** 2;
+        if (dd < bd) { bd = dd; best = q; }
+      }
+      p.x = best[0];
+      p.z = best[1];
+    }
   }
 
   // World-frame velocity: your own stride, carried along by any train.

@@ -41,8 +41,8 @@
         <div class="bar"><div id="speed-fill"></div><i style="left: 50%"></i><i style="left: 90%"></i></div>
         <div class="paces" role="radiogroup" aria-label="Pace">
           <button data-pace="0" role="radio">Walk</button>
-          <button data-pace="1" role="radio">Sprint <kbd>⇧</kbd></button>
-          <button data-pace="2" role="radio">Boost <kbd>⇧␣</kbd></button>
+          <button data-pace="1" role="radio">Sprint</button>
+          <button data-pace="2" role="radio">Boost <kbd>⇧</kbd></button>
         </div>
         <label class="light" for="light-slider">
           <span class="label">light</span>
@@ -60,19 +60,10 @@
       <canvas id="minimap" aria-label="Map of where you are"></canvas>
       <div id="prompt" hidden><kbd>E</kbd><span id="prompt-text"></span></div>
       <div id="crosshair"></div>
-      <div id="look-hint">Drag to look around · press and hold to walk</div>
+      <div id="look-hint">Drag to look around · press and hold to move</div>
       <button id="back-btn">Look back</button>
       <button id="throw-btn">Throw</button>
       <div id="slowmo" hidden></div>
-      <div id="intro" hidden>
-        <span class="label">the speed of light</span>
-        <div class="scale">
-          <div class="track"><div class="fill" id="intro-fill"></div></div>
-          <div class="ticks" id="intro-ticks"></div>
-          <div class="dot" id="intro-dot"></div>
-        </div>
-        <span id="intro-word"></span>
-      </div>
       <button id="act-btn" hidden></button>
     </div>
 
@@ -106,15 +97,18 @@
         </section>
         <dl class="keys">
           <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Move (arrow keys work too)</dd>
-          <dt><kbd>Shift</kbd></dt><dd>Sprint, up to 95% of light speed</dd>
-          <dt><kbd>Shift</kbd> + <kbd>Space</kbd></dt><dd>Afterburner: 99.5% of light speed</dd>
+          <dt>Pace</dt><dd>You sprint by default, up to 95% of light speed. Click Walk, Sprint or Boost to change it</dd>
+          <dt><kbd>Shift</kbd></dt><dd>Hold for one pace faster: from a sprint, the afterburner at 99.5% of light speed</dd>
           <dt>Drag</dt><dd>Look around</dd>
           <dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Turn</dd>
           <dt><kbd>B</kbd> or right-click</dt><dd>Hold to look back</dd>
           <dt><kbd>E</kbd></dt><dd>Board or step off a ride</dd>
           <dt>Press and hold</dt><dd>Walk forward; keep dragging to steer</dd>
-          <dt>Scroll / swipe</dt><dd>Up to sprint, again for the afterburner; down to slow back to a walk</dd>
+          <dt>Scroll / swipe</dt><dd>Up for the afterburner, down to slow to a walk</dd>
           <dt><kbd>F</kbd></dt><dd>Throw a glowing ball at 60% of light speed</dd>
+          <dt><kbd>R</kbd></dt><dd>Torch on or off</dd>
+          <dt><kbd>V</kbd></dt><dd>Light a sparkler and draw in the air</dd>
+          <dt><kbd>X</kbd></dt><dd>On the Endless Road, ease back to a walking pace</dd>
           <dt><kbd>T</kbd></dt><dd>Back to the start of the platform</dd>
           <dt><kbd>L</kbd></dt><dd>Lab: change the speed of light, switch effects on and off</dd>
           <dt><kbd>M</kbd></dt><dd>Choose a place</dd>
@@ -130,7 +124,7 @@
         <h3>Goals</h3>
         <p>Click any goal in the top-left list to jump to a good spot for it.</p>
         <h3>Touch</h3>
-        <p>Left thumb moves; push far to sprint. Right thumb looks. Buttons on screen board trains and look back.</p>
+        <p>Left thumb moves; push far for the afterburner. Right thumb looks. Buttons on screen board trains and look back.</p>
         <h3>Coming back</h3>
         <p>The address bar keeps your place, position and Lab settings, so a refresh (or a shared link) puts you back where you were.</p>
         <h3>Reading the screen</h3>
@@ -141,15 +135,21 @@
     <div id="toast"></div>
 
     <div id="menu">
+      <canvas id="menu-models"></canvas>
       <div class="menu-inner">
-        <div class="spectrum"></div>
-        <h1 class="logo">Pacetime</h1>
-        <p class="tagline">Light here moves at a walking pace. Everything Einstein said follows, and you can watch it happen.</p>
+        <header class="menu-head">
+          <div>
+            <div class="spectrum"></div>
+            <h1 class="logo">Pacetime</h1>
+            <p class="tagline">Light here moves at a walking pace. Everything Einstein said follows, and you can watch it happen.</p>
+          </div>
+          <button id="resume" hidden>Back to <b id="resume-name"></b> <kbd>Esc</kbd></button>
+        </header>
         <ol id="scene-cards"></ol>
         <p class="controls">
-          <kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · drag to look · hold to walk · scroll to sprint · <kbd>E</kbd> ride · <kbd>F</kbd> throw · hold <kbd>B</kbd> to look back · <kbd>1</kbd>–<kbd>5</kbd> pick a place · <kbd>?</kbd> all controls
+          <kbd>W A S D</kbd> move · <kbd>Shift</kbd> afterburner · drag to look · hold to move · scroll to change pace · <kbd>E</kbd> ride · <kbd>F</kbd> throw · hold <kbd>B</kbd> to look back · <kbd>1</kbd>–<kbd>5</kbd> pick a place · <kbd>?</kbd> all controls
         </p>
-        <p class="controls touch">Left thumb moves (push far to sprint, all the way for the afterburner), right thumb looks.</p>
+        <p class="controls touch">Left thumb moves (push far for the afterburner), right thumb looks.</p>
       </div>
     </div>
 

@@ -1,4 +1,4 @@
-// Checks the shell: number keys, help, mute, sprint speed and refresh-restore via the URL hash.
+// Checks the shell: number keys, help, mute, pace speeds and refresh-restore via the URL hash.
 // Usage: bun run dev (in another shell), then: node scripts/ui.mjs
 import { chromium } from "playwright-core";
 
@@ -13,18 +13,21 @@ const q = (fn, arg) => page.evaluate(fn, arg);
 
 await page.goto(URL);
 await page.waitForTimeout(1500);
-await page.keyboard.press("Digit4");
+await page.keyboard.press("Digit5");
 await page.waitForTimeout(400);
-ok("4 on the title screen starts Einstein's Railway", await q(() => document.getElementById("menu").hidden && document.getElementById("scene-title").textContent === "Einstein's Railway"));
+ok("5 on the title screen starts Einstein's Railway", await q(() => document.getElementById("menu").hidden && document.getElementById("scene-title").textContent === "Einstein's Railway"));
 
 await q(() => { pacetime.player.yaw = -Math.PI / 2; }); // along the platform
-await page.keyboard.down("Shift");
 await page.keyboard.down("w");
 await page.waitForTimeout(3500);
 const beta = await q(() => pacetime.player.beta);
+ok(`W alone sprints, to 95% of c where c = 5 m/s (got ${(beta * 100).toFixed(1)}%)`, Math.abs(beta - 0.95) < 0.01);
+await page.keyboard.down("Shift");
+await page.waitForTimeout(2500);
+const boosted = await q(() => pacetime.player.beta);
 await page.keyboard.up("w");
 await page.keyboard.up("Shift");
-ok(`sprint reaches 95% of c where c = 5 m/s (got ${(beta * 100).toFixed(1)}%)`, Math.abs(beta - 0.95) < 0.01);
+ok(`holding Shift steps up to the afterburner, 99.5% (got ${(boosted * 100).toFixed(1)}%)`, Math.abs(boosted - 0.995) < 0.002);
 
 await page.waitForTimeout(2500); // coast to a stop
 const hash = await q(() => location.hash);
@@ -54,9 +57,9 @@ ok("N mutes", await q(() => !document.getElementById("sound-toggle").checked));
 await page.keyboard.press("KeyN");
 ok("N unmutes", await q(() => document.getElementById("sound-toggle").checked));
 
-await page.evaluate(() => { location.hash = "#beam"; });
+await page.evaluate(() => { location.hash = "#city"; });
 await page.waitForTimeout(800);
-ok("editing the hash to #beam switches experiment", await q(() => document.getElementById("scene-title").textContent === "Chasing the Beam"));
+ok("editing the hash to #city switches place", await q(() => document.getElementById("scene-title").textContent === "Neon Crossroads"));
 
 await page.evaluate(() => { history.replaceState(null, "", location.pathname); pacetime.effects.doppler = true; });
 console.log(errors.length ? "ERRORS:\n" + [...new Set(errors)].join("\n") : "no console errors");

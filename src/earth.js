@@ -157,9 +157,9 @@ const STROKES = {
   4: [[0, 4, 0, 2], [0, 2, 2, 2], [2, 4, 2, 0]],
 };
 
-export function neon(text, { pos = [0, 0, 0], rotY = 0, size = 0.25, color = "#ff4fa3", gap = 0.8, ir = 0.8, uv = 0.8, additive = false, width = 0.07, switched = false } = {}) {
+export function neon(text, { pos = [0, 0, 0], rotY = 0, size = 0.25, color = "#ff4fa3", gap = 0.8, ir = 0.8, uv = 0.8, additive = false, width = 0.07, switched = false, comoving = false } = {}) {
   const g = new THREE.Group();
-  const m = mat({ color, emissive: 1, ir, uv, additive, switched, unique: true });
+  const m = mat({ color, emissive: 1, ir, uv, additive, switched, comoving, unique: true });
   g.glow = m;
   let cx = 0;
   for (const ch of text) {

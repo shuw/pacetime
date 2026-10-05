@@ -6,7 +6,7 @@ import { SOUND_SPEED } from "../earth.js";
 import { Mover, taxi } from "../movers.js";
 import { Train } from "../rail.js";
 import { building, Emitter, lampPost, neon, reflection, surface } from "../earth.js";
-import { dopplerFactor } from "../relativity.js";
+import { dopplerFactor, kmh } from "../relativity.js";
 import { retardedTime, world } from "../relativity.js";
 import { sfx } from "../audio.js";
 
@@ -65,8 +65,6 @@ export default {
   title: "Neon Crossroads",
   tag: "light delay · Doppler · aberration",
   blurb: "Rain, neon and taxis at 85% of light speed that seem to outrun light coming toward you. Hail one and watch the city fold.",
-  intro: true,
-  tour: { from: [-2, 120, 0], dir: [0, -1], length: 220 },
 
   build({ player, toast }) {
     world.c = C;
@@ -278,7 +276,7 @@ export default {
       { group: "Light delay", text: "Hear thunder, then wait: the lightning comes seconds later", done: false, at: [0, 0, 0, 0.35] },
       { group: "Ride", text: "Hail a taxi (E at the yellow TAXI sign) and ride up the avenue", done: false, at: [-7.6, 12, 0, 0] },
     ];
-    let note = "Light here moves at 10 m/s, slower than a sprinter. The taxis do 8.5 m/s, so you see them where they were seconds ago.";
+    let note = "Light here moves at 36 km/h, slower than a sprinter. The taxis do 30.6 km/h, so you see them where they were seconds ago.";
     let lastSignal = null, lastSurge = false, cabWatch = { near: false, far: false };
     const fwd = new THREE.Vector3();
 
@@ -295,7 +293,7 @@ export default {
         "An approaching taxi is seen where it was. Its light and the taxi race toward you almost together, so it seems to cover ground nearly 6× faster than light.",
         "Every signal and every lamp switches at the same instant. You see the near ones first, so changes ripple outward from wherever you stand.",
         "A taxi heading away at 85% of light speed has its taillights shifted far into the infrared. They don't dim, they vanish.",
-        "Rain falls at 6 m/s here, more than half the speed of light. Run, and watch the streaks tilt toward you.",
+        "Rain falls at 21.6 km/h here, more than half the speed of light. Run, and watch the streaks tilt toward you.",
       ],
       get note() { return note; },
       readouts() {
@@ -303,8 +301,8 @@ export default {
         const toward = near ? near.c.m.vel.clone().normalize().dot(player.eye.clone().sub(near.s.pos).normalize()) : 0;
         const apparent = TAXI / (1 - TAXI * toward);
         return [
-          ["light speed", `${world.c.toFixed(1)} m/s`],
-          ["taxis", `${(TAXI * 100).toFixed(0)}% c · ${(TAXI * C).toFixed(1)} m/s`],
+          ["light speed", kmh(world.c)],
+          ["taxis", `${(TAXI * 100).toFixed(0)}% c · ${kmh(TAXI * C)}`],
           ["nearest taxi looks", `${apparent.toFixed(2)} c ${toward > 0 ? "toward you" : "away"}`],
           ["signals", signalAt(retardedTime(player.eye, signals[0].head))],
         ];
@@ -422,7 +420,7 @@ export default {
         camera.getWorldDirection(fwd);
         if (surging && !lastSurge && Math.abs(fwd.z) > 0.8 && Math.abs(eye.x) < AVE + WALK) {
           goals[1].done = true;
-          note = "Every lamp blinked at the same moment. The wave you saw is just the news travelling up the street at 10 m/s.";
+          note = "Every lamp blinked at the same moment. The wave you saw is just the news travelling up the street at 36 km/h.";
         }
         lastSurge = surging;
         for (const { s, pos, color } of signMeshes) {

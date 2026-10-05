@@ -98,14 +98,14 @@ export function cosmos(seed = 13) {
 
 // A jagged bolt from the sky to a point on the deck, shown for a moment when
 // its light reaches you, plus the spot it leaves behind.
-export function bolt(target, seed, color = PALETTE.strike) {
+export function bolt(target, seed, color = PALETTE.strike, { top = 60 } = {}) {
   const g = new THREE.Group();
   const rand = rng(seed);
   const pts = [];
   for (let i = 0; i <= 14; i++) {
     const k = i / 14;
     const j = i === 0 || i === 14 ? 0 : 1;
-    pts.push([target.x + (rand() - 0.5) * 3 * j, target.y + 60 * (1 - k), target.z + (rand() - 0.5) * 3 * j]);
+    pts.push([target.x + (rand() - 0.5) * 3 * j, target.y + top * (1 - k), target.z + (rand() - 0.5) * 3 * j]);
   }
   pts.reverse();
   const stroke = new THREE.Group();
@@ -121,7 +121,7 @@ export function bolt(target, seed, color = PALETTE.strike) {
   g.add(stroke);
   const flare = mesh(G.sphere, mat({ color, emissive: 1, additive: true, opacity: 0.8, ir: 1, uv: 1 }), { pos: [target.x, target.y + 0.3, target.z], scale: 0.01 });
   g.add(flare);
-  const scorch = mesh(new THREE.CircleGeometry(0.9, 40), mat({ color: "#ff8a3d", emissive: 0.9, unlit: true, doubleSided: true, ir: 1.5 }), { pos: [target.x, 0.04, target.z], rot: [-Math.PI / 2, 0, 0] });
+  const scorch = mesh(new THREE.CircleGeometry(0.9, 40), mat({ color: "#ff8a3d", emissive: 0.9, unlit: true, doubleSided: true, ir: 1.5 }), { pos: [target.x, target.y + 0.04, target.z], rot: [-Math.PI / 2, 0, 0] });
   g.add(scorch);
   g.strike = null;
   g.userData.dynamic = true;

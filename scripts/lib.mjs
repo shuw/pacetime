@@ -14,7 +14,17 @@ export async function open({ hash = "", size = [1440, 860], gpu = true } = {}) {
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   await page.goto(URL + hash);
-  await page.waitForFunction(() => window.pacetime?.instance, null, { timeout: 15000 });
+  try {
+    // With a place in the address, wait for it; otherwise the title screen is enough.
+    await page.waitForFunction((h) => (h ? window.pacetime?.instance : window.pacetime), hash, { timeout: 15000 });
+  } catch (e) {
+    // Bun serves its error page when the build fails; it's a script, so ask
+    // the dev server log why instead.
+    const { execSync } = await import("node:child_process");
+    const log = execSync("tail -8 /tmp/pacetime-dev.log 2>/dev/null || true").toString().replace(/\x1b\[[0-9;]*m/g, "");
+    console.error("Page didn't start. Build error?\n" + log);
+    throw e;
+  }
   const t = {
     browser, page, errors,
     q: (fn, arg) => page.evaluate(fn, arg),

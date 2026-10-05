@@ -21,9 +21,11 @@ export const motion = {
   // Anything else that needs to hear about speed limits: fn(dT, t, c).
   add(fn) { others.push(fn); },
   reset() { movers.clear(); rotors.length = 0; others.length = 0; },
+  // After scenes have moved things about this frame.
+  sync(t) { for (const m of movers) m.sync(t); },
   step(dT, t) {
     const c = world.c;
-    for (const m of movers) m.govern(c, t);
+    for (const m of movers) { m.govern(c, t); m.sync(t); }
     for (const r of rotors) {
       const s = Math.abs(r.omega) * r.rmax;
       const eff = s > 0 ? (Math.sign(r.omega) * govern(s, c)) / r.rmax : 0;

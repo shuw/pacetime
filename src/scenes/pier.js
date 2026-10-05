@@ -11,7 +11,9 @@ import { sfx } from "../audio.js";
 import { Gallery } from "../gallery.js";
 import { DayCycle } from "../day.js";
 import { Painter, rodMatrix } from "../paint.js";
-import { person, personGeometry, randomLook, Strollers } from "../people.js";
+import { blobShadow, person, personGeometry, randomLook, Strollers } from "../people.js";
+import { scooterGeometry } from "../toys.js";
+import { MirrorHall } from "../mirrors.js";
 
 const C = 6; // light speed here, m/s
 const SEA = -2.4;
@@ -150,8 +152,6 @@ export default {
   title: "Seaside Funfair",
   tag: "light delay · Doppler",
   blurb: "Golden hour on the pier, then dusk. A Ferris wheel near light speed, a coaster, swings, fireworks you hear before you see.",
-  intro: true,
-  tour: { from: [0, 30, 0], dir: [0, -1], length: 150 },
 
   build({ player, toast }) {
     world.c = C;
@@ -218,7 +218,7 @@ export default {
     let prev = null;
     for (let z = 32; z > -118; z -= 10) {
       const side = (Math.round(z / 10) % 2 === 0) ? -4.5 : 4.5;
-      group.add(lampPost(side, z, { h: 4, switched: true, fancy: true, pole: "#23465a", color: "#ffe6b0", range: 7, power: 1.1 }));
+      group.add(lampPost(side, z, { h: 4, switched: true, fancy: true, pole: "#23465a", color: "#ffe6b0", range: 7, power: 0.8 }));
       if (prev) {
         group.add(stringLights([prev[0], 4.3, prev[1]], [side, 4.3, z], { n: 14, sag: 0.9, switched: true, wire: "#2b2d33", colors: ["#ffd38a", "#ff6b8a", "#7fd8ff", "#c7ff8a", "#ffb0e0"] }));
         bunting(group, [prev[0], 3.7, prev[1]], [side, 3.7, z], { n: 14, sag: 0.6 });
@@ -239,9 +239,10 @@ export default {
     }
 
     // Kiosks along the pier.
-    kiosk(group, colliders, -3.4, -58, Math.PI / 2, "#ff6fa8", "CANDY");
-    kiosk(group, colliders, 3.4, -78, -Math.PI / 2, "#2ec4b6", "ICE CREAM");
-    kiosk(group, colliders, -3.4, -98, Math.PI / 2, "#ffbe0b", "HOT DOGS");
+    // Between the lamp posts (which stand every 10 m from z = 32).
+    kiosk(group, colliders, -3.4, -63, Math.PI / 2, "#ff6fa8", "CANDY");
+    kiosk(group, colliders, 3.4, -83, -Math.PI / 2, "#2ec4b6", "ICE CREAM");
+    kiosk(group, colliders, -3.4, -103, Math.PI / 2, "#ffbe0b", "HOT DOGS");
     // and on the end platform
     kiosk(group, colliders, -27, -124, 0, "#8338ec", "GAMES");
     kiosk(group, colliders, -6, -124, 0, "#fb5607", "FRIES");
@@ -273,54 +274,67 @@ export default {
     const wheelOmega = (0.8 * C) / WHEEL_R;
     const wr = rotor([WHEEL.x, WHEEL.y, WHEEL.z], [0, 0, 1], wheelOmega, WHEEL_R + 1.2);
     const spin = (o) => mat({ ...o, rotor: wr });
-    for (const dz of [-0.9, 0.9]) {
-      group.add(mesh(new THREE.TorusGeometry(WHEEL_R, 0.18, 10, 180), spin({ color: "#f6f2ea", ir: 0.4, uv: 0.3 }), { pos: [WHEEL.x, WHEEL.y, WHEEL.z + dz] }));
-      group.add(mesh(new THREE.TorusGeometry(WHEEL_R * 0.55, 0.1, 8, 120), spin({ color: "#f6f2ea", ir: 0.4, uv: 0.3 }), { pos: [WHEEL.x, WHEEL.y, WHEEL.z + dz] }));
+    // Two rims, well clear of the gondolas that swing between them.
+    const RIM_Z = 1.6;
+    for (const dz of [-RIM_Z, RIM_Z]) {
+      group.add(mesh(new THREE.TorusGeometry(WHEEL_R, 0.18, 12, 240), spin({ color: "#f6f2ea", ir: 0.4, uv: 0.3 }), { pos: [WHEEL.x, WHEEL.y, WHEEL.z + dz] }));
+      group.add(mesh(new THREE.TorusGeometry(WHEEL_R * 0.55, 0.1, 10, 160), spin({ color: "#f6f2ea", ir: 0.4, uv: 0.3 }), { pos: [WHEEL.x, WHEEL.y, WHEEL.z + dz] }));
       for (let i = 0; i < 16; i++) {
         const a = (i / 16) * Math.PI * 2;
         group.add(mesh(G.box, spin({ color: BRIGHT[i % 4], ir: 0.4, uv: 0.3 }), { pos: [WHEEL.x + (Math.cos(a) * WHEEL_R) / 2, WHEEL.y + (Math.sin(a) * WHEEL_R) / 2, WHEEL.z + dz], scale: [WHEEL_R, 0.1, 0.1], rot: [0, 0, a] }));
       }
-    }
-    for (let i = 0; i < 80; i++) {
-      const a = (i / 80) * Math.PI * 2;
-      group.add(mesh(G.ball, spin({ color: ["#ffd38a", "#ff6b8a", "#8fd8ff", "#c7ff8a"][i % 4], emissive: 1, ir: 1, uv: 2.2, switched: true }), { pos: [WHEEL.x + Math.cos(a) * WHEEL_R, WHEEL.y + Math.sin(a) * WHEEL_R, WHEEL.z + 1.1], scale: 0.13 }));
-    }
-    for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * Math.PI * 2;
-      for (let k = 1; k <= 4; k++) {
-        const r = (WHEEL_R * k) / 5;
-        group.add(mesh(G.ball, spin({ color: "#fff2c8", emissive: 1, ir: 1, uv: 2, switched: true }), { pos: [WHEEL.x + Math.cos(a) * r, WHEEL.y + Math.sin(a) * r, WHEEL.z + 1.0], scale: 0.08 }));
+      // Rim lights on the outer faces, where nothing overlaps them.
+      const out = dz + Math.sign(dz) * 0.24;
+      for (let i = 0; i < 64; i++) {
+        const a = (i / 64) * Math.PI * 2;
+        group.add(mesh(G.ball, spin({ color: ["#ffd38a", "#ff6b8a", "#8fd8ff", "#c7ff8a"][i % 4], emissive: 1, ir: 1, uv: 2.2, switched: true }), { pos: [WHEEL.x + Math.cos(a) * WHEEL_R, WHEEL.y + Math.sin(a) * WHEEL_R, WHEEL.z + out], scale: 0.13 }));
+      }
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        for (let k = 1; k <= 4; k++) {
+          const r = (WHEEL_R * k) / 5;
+          group.add(mesh(G.ball, spin({ color: "#fff2c8", emissive: 1, ir: 1, uv: 2, switched: true }), { pos: [WHEEL.x + Math.cos(a) * r, WHEEL.y + Math.sin(a) * r, WHEEL.z + dz + Math.sign(dz) * 0.14], scale: 0.08 }));
+        }
       }
     }
-    // Open gondolas hang level as the wheel turns: a basket, four posts and a
-    // roof, roomy enough to ride in. Riders are separate so yours can step out.
+    // Open gondolas hang level from axles between the rims: a basket, four
+    // posts and a roof, roomy enough to ride in. Riders are separate so yours
+    // can step out. No surfaces overlap, so nothing flickers.
     const cabinPivots = [];
     const riders = [];
+    const axle = new THREE.CylinderGeometry(0.07, 0.07, RIM_Z * 2, 10, 4);
+    axle.rotateX(Math.PI / 2);
     for (let i = 0; i < 16; i++) {
       const a = (i / 16) * Math.PI * 2;
       const pivot = [WHEEL.x + Math.cos(a) * WHEEL_R, WHEEL.y + Math.sin(a) * WHEEL_R, WHEEL.z];
       cabinPivots.push(new THREE.Vector3(Math.cos(a) * WHEEL_R, Math.sin(a) * WHEEL_R, 0));
+      group.add(mesh(axle, spin({ color: "#d9dde6", ir: 0.4, uv: 0.3 }), { pos: pivot }));
       const c = BRIGHT[i % BRIGHT.length];
       const [px, py, pz] = pivot;
       const p = new Painter();
       p.add(G.cyl, "#d9dde6", { pos: [px, py - 0.3, pz], scale: [0.05, 0.6, 0.05] });
-      p.add(new THREE.ConeGeometry(1.05, 0.45, 16), "#f6f2ea", { pos: [px, py - 0.6, pz] });
-      p.add(new THREE.CylinderGeometry(1.06, 1.06, 0.08, 16), c, { pos: [px, py - 0.84, pz] });
+      p.add(new THREE.ConeGeometry(1.05, 0.42, 32), "#f6f2ea", { pos: [px, py - 0.6, pz] });
+      p.add(new THREE.CylinderGeometry(1.07, 1.07, 0.07, 32), c, { pos: [px, py - 0.86, pz] });
       for (let k = 0; k < 4; k++) {
         const b = (k / 4) * Math.PI * 2 + Math.PI / 4;
-        p.add(G.cyl, "#f6f2ea", { pos: [px + Math.cos(b) * 0.82, py - 1.3, pz + Math.sin(b) * 0.82], scale: [0.035, 0.92, 0.035] });
+        p.add(G.cyl, "#f6f2ea", { pos: [px + Math.cos(b) * 0.8, py - 1.32, pz + Math.sin(b) * 0.8], scale: [0.035, 0.86, 0.035] });
       }
-      p.add(new THREE.CylinderGeometry(0.88, 0.8, 0.7, 20, 1, true), c, { pos: [px, py - 2.1, pz] });
-      p.add(new THREE.CylinderGeometry(0.8, 0.8, 0.05, 20), "#3b3355", { pos: [px, py - 2.45, pz] });
-      p.add(new THREE.TorusGeometry(0.88, 0.05, 6, 24), "#ffe9a8", { pos: [px, py - 1.75, pz], rot: [Math.PI / 2, 0, 0] });
+      p.add(new THREE.CylinderGeometry(0.9, 0.82, 0.7, 32, 1, false), c, { pos: [px, py - 2.1, pz] });
+      p.add(new THREE.TorusGeometry(0.93, 0.05, 8, 32), "#ffe9a8", { pos: [px, py - 1.74, pz], rot: [Math.PI / 2, 0, 0] });
       const gr = orbiting(wr, pivot);
-      group.add(mesh(p.geometry(), mat({ color: "#ffffff", vertexColors: true, doubleSided: true, ir: 0.5, uv: 1.2, rotor: gr })));
+      group.add(mesh(p.geometry(), mat({ color: "#ffffff", vertexColors: true, ir: 0.5, uv: 1.2, rotor: gr })));
       if (i % 3 !== 0) {
-        const rider = mesh(personGeometry(randomLook(rand), { pose: "seated", scale: 0.85 }), mat({ color: "#ffffff", vertexColors: true, ir: 0.4, uv: 0.4, rotor: gr }), { pos: [px, py - 2.45, pz] });
+        const rider = mesh(personGeometry(randomLook(rand), { pose: "seated", scale: 0.85 }), mat({ color: "#ffffff", vertexColors: true, ir: 0.4, uv: 0.4, rotor: gr }), { pos: [px, py - 2.44, pz] });
         rider.userData.dynamic = true;
         group.add(rider);
         riders[i] = rider;
       }
+    }
+    // The hub and the axle the legs hold up.
+    {
+      const hub = new THREE.CylinderGeometry(0.35, 0.35, 5.2, 16, 4);
+      hub.rotateX(Math.PI / 2);
+      group.add(mesh(hub, mat({ color: "#d9dde6", ir: 0.4 }), { pos: [WHEEL.x, WHEEL.y, WHEEL.z] }));
     }
     for (const dz of [-2.4, 2.4]) for (const sx of [-1, 1]) {
       const foot = new THREE.Vector3(WHEEL.x + sx * 7.5, 0, WHEEL.z + dz);
@@ -329,7 +343,7 @@ export default {
       leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), WHEEL.clone().sub(foot).normalize());
       group.add(leg);
     }
-    group.add(mesh(G.sphere, mat({ color: "#ffd38a", emissive: 1, ir: 1, switched: true }), { pos: [WHEEL.x, WHEEL.y, WHEEL.z], scale: 0.8 }));
+    for (const dz of [-RIM_Z - 0.3, RIM_Z + 0.3]) group.add(mesh(G.sphere, mat({ color: "#ffd38a", emissive: 1, ir: 1, switched: true }), { pos: [WHEEL.x, WHEEL.y, WHEEL.z + dz], scale: 0.6 }));
     colliders.push({ x: WHEEL.x - 7.5, z: WHEEL.z, r: 1 }, { x: WHEEL.x + 7.5, z: WHEEL.z, r: 1 });
 
     // Wave swinger: chairs on chains fly out as the canopy spins.
@@ -502,6 +516,35 @@ export default {
       }
     }
 
+    // Scooter hire on the promenade: hop on and ride the whole pier.
+    const SCOOTER_HOME = new THREE.Vector3(9, 0, 46.5);
+    const scooterGeo = scooterGeometry();
+    const scooterMat = mat({ color: "#ffffff", vertexColors: true, ir: 0.4, uv: 0.4 });
+    const parked = [];
+    for (let k = 0; k < 3; k++) {
+      const s = mesh(scooterGeo, scooterMat, { pos: [SCOOTER_HOME.x + k * 1.4, 0, SCOOTER_HOME.z], rot: [0, Math.PI, 0] });
+      s.userData.dynamic = true;
+      group.add(s);
+      group.add(blobShadow([SCOOTER_HOME.x + k * 1.4, 0.02, SCOOTER_HOME.z], 0.7));
+      parked.push(s);
+    }
+    {
+      const sign = neon("SCOOTERS", { size: 0.22, color: "#5ce1c6", switched: true, width: 0.08 });
+      sign.position.set(SCOOTER_HOME.x + 1.4 - sign.textWidth / 2, 3.1, SCOOTER_HOME.z + 1.3);
+      group.add(box(sign.textWidth + 0.5, 0.6, 0.1, { color: "#1d1b2e", ir: 0.2 }, [SCOOTER_HOME.x + 1.4, 3.3, SCOOTER_HOME.z + 1.25]));
+      group.add(sign);
+      for (const dx of [-0.6, 3.4]) group.add(box(0.1, 3, 0.1, { color: "#23465a" }, [SCOOTER_HOME.x + dx, 1.5, SCOOTER_HOME.z + 1.25]));
+    }
+
+    // Hall of mirrors on the promenade, west of the pier.
+    const mirrors = new MirrorHall(group, { center: [-32, 51], colliders, toast });
+    let waved = 0;
+    const doWave = () => {
+      mirrors.wave(world.t);
+      waved = world.t;
+      sfx.ui();
+    };
+
     // Shooting gallery on the end platform.
     const gallery = new Gallery(group, { origin: new THREE.Vector3(-20, 0, -132), width: 16, depth: 8, c: C, toast });
     const GALLERY_LINE = new THREE.Vector3(-20, 0, -130.8);
@@ -515,9 +558,11 @@ export default {
       { group: "Rides", text: "Ride the roller coaster (E at its station, right of the stalls)", done: false, at: [24.4, -128, Math.PI, 0] },
       { group: "Rides", text: "Ride the Ferris wheel (E under it) and come off younger", done: false, at: [-16, -142, 0, 0] },
       { group: "Shooting gallery", text: "Knock down 5 targets: aim where they are, not where you see them (F to throw)", done: false, at: [-20, -130.8, 0, 0.02] },
+      { group: "Scooter", text: "Ride a scooter (E at the hire stand on the promenade) down the pier at night, headlight on", done: false, at: [10.4, 45.2, Math.PI, -0.1] },
+      { group: "Hall of mirrors", text: "In the hall of mirrors on the promenade, wave (X): each reflection waves back later than the last", done: false, at: [-32, 50.5, 1.57, 0] },
       { group: "Lighthouse", text: "After dark, watch the lighthouse beam curl into a spiral over the sea", done: false, at: [10, -165, -0.61, 0.15] },
     ];
-    let note = "Light here moves at 6 m/s, about a jog. The sun is setting; the fireworks start after dark.";
+    let note = "Light here moves at 21.6 km/h, about a run. The sun is setting; the fireworks start after dark.";
     let wheelWatch = 0, beamWatch = 0, lastLapS = 0, ridingLap = 0, lightsSeen = false;
     const fwd = new THREE.Vector3(), toward = new THREE.Vector3();
 
@@ -596,13 +641,17 @@ export default {
       goals,
       log,
       tips: [
-        "The sun sets over a few minutes. At dusk every light on the pier switches on at the same moment, but the news reaches you lamp by lamp at 6 m/s.",
+        "The sun sets over a few minutes. At dusk every light on the pier switches on at the same moment, but the news reaches you lamp by lamp at 21.6 km/h.",
         "Fireworks burst 70 m off the end of the pier. Their light takes over 10 seconds to get here; the bang takes a fifth of a second.",
         "The Ferris wheel's rim moves at 80% of light speed. Light from its rising and falling sides left at different times, so the spokes look bent.",
         "The kids running up and down the pier are going at half the speed of light.",
       ],
       get note() { return note; },
       clock: () => day.clock(),
+      onKey(code) {
+        if (code === "KeyX" && mirrors.inside(player.pos)) { doWave(); return true; }
+        return false;
+      },
       onThrow(b) {
         if (player.pos.distanceTo(GALLERY_LINE) < 6) gallery.throwBall(b);
       },
@@ -617,6 +666,35 @@ export default {
         return rows;
       },
       action() {
+        if (mirrors.inside(player.pos) && !player.busy) return { label: "Wave (X)", run: () => doWave() };
+        if (player.bike) {
+          return {
+            label: "Get off the scooter",
+            run: () => {
+              player.dismount();
+              parked[0].visible = true;
+              parked[0].position.set(player.pos.x + Math.cos(player.yaw) * 1.1, 0, player.pos.z - Math.sin(player.yaw) * 1.1);
+              parked[0].rotation.y = player.yaw;
+              sfx.alight();
+            },
+          };
+        }
+        const scooter = parked.find((s) => s.visible && Math.hypot(player.pos.x - s.position.x, player.pos.z - s.position.z) < 2.6);
+        if (scooter && !riding) {
+          return {
+            label: "Ride a scooter",
+            run: () => {
+              scooter.visible = false;
+              if (scooter !== parked[0]) { const i = parked.indexOf(scooter); [parked[0], parked[i]] = [parked[i], parked[0]]; }
+              player.pos.set(scooter.position.x, 0, scooter.position.z);
+              player.yaw = scooter.rotation.y;
+              player.pitch = -0.05;
+              player.mountBike();
+              sfx.board();
+              toast("W to ride, A/D or drag to steer, Shift for full throttle. The headlight's beam crawls ahead of you at the speed of light.", 8);
+            },
+          };
+        }
         if (riding === wheelSeat) {
           return {
             label: "Step off the wheel",
@@ -734,19 +812,21 @@ export default {
         lampMat.uniforms.uSpec.value.z = 0.5 + flare;
 
         // Fireworks once it's dark: a steady show, with twin shells now and then.
-        // Each night's show runs from dusk until the sky starts to pale.
-        const showDay = Math.floor((day.phaseAt(nextShell) - SHOW_FROM + 0.05) / day.period);
-        const showAt = day.timeOf(showDay * day.period + SHOW_FROM), showEnd = day.timeOf(showDay * day.period + SHOW_TO);
-        if (nextShell < showAt) nextShell = showAt;
-        if (nextShell > showEnd) nextShell = day.timeOf((showDay + 1) * day.period + SHOW_FROM);
-        if (nextTwin < nextShell + 8 || nextTwin > showEnd) nextTwin = Math.max(nextTwin, nextShell + 8);
-        if (nextTwin > showEnd) nextTwin = day.timeOf((showDay + 1) * day.period + SHOW_FROM) + 8;
-        while (t + 12 > nextShell && nextShell <= showEnd) {
+        // Each night's show runs from dusk until the sky starts to pale: a
+        // steady stream of shells, and twin shells every 30 s.
+        const period = day.period;
+        const nightOf = Math.floor((day.phaseAt(t) - SHOW_FROM) / period); // the latest show that has started
+        const showAt = day.timeOf(nightOf * period + SHOW_FROM), showEnd = day.timeOf(nightOf * period + SHOW_TO);
+        const nextShowAt = day.timeOf((nightOf + 1) * period + SHOW_FROM);
+        const inShow = (x) => x >= showAt && x <= showEnd;
+        if (!inShow(nextShell) && nextShell < nextShowAt) nextShell = t < showEnd ? Math.max(showAt, nextShell) : nextShowAt;
+        if (!inShow(nextTwin) && nextTwin < nextShowAt) nextTwin = t < showEnd ? Math.max(showAt + 8, nextTwin) : nextShowAt + 8;
+        while (t + 12 > nextShell && inShow(nextShell)) {
           const at = new THREE.Vector3(BARGE.x + (fw.rand() - 0.5) * 60, 28 + fw.rand() * 16, BARGE.z + (fw.rand() - 0.5) * 16);
           fw.shell(BARGE.clone().setY(SEA + 1), at, nextShell);
           nextShell += 3 + fw.rand() * 3;
         }
-        if (t + 12 > nextTwin) {
+        if (t + 12 > nextTwin && inShow(nextTwin)) {
           TWIN.forEach((q) => fw.shell(new THREE.Vector3(q.x, SEA + 1, q.z), q, nextTwin, { color: "#ffd166", count: 180 }));
           twins.push({ t: nextTwin, events: [log.add("Left shell", nextTwin, TWIN[0], "twin"), log.add("Right shell", nextTwin, TWIN[1], "twin")] });
           if (twins.length > 6) twins.shift();
@@ -767,8 +847,18 @@ export default {
         if (wheelWatch > 3) goals[4].done = true;
         toward.set(LIGHTHOUSE.x, LAMP_Y, LIGHTHOUSE.z).sub(eye).normalize();
         if (fwd.dot(toward) > 0.85 && day.dark > 0.6) beamWatch += dTau;
-        if (beamWatch > 5) goals[8].done = true;
+        if (beamWatch > 5) goals[10].done = true;
+        if (player.bike && player.beta > 0.85 && day.dark > 0.5 && !goals[8].done) {
+          goals[8].done = true;
+          note = "Your headlight's beam is racing ahead of you at the speed of light, and you're only just slower. The road ahead lights up a moment late.";
+        }
         gallery.update(t);
+        mirrors.update(eye, player, t);
+        if (waved && t > waved + 3 && !goals[9].done && mirrors.inside(player.pos)) {
+          goals[9].done = true;
+          const far = mirrors.yous.reduce((a, y) => Math.max(a, y.age ?? 0), 0);
+          note = `Every reflection is light that took the long way round. The furthest one you can see is ${far.toFixed(1)} s in the past.`;
+        }
         if (gallery.score >= 5 && !goals[7].done) {
           goals[7].done = true;
           toast(`Five down in ${gallery.throws} throws. You were aiming metres ahead of what you could see.`, 7);

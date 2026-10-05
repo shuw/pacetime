@@ -143,7 +143,30 @@ export class Wake {
 // run time) is left alone.
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
+// Spinning meshes need each vertex's part centre: small parts spin about their
+// own origin, big ones (aCenter = position) are left to bend as a whole.
+const centerCache = new Map();
+export function addCenters(root) {
+  root.updateMatrixWorld(true);
+  const scale = new THREE.Vector3();
+  root.traverse((m) => {
+    if (!m.isMesh || !m.material.defines || !("ROTOR" in m.material.defines) || m.geometry.attributes.aCenter) return;
+    m.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), scale);
+    if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+    const big = m.geometry.boundingSphere.radius * Math.max(scale.x, scale.y, scale.z) > 1.5;
+    const key = m.geometry.uuid + (big ? ":big" : ":small");
+    if (!centerCache.has(key)) {
+      const g = m.geometry.clone();
+      const pos = g.attributes.position;
+      g.setAttribute("aCenter", big ? pos.clone() : new THREE.BufferAttribute(new Float32Array(pos.count * 3), 3));
+      centerCache.set(key, g);
+    }
+    m.geometry = centerCache.get(key);
+  });
+}
+
 export function bake(root) {
+  addCenters(root);
   root.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
   const buckets = new Map();
@@ -157,12 +180,16 @@ export function bake(root) {
   let merged = 0;
   for (const meshes of buckets.values()) {
     if (meshes.length < 2) continue;
-    const keep = meshes[0].material.vertexColors ? ["position", "normal", "color"] : ["position", "normal"];
+    const keep = ["position", "normal"];
+    if (meshes[0].material.vertexColors) keep.push("color");
+    if ("ROTOR" in (meshes[0].material.defines ?? {})) keep.push("aCenter");
     const geos = meshes.map((m) => {
       let g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
       for (const name of Object.keys(g.attributes)) if (!keep.includes(name)) g.deleteAttribute(name);
       if (!g.attributes.normal) g.computeVertexNormals();
-      g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld));
+      const M = new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld);
+      g.applyMatrix4(M);
+      if (g.attributes.aCenter) g.attributes.aCenter.applyMatrix4(M);
       return g;
     });
     const geo = mergeGeometries(geos, false);

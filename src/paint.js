@@ -20,6 +20,7 @@ export class Painter {
     const col = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
     g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    setCenter(g, new THREE.Vector3().setFromMatrixPosition(m));
     this.parts.push(g);
     return this;
   }
@@ -28,6 +29,8 @@ export class Painter {
   addPainted(geo, matrix) {
     const g = geo.clone();
     g.applyMatrix4(matrix);
+    for (const k of Object.keys(g.attributes)) if (!["position", "normal", "color"].includes(k)) g.deleteAttribute(k);
+    setCenter(g, new THREE.Vector3().setFromMatrixPosition(matrix));
     this.parts.push(g);
     return this;
   }
@@ -35,6 +38,14 @@ export class Painter {
   geometry() {
     return mergeGeometries(this.parts, false);
   }
+}
+
+// Every vertex of a part remembers the part's centre (for spinning things).
+function setCenter(g, c) {
+  const n = g.attributes.position.count;
+  const a = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) a.set([c.x, c.y, c.z], i * 3);
+  g.setAttribute("aCenter", new THREE.BufferAttribute(a, 3));
 }
 
 // A cylinder between two points.

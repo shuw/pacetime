@@ -25,10 +25,10 @@ export class Minimap {
   update(player, instance, dt) {
     const moving = player.u.length() > 0.2 || !!player.vehicle;
     this.idle = moving ? 0 : this.idle + dt;
-    const show = this.idle < 2.5;
+    const show = this.idle < 2.5 && !instance.noMap;
     // Zoom out smoothly with speed, and stay put while it fades away.
     if (moving) {
-      const target = RANGE_WALK + (RANGE_SPRINT - RANGE_WALK) * Math.min(1, Math.max(0, (player.beta - 0.55) / 0.4));
+      const target = instance.mapRange?.() ?? RANGE_WALK + (RANGE_SPRINT - RANGE_WALK) * Math.min(1, Math.max(0, (player.beta - 0.55) / 0.4));
       this.range += (target - this.range) * Math.min(1, dt * 2);
     }
     this.canvas.classList.toggle("show", show);

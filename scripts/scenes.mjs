@@ -1,5 +1,5 @@
 // Plays each everyday scene's goals with scripted moves, fast-forwarding where
-// it can. Usage: node scripts/scenes.mjs [pier|city|village ...]
+// it can. Usage: node scripts/scenes.mjs [pier|city|highway|starship ...]
 import { open, report } from "./lib.mjs";
 
 const want = process.argv.slice(2);
@@ -11,44 +11,6 @@ const run = async (id, fn) => {
   await fn();
   await show(id);
 };
-
-await run("village", async () => {
-  // Read the church clock from far away.
-  await t.place(-30, 60, 0.3, 0.2);
-  await t.q(() => { const c = pacetime.instance; const e = pacetime.player.eye; const toC = { x: 18 - e.x, z: -80 - e.z }; pacetime.player.yaw = Math.atan2(-toC.x, -toC.z); });
-  await t.advance(3);
-  // Watch for a steam train from beside the track.
-  await t.place(8, 62, 1.4, 0);
-  for (let i = 0; i < 300 && !(await t.q(() => pacetime.instance.goals[1].done)); i++) {
-    await t.advance(0.2);
-    await t.q(() => {
-      // Turn toward the nearer engine as you see it.
-      const e = pacetime.player.eye;
-      const best = pacetime.instance.engineSeen?.(e);
-      if (best) pacetime.player.yaw = Math.atan2(-(best.x - e.x), -(best.z - e.z));
-    });
-  }
-  // Ride the carousel for 20 s of your time.
-  await t.place(-17, -22, 0);
-  await t.q(() => pacetime.act());
-  await t.advance(22);
-  console.log("  riding:", await t.q(() => !!pacetime.player.vehicle), await t.snap("village-carousel"));
-  await t.q(() => pacetime.act());
-  // Sprint through the snow.
-  await t.place(-60, 40, 0);
-  await t.page.keyboard.down("Shift"); await t.page.keyboard.down("w");
-  await t.wait(2500);
-  console.log("  snow sprint:", await t.snap("village-snow"));
-  await t.page.keyboard.up("w"); await t.page.keyboard.up("Shift");
-  // Wait at the station for a train, board, ride a while.
-  await t.place(4, 74, Math.PI);
-  for (let i = 0; i < 140 && (await t.q(() => pacetime.instance.action()?.label)) !== "Board the steam train"; i++) await t.advance(1);
-  await t.q(() => pacetime.act());
-  await t.advance(6);
-  console.log("  train:", await t.q(() => !!pacetime.player.vehicle), await t.snap("village-train"));
-  // Stand near the track and wait for an engine to pass.
-  await t.q(() => pacetime.act());
-});
 
 await run("city", async () => {
   await t.place(0, 0, 0);
@@ -133,12 +95,100 @@ await run("pier", async () => {
   await t.q(() => pacetime.act());
   // After dark: twin shells from the middle, then from the side, and the lighthouse.
   await t.place(0, -118, 0, 0.25);
-  for (let i = 0; i < 200 && !(await t.q(() => pacetime.instance.goals[1].done)); i++) await t.advance(0.5);
+  for (let i = 0; i < 500 && !(await t.q(() => pacetime.instance.goals[1].done)); i++) await t.advance(0.5);
   await t.place(-26, -160, 0, 0.25);
   for (let i = 0; i < 200 && !(await t.q(() => pacetime.instance.goals[2].done)); i++) await t.advance(0.5);
   await t.place(10, -165, -0.61, 0.15);
-  for (let i = 0; i < 100 && !(await t.q(() => pacetime.instance.goals[8].done)); i++) await t.advance(0.25);
+  for (let i = 0; i < 100 && !(await t.q(() => pacetime.instance.goals[10].done)); i++) await t.advance(0.25);
+  // Hall of mirrors: walk in, wave, wait.
+  await t.place(-32, 50.5, 1.57, 0);
+  await t.advance(1);
+  await t.page.keyboard.press("KeyX");
+  await t.advance(1.2);
+  console.log("  mirrors:", await t.snap("pier-mirrors"));
+  for (let i = 0; i < 20 && !(await t.q(() => pacetime.instance.goals[9].done)); i++) await t.advance(0.25);
+  // Ride a scooter down the pier at night.
+  await t.q(() => pacetime.instance.day.set(0.85, pacetime.world.t)); // night
+  await t.place(10.4, 45.2, Math.PI, 0);
+  await t.q(() => pacetime.act());
+  console.log("  on scooter:", await t.q(() => !!pacetime.player.bike));
+  await t.q(() => { pacetime.player.pos.set(0, 0, 42); pacetime.player.yaw = 0; });
+  await t.page.keyboard.down("w"); await t.page.keyboard.down("Shift");
+  for (let i = 0; i < 60 && !(await t.q(() => pacetime.instance.goals[8].done)); i++) { await t.wait(100); await t.q(() => { const p = pacetime.player.pos; pacetime.player.yaw = Math.atan2(p.x, 3) * 0.8; }); }
+  console.log("  scooter:", await t.snap("pier-scooter"));
+  await t.page.keyboard.up("w"); await t.page.keyboard.up("Shift");
+  await t.q(() => pacetime.act());
   console.log("  night:", await t.snap("pier-night"));
+});
+
+await run("highway", async () => {
+  // From a standstill, fire a pulse and watch it go.
+  await t.page.keyboard.press("KeyF");
+  await t.advance(0.6);
+  console.log("  pulse from rest:", await t.snap("highway-pulse-rest"));
+  await t.advance(2);
+  // Up past 99%, then cruise while the Comet catches up.
+  await t.page.keyboard.down("w"); await t.page.keyboard.down("Shift");
+  await t.advance(3.5);
+  await t.page.keyboard.up("w"); await t.page.keyboard.up("Shift");
+  for (let i = 0; i < 40 && !(await t.q(() => pacetime.instance.goals[2].done)); i++) await t.advance(0.5);
+  console.log("  alongside:", await t.snap("highway-comet"));
+  // Brake hard: it shoots ahead.
+  await t.page.keyboard.down("s"); await t.advance(1.4); await t.page.keyboard.up("s");
+  for (let i = 0; i < 20 && !(await t.q(() => pacetime.instance.goals[3].done)); i++) await t.advance(0.25);
+  console.log("  ahead:", await t.snap("highway-comet-ahead"));
+  // Past 99.99%, then cruise, fire a pulse and chase it.
+  await t.page.keyboard.down("w"); await t.page.keyboard.down("Shift");
+  for (let i = 0; i < 60 && (await t.q(() => pacetime.player.omb)) > 5e-5; i++) await t.advance(0.2);
+  await t.page.keyboard.up("w"); await t.page.keyboard.up("Shift");
+  await t.page.keyboard.press("KeyF");
+  for (let i = 0; i < 20 && !(await t.q(() => pacetime.instance.goals[5].done)); i++) await t.advance(0.25);
+  console.log("  chase:", await t.q(() => pacetime.instance.readouts().filter(([k]) => /pulse|pulling/.test(k)).map((r) => r.join(" ")).join(", ")), await t.snap("highway-pulse-chase"));
+  // Full throttle until nine nines, glancing back on the way.
+  await t.page.keyboard.down("w"); await t.page.keyboard.down("Shift");
+  await t.advance(4);
+  await t.page.keyboard.down("b"); await t.advance(0.3); await t.page.keyboard.up("b");
+  await t.advance(14);
+  await t.page.keyboard.up("w"); await t.page.keyboard.up("Shift");
+  console.log("  speed:", await t.q(() => ({ omb: pacetime.player.omb, gamma: Math.round(pacetime.player.gamma), km: pacetime.instance.readouts()[0][1] })), await t.snap("highway-fast"));
+});
+
+await run("starship", async () => {
+  const nav = (k) => t.q((k) => pacetime.instance.nav[k](), k);
+  // Take the helm and go flat out.
+  await t.q(() => { pacetime.player.ship.local.set(0, 0, -4); });
+  await t.q(() => pacetime.act());
+  await t.page.keyboard.down("w"); await t.page.keyboard.down("Shift");
+  await t.advance(14);
+  await t.page.keyboard.up("w"); await t.page.keyboard.up("Shift");
+  console.log("  cruising: γ", await t.q(() => Math.round(pacetime.player.gamma)), await t.snap("starship-cruise"));
+  // Get up and walk to the back bubble.
+  await t.q(() => pacetime.act());
+  await t.q(() => { const s = pacetime.player.ship; s.local.set(0, 0, 4.6); pacetime.player.yaw = s.heading + Math.PI; });
+  await t.advance(0.5);
+  console.log("  rear bubble:", await t.snap("starship-rear"));
+  // Pip brings us in to the buoy.
+  for (let i = 0; i < 300 && !(await t.q(() => pacetime.instance.goals[3].done)); i++) await t.advance(0.5);
+  await t.q(() => { const p = pacetime.player; p.ship.local.set(0, 0, -4.75); p.yaw = p.ship.heading; p.pitch = 0.05; });
+  await t.advance(0.3);
+  console.log("  buoy:", await t.snap("starship-buoy"), Math.round(await nav("toBuoy")), "m from the buoy; cards so far:", await nav("cards"));
+  // Home again: back to the helm and W.
+  await t.q(() => pacetime.act());
+  await t.page.keyboard.down("w"); await t.page.keyboard.down("Shift");
+  await t.advance(16);
+  await t.page.keyboard.up("w"); await t.page.keyboard.up("Shift");
+  console.log("  cards at the buoy:", await nav("cards"));
+  const arrivals = [];
+  for (let i = 0; i < 300 && !(await t.q(() => pacetime.instance.goals[4].done)); i++) {
+    await t.advance(0.5);
+    const n = await nav("cards");
+    if (n > arrivals.length) arrivals.push(`${n}@${(await t.q(() => pacetime.player.tau)).toFixed(0)}s`);
+  }
+  console.log("  cards on the way home:", arrivals.join(" "));
+  await t.q(() => { const p = pacetime.player; p.yaw = p.ship.heading; p.pitch = 0.1; });
+  await t.advance(0.3);
+  console.log("  home:", Math.round(await nav("fromHome")), "m from the dock", await t.snap("starship-home"));
+  for (let i = 0; i < 20 && !(await t.q(() => pacetime.instance.goals[5].done)); i++) await t.advance(0.25);
 });
 
 report(t.errors);

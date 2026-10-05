@@ -8,20 +8,22 @@ import { Player } from "./player.js";
 import { bake } from "./geo.js";
 import { ghosts, reflScale, shared, skyMaterial } from "./shaders.js";
 import { effects, world } from "./relativity.js";
-import { clearToast, cWord, initLab, onGoalClick, showScene, syncLab, toast, toggleGoals, toggleLab, updateHud } from "./hud.js";
+import { clearToast, initLab, onGoalClick, showScene, syncLab, toast, toggleGoals, toggleLab, updateHud } from "./hud.js";
 import { lightSpeed } from "./relativity.js";
 import { motion } from "./motion.js";
 import { Minimap } from "./minimap.js";
+import { ACCENTS, MenuModels } from "./menu3d.js";
+import { BeamHistory, handlebarsModel, Sparkler, torchModel, wandModel } from "./toys.js";
 import { addVelocity } from "./relativity.js";
 import { sparkField } from "./shaders.js";
 import { isMuted, setAmbience, setListener, setMuted, sfx, unlockAudio, updateAudio } from "./audio.js";
 import railway from "./scenes/railway.js";
-import beam from "./scenes/beam.js";
 import pier from "./scenes/pier.js";
 import city from "./scenes/city.js";
-import village from "./scenes/village.js";
+import highway from "./scenes/highway.js";
+import starship from "./scenes/starship.js";
 
-const SCENES = [pier, city, village, railway, beam];
+const SCENES = [pier, highway, starship, city, railway];
 
 const canvas = document.getElementById("view");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -42,37 +44,59 @@ root.add(sky);
 camera.layers.enable(1);
 camera.layers.enable(2);
 
-// Sun shadows: a depth map drawn from the sun, in the world's own frame.
+// Sun shadows: depth maps drawn from the sun, in the world's own frame. A
+// sharp near map follows you; a coarser far map covers the rest.
 const SHADOW_SIZE = 2048;
-const shadowRT = new THREE.WebGLRenderTarget(SHADOW_SIZE, SHADOW_SIZE, { depthBuffer: true });
-shadowRT.depthTexture = new THREE.DepthTexture(SHADOW_SIZE, SHADOW_SIZE, THREE.FloatType);
-const shadowCam = new THREE.OrthographicCamera(-80, 80, 80, -80, 200, 700);
-shadowCam.layers.set(0);
+function shadowTarget() {
+  const rt = new THREE.WebGLRenderTarget(SHADOW_SIZE, SHADOW_SIZE, { depthBuffer: true });
+  rt.depthTexture = new THREE.DepthTexture(SHADOW_SIZE, SHADOW_SIZE, THREE.FloatType);
+  return rt;
+}
+const cascades = [
+  { rt: shadowTarget(), cam: new THREE.OrthographicCamera(-30, 30, 30, -30, 200, 700), ahead: 18, size: 60 },
+  { rt: shadowTarget(), cam: new THREE.OrthographicCamera(-120, 120, 120, -120, 200, 700), ahead: 70, size: 240 },
+];
+for (const c of cascades) c.cam.layers.set(0);
+let shadowFrame = 0;
 
 function renderShadow() {
   const sun = shared.uSun.value;
   const on = current.instance.shadows ? THREE.MathUtils.smoothstep(sun.y, -0.01, 0.06) : 0;
   shared.uShadowOn.value = on;
   if (on <= 0) return;
-  // Centre the map a little ahead of where you're looking.
   const ahead = camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
-  const center = new THREE.Vector3(eye.x, 0, eye.z).addScaledVector(ahead, 40);
-  shadowCam.position.copy(center).addScaledVector(sun, 400);
-  shadowCam.lookAt(center);
-  shadowCam.updateMatrixWorld();
-  shared.uShadowMatrix.value.multiplyMatrices(shadowCam.projectionMatrix, shadowCam.matrixWorldInverse);
-  // Moving things cast their shadows from where you see them (light delay
-  // included), so a fast wheel's shadow and its self-shadowing line up with
-  // what's on screen. The view bending is left out: shadows fall in the world.
+  // Moving things cast shadows from where you see them (light delay included),
+  // so a fast wheel's shadow lines up with what's on screen. The view bending
+  // is left out: shadows fall in the world.
   shared.uPass.value = 2;
   // A texture can't be read while it's being drawn into.
-  shared.uShadowMap.value = null;
-  renderer.setRenderTarget(shadowRT);
-  renderer.clear();
-  renderer.render(root, shadowCam);
+  shared.uShadowMap.value = shared.uShadowMapFar.value = null;
+  shadowFrame++;
+  cascades.forEach((c, k) => {
+    if (k === 1 && shadowFrame % 2 === 0 && c.ready) return; // the far map can lag a frame
+    const center = new THREE.Vector3(eye.x, 0, eye.z).addScaledVector(ahead, c.ahead);
+    // Snap to whole texels so shadow edges don't shimmer as you move.
+    const texel = c.size / SHADOW_SIZE;
+    c.cam.position.copy(center).addScaledVector(sun, 400);
+    c.cam.lookAt(center);
+    c.cam.updateMatrixWorld();
+    const local = center.clone().applyMatrix4(c.cam.matrixWorldInverse);
+    const snap = new THREE.Vector3(Math.round(local.x / texel) * texel - local.x, Math.round(local.y / texel) * texel - local.y, 0);
+    c.cam.position.add(snap.applyQuaternion(c.cam.quaternion));
+    c.cam.updateMatrixWorld();
+    c.matrix = new THREE.Matrix4().multiplyMatrices(c.cam.projectionMatrix, c.cam.matrixWorldInverse);
+    shared.uShadowMatrix.value.copy(c.matrix);
+    renderer.setRenderTarget(c.rt);
+    renderer.clear();
+    renderer.render(root, c.cam);
+    c.ready = true;
+  });
   renderer.setRenderTarget(null);
   shared.uPass.value = 0;
-  shared.uShadowMap.value = shadowRT.depthTexture;
+  shared.uShadowMatrix.value.copy(cascades[0].matrix);
+  shared.uShadowMatrixFar.value.copy(cascades[1].matrix);
+  shared.uShadowMap.value = cascades[0].rt.depthTexture;
+  shared.uShadowMapFar.value = cascades[1].rt.depthTexture;
 }
 
 // Water reflections: the scene drawn again from a camera mirrored in the
@@ -127,6 +151,28 @@ composer.addPass(new OutputPass());
 let usePost = false;
 
 const player = new Player(canvas);
+
+// Things you carry ride along with the camera.
+const rig = new THREE.Group();
+const torch = torchModel(), wand = wandModel(), bars = handlebarsModel();
+rig.add(torch, wand);
+root.add(rig);
+// What you ride in faces where you're heading, not where you look.
+const craft = new THREE.Group();
+craft.add(bars);
+root.add(craft);
+const beamHistory = new BeamHistory();
+const toys = { torch: false, sparkler: false };
+function toggleTorch() {
+  toys.torch = !toys.torch;
+  sfx.ui();
+  toast(toys.torch ? "Torch on. Its light crawls out at the speed of light: sweep it across a wall and watch the spot lag behind." : "Torch off", 4);
+}
+function toggleSparkler() {
+  toys.sparkler = !toys.sparkler;
+  sfx.ui();
+  toast(toys.sparkler ? "Sparkler lit. Draw in the air, then sprint past what you drew." : "Sparkler out", 4);
+}
 const minimap = new Minimap(document.getElementById("minimap"));
 let current = null; // { scene, instance }
 let paused = true;
@@ -142,7 +188,7 @@ function applyEnv(e) {
   shared.uNight.value = e.night ?? 0;
   shared.uSpace.value = e.space ?? 0;
   shared.uStars.value = e.stars ?? 1;
-  shared.uSunDisk.value = 1;
+  shared.uSunDisk.value = e.sunDisk ?? 1;
   shared.uMoon.value = 1;
   shared.uAurora.value = e.aurora ?? 0;
   shared.uClouds.value = e.clouds ?? 0;
@@ -166,14 +212,15 @@ function applyPost(post) {
 function load(scene) {
   if (current) root.remove(current.instance.group);
   ghosts.length = 0;
-  if (intro) { intro = null; document.getElementById("intro").hidden = true; document.getElementById("hud").classList.remove("intro-on"); }
   clearToast();
   player.place(0, 0, 0);
   player.tau = 0;
   world.t = 0;
   motion.reset();
   minimap.reset();
+  beamHistory.reset();
   const instance = scene.build({ player, toast });
+  instance.sparkler = new Sparkler(instance.group);
   // Balls glow like embers: plenty of light beyond the violet, so they stay
   // visible (and redden) as they fly away from you.
   instance.balls = sparkField(120, { gravity: 0.5, intensity: 4, ir: 0.6, uv: 2.4 });
@@ -193,6 +240,15 @@ function load(scene) {
   showScene(scene, SCENES.indexOf(scene));
   instance.c0 = world.c;
   player.legs = world.c;
+  player.rocket = !!instance.rocket;
+  player.eta = 0;
+  player.easing = false;
+  player.ship = instance.ship ?? null;
+  if (player.ship) player.yaw = player.ship.heading;
+  camera.far = instance.far ?? 12000;
+  camera.updateProjectionMatrix();
+  craft.remove(...craft.children.filter((c) => c.userData.cockpit));
+  if (instance.cockpit) { instance.cockpit.userData.cockpit = true; craft.add(instance.cockpit); }
   goalsDone = 0;
   syncLab();
 }
@@ -210,7 +266,9 @@ function stateHash() {
 }
 
 function parseHash() {
-  const [head, ...rest] = decodeURIComponent(location.hash.slice(1)).split("&");
+  let text;
+  try { text = decodeURIComponent(location.hash.slice(1)); } catch { return null; } // a mangled link: start at the title screen
+  const [head, ...rest] = text.split("&");
   const [id, pose] = head.split("@");
   if (!SCENES.some((s) => s.id === id)) return null;
   const opts = Object.fromEntries(rest.map((kv) => kv.split("=")));
@@ -246,20 +304,34 @@ addEventListener("hashchange", () => {
   if (h && h.id !== current?.scene.id) restore(h);
 });
 
+// The title screen: a card per place, each with a little live model.
+const menuModels = new MenuModels(document.getElementById("menu-models"));
+const menuEl = document.getElementById("menu");
 function buildMenu() {
   document.getElementById("scene-cards").innerHTML = SCENES.map((s) => `
-    <li><button class="scene-card" data-id="${s.id}">
-      <h3>${s.title}</h3>
-      <span class="tag">${s.tag}${done[s.id] ? ' · <span class="done">complete</span>' : ""}</span>
-      <p>${s.blurb}</p>
+    <li><button class="scene-card" data-id="${s.id}" style="--c: ${ACCENTS[s.id] ?? "#9fb4ff"}">
+      <div class="stage" data-stage="${s.id}"></div>
+      <div class="card-text">
+        <h3>${s.title}</h3>
+        <span class="tag">${s.tag}${done[s.id] ? ' · <span class="done">complete</span>' : ""}</span>
+        <p>${s.blurb}</p>
+      </div>
     </button></li>`).join("");
 }
+const hoverCard = (e) => { menuModels.hover = e.target.closest?.(".scene-card")?.dataset.id ?? null; };
+document.getElementById("scene-cards").addEventListener("pointerover", hoverCard);
+document.getElementById("scene-cards").addEventListener("pointerleave", () => (menuModels.hover = null));
+document.getElementById("scene-cards").addEventListener("focusin", hoverCard);
+document.getElementById("resume").addEventListener("click", () => closeMenu());
 
 function openMenu() {
   paused = true;
   player.enabled = false;
   buildMenu();
-  document.getElementById("menu").hidden = false;
+  const resume = current?.instance.started;
+  document.getElementById("resume").hidden = !resume;
+  if (resume) document.getElementById("resume-name").textContent = current.scene.title;
+  menuEl.hidden = false;
   document.getElementById("hud").hidden = true;
 }
 
@@ -270,51 +342,11 @@ function closeMenu() {
   player.enabled = true;
 }
 
-// Arriving at an everyday place, light starts at its real speed and slows to
-// walking pace, so you watch the world turn strange.
-const REAL_C = 299792458;
-let intro = null;
-// Landmarks on the slowing-down scale, in m/s.
-const SCALE = [[REAL_C, "light"], [2e5, "spacecraft"], [1000, "bullet"], [30, "car"], [3, "jog"]];
-const scaleAt = (c) => Math.log10(REAL_C / c) / Math.log10(REAL_C / 1.5); // 0 at real light, 1 at 1.5 m/s
-function startIntro() {
-  intro = { c1: world.c, t: 0, dur: 6 };
-  world.c = REAL_C;
-  document.getElementById("intro-ticks").innerHTML = SCALE.map(([v, name]) => `<span style="left:${(scaleAt(v) * 100).toFixed(1)}%">${name}</span>`).join("");
-  sfx.slowdown(intro.dur * 0.85);
-  document.getElementById("intro").hidden = false;
-  document.getElementById("hud").classList.add("intro-on");
-}
-function runIntro(dt) {
-  if (!intro) return;
-  intro.t += dt;
-  const k = Math.min(1, intro.t / intro.dur);
-  const e = k < 0.15 ? 0 : (k - 0.15) / 0.85;
-  const smooth = e * e * (3 - 2 * e);
-  world.c = Math.exp(Math.log(REAL_C) + (Math.log(intro.c1) - Math.log(REAL_C)) * smooth);
-  const c = world.c;
-  const x = Math.min(1, scaleAt(c)) * 100;
-  document.getElementById("intro-dot").style.left = `${x}%`;
-  document.getElementById("intro-fill").style.width = `${x}%`;
-  document.querySelectorAll("#intro-ticks span").forEach((s, i) => s.classList.toggle("passed", c <= SCALE[i][0] * 1.01));
-  const word = k < 0.15 ? "As fast as it is in our world. Now slowing it down…" : k < 1 ? `Now about as fast as ${cWord(c)}…` : `Light here moves about as fast as ${cWord(intro.c1)}. Have a look around.`;
-  if (document.getElementById("intro-word").textContent !== word) document.getElementById("intro-word").textContent = word;
-  if (intro.t > intro.dur + 2.5) {
-    world.c = intro.c1;
-    intro = null;
-    document.getElementById("intro").hidden = true;
-    document.getElementById("hud").classList.remove("intro-on");
-    syncLab();
-  }
-}
-
 function startScene(scene) {
   unlockAudio();
   sfx.ui();
-  player.autopilot = null;
   load(scene);
   store.set("pacetime-last", scene.id);
-  if (scene.intro) startIntro();
   current.instance.started = true;
   closeMenu();
 }
@@ -329,6 +361,7 @@ const BALL_COLORS = ["#ffd166", "#7bdcff", "#ff7aa8", "#9dff8a", "#c7a0ff"];
 let ballN = 0;
 function throwBall() {
   if (!current || paused) return;
+  if (current.instance.fire) return current.instance.fire(); // some places fire light instead
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
   dir.y += 0.12;
@@ -406,8 +439,10 @@ addEventListener("keydown", (e) => {
   const pick = menuOpen && /^Digit[1-9]$/.test(e.code) ? SCENES[Number(e.code.slice(5)) - 1] : null;
   if (pick) return startScene(pick);
   if (e.code === "KeyM") menuOpen && current?.instance.started ? closeMenu() : openMenu();
-  else if (e.code === "Escape" && menuOpen && current?.instance.started) closeMenu();
+  else if (e.code === "Escape" && menuOpen) { if (current?.instance.started) closeMenu(); }
   else if (menuOpen) return;
+  // Esc closes the Lab if it's open, and otherwise goes back to the title screen.
+  else if (e.code === "Escape") document.getElementById("lab").hidden ? openMenu() : toggleLab();
   // The Lab needs the mouse, so opening it lets go of the view.
   else if (e.code === "KeyL") toggleLab();
   else if (e.code === "KeyG") toggleGoals();
@@ -416,7 +451,11 @@ addEventListener("keydown", (e) => {
     syncLab();
   }
   else if (e.code === "KeyE") act();
+  else if (current?.instance.onKey?.(e.code)) return;
   else if (e.code === "KeyF") throwBall();
+  else if (e.code === "KeyR") toggleTorch();
+  else if (e.code === "KeyV") toggleSparkler();
+  else if (e.code === "KeyX") player.easeToWalk();
   else if (e.code === "Comma") setPlayback(SPEEDS[Math.max(0, SPEEDS.indexOf(playback) - 1)]);
   else if (e.code === "Period") setPlayback(SPEEDS[Math.min(SPEEDS.length - 1, SPEEDS.indexOf(playback) + 1)]);
   else if (e.code === "KeyH") document.body.classList.toggle("photo");
@@ -430,7 +469,8 @@ addEventListener("keydown", (e) => {
 // Light speed is independent of everything else: things keep their own
 // speeds, and are only held just under light speed when they'd outrun it.
 function setLight(c) {
-  if (intro) return;
+  // Some places use light at its real speed.
+  if (current?.instance.fixedC) return toast("Light here moves at its real speed.", 3);
   world.c = c;
 }
 
@@ -471,12 +511,17 @@ resize();
 const viewDir = new THREE.Vector3();
 function adaptExposure(dt) {
   const b = shared.uBeta.value;
-  const beta2 = b.lengthSq();
   camera.getWorldDirection(viewDir);
-  const D = beta2 > 1e-10 ? 1 / (Math.sqrt(1 / (1 - beta2)) * (1 - b.dot(viewDir))) : 1;
+  // 1/(γ(1 - β cosθ)) with 1 - β cosθ = (1-β) + β(1-cosθ), exact near light speed.
+  let D = 1;
+  if (b.lengthSq() > 1e-14) {
+    const [, , g, omb] = shared.uObs.value.toArray();
+    const oneMinusCos = b.clone().normalize().sub(viewDir).lengthSq() / 2;
+    D = 1 / (g * (omb + (1 - omb) * oneMinusCos));
+  }
   // On a train, the carriage around you moves with you and fills the view, so don't adapt.
   const k = shared.uGlowAmt.value;
-  const Dg = k > 0.999 ? D : Math.exp(k * 1.5 * Math.tanh(Math.log(Math.max(D, 1e-4)) / 1.5));
+  const Dg = k > 0.999 ? D : Math.exp(k * 1.5 * Math.tanh(Math.log(Math.max(D, 1e-4)) / 0.83));
   const brightAhead = k > 0.999 ? Dg ** -0.5 : Dg ** -2; // gentle: the eye adapts fully
   const target = effects.searchlight && !player.vehicle ? THREE.MathUtils.clamp(Dg < 1 ? Dg ** -1.2 : brightAhead, 0.3, 4) : 1;
   const u = shared.uExposure;
@@ -506,6 +551,12 @@ function simulate(dTau, { realtime = true } = {}) {
   const { instance, scene } = current;
   const dT = player.update(dTau, instance);
   world.t += dT;
+  // Places that go on forever move the world back under you (in whole tiles).
+  const shift = instance.rebase?.(player);
+  if (shift) {
+    const { x = 0, z = 0 } = typeof shift === "number" ? { z: shift } : shift;
+    minimap.trail.forEach((p) => { p[0] += x; p[1] += z; });
+  }
   motion.step(dT, world.t);
   player.applyTo(camera);
   camera.updateMatrixWorld();
@@ -513,6 +564,15 @@ function simulate(dTau, { realtime = true } = {}) {
 
   shared.uCam.value.copy(eye);
   shared.uBeta.value.copy(player.v).divideScalar(world.c);
+  // γ and 1-β straight from your proper velocity, so the shaders stay exact
+  // even at 99.99999% of light speed. The bending uses a gentler rapidity in
+  // gentle mode.
+  {
+    const g = player.gamma, omb = player.omb;
+    const eta = omb < 1 ? 0.5 * Math.log((2 - omb) / omb) : 0;
+    const ea = eta * shared.uAberrK.value;
+    shared.uObs.value.set(g, omb, Math.cosh(ea), 2 / (1 + Math.exp(2 * ea)));
+  }
   shared.uFlags.value.set(+effects.aberration, +effects.doppler, +effects.searchlight, 0);
   shared.uTime.value = world.t;
   shared.uC.value = world.c;
@@ -521,17 +581,16 @@ function simulate(dTau, { realtime = true } = {}) {
   adaptExposure(dTau);
   sky.position.copy(eye);
 
-  // Nothing counts as spotted while light is still slowing down.
-  const before = intro ? instance.goals?.map((g) => g.done) : null;
+  updateToys(instance);
   instance.update({ player, eye, camera, t: world.t, dT, dTau });
-  if (before) instance.goals.forEach((g, i) => (g.done = before[i]));
+  motion.sync(world.t);
   if (realtime) pickLamps(instance.lamps, eye);
   instance.group.traverse((c) => { if (c.follow) c.position.set(eye.x, c.followY ?? 0, eye.z); });
   for (const g of ghosts) g.visible = effects.ghosts;
   if (!realtime) return;
 
   setListener(eye, right.set(1, 0, 0).applyQuaternion(camera.quaternion));
-  updateAudio({ beta: player.beta, train: instance.sound?.(eye) ?? instance.train?.audio(eye, player) ?? null });
+  updateAudio({ beta: player.beta, gamma: player.gamma, dt: dTau, train: instance.sound?.(eye) ?? instance.train?.audio(eye, player) ?? null });
   footsteps(dTau);
   if (!paused) {
     const nDone = instance.goals?.filter((g) => g.done).length ?? 0;
@@ -547,29 +606,36 @@ function simulate(dTau, { realtime = true } = {}) {
   }
 }
 
-// On the title screen the camera glides through the scene: a few seconds at
-// 92% of light speed, a slow-down to look around, then back to the start.
-let tourClock = 0;
-function tour(dt) {
-  const tr = current?.scene.tour;
-  if (!tr || !paused || current.instance.started) { player.autopilot = null; return; }
-  tourClock += dt;
-  const [x, z, yaw] = tr.from;
-  const cycle = 14;
-  // Show each scene for two glides, then move on to the next.
-  if (tourClock > cycle * 2) {
-    tourClock = 0;
-    load(SCENES[(SCENES.indexOf(current.scene) + 1) % SCENES.length]);
-    return;
+
+// The torch, the scooter's headlight and the sparkler.
+const fwdV = new THREE.Vector3();
+function updateToys(instance) {
+  rig.position.copy(camera.position);
+  rig.quaternion.copy(camera.quaternion);
+  rig.updateMatrixWorld(true);
+  craft.position.copy(camera.position);
+  craft.rotation.set(0, player.yaw, 0);
+  craft.updateMatrixWorld(true);
+  const onBike = !!player.bike;
+  torch.visible = toys.torch && !onBike;
+  wand.visible = toys.sparkler && !onBike;
+  bars.visible = onBike;
+  if (onBike) {
+    // The headlight points along the scooter, dipped toward the road.
+    const h = new THREE.Vector3(-Math.sin(player.yaw), -0.07, -Math.cos(player.yaw)).normalize();
+    const lamp = player.eye.clone().add(new THREE.Vector3(0, -0.55, 0)).addScaledVector(h, 0.6);
+    shared.uBeamCone.value.set(0.975, 0.9, 30);
+    beamHistory.push(world.t, lamp, h, true, 0.8);
+  } else {
+    const lens = new THREE.Vector3();
+    torch.lens.getWorldPosition(lens);
+    camera.getWorldDirection(fwdV);
+    shared.uBeamCone.value.set(0.988, 0.955, 22);
+    beamHistory.push(world.t, lens, fwdV, toys.torch, 1);
   }
-  const k = tourClock % cycle;
-  if (k < dt * 1.5 || player.pos.distanceTo(new THREE.Vector3(x, 0, z)) > tr.length) {
-    player.place(x, z, yaw);
-    player.pitch = 0.04;
-    tourClock = Math.floor(tourClock / cycle) * cycle + dt * 2;
-  }
-  const u = (k < 9 ? 2.4 : 0) * player.legs; // proper speed: 0.92 c
-  player.autopilot = new THREE.Vector3(tr.dir[0], 0, tr.dir[1]).normalize().multiplyScalar(u);
+  const tip = new THREE.Vector3();
+  wand.tip.getWorldPosition(tip);
+  instance.sparkler?.update(world.t, tip, toys.sparkler && !onBike);
 }
 
 // The eight lamps nearest you light their surroundings. Switched lamps only
@@ -619,12 +685,16 @@ function frame() {
   if (frameTimes.length > 120) frameTimes.shift();
   const dTau = Math.min((now - last) / 1000, 0.05);
   last = now;
+  // The title screen covers everything: draw its models instead of the world.
+  if (!menuEl.hidden) {
+    menuModels.render(dTau);
+    requestAnimationFrame(frame);
+    return;
+  }
   if (current) {
     // Behind the title screen the world keeps running so the menu has a live backdrop.
     const frozen = (paused || !help.hidden) && current.instance.started;
-    tour(dTau);
     const total = frozen ? 0 : dTau * warp * playback;
-    if (!frozen) runIntro(dTau);
     const n = Math.max(1, Math.ceil(total / 0.05));
     for (let i = 0; i < n; i++) simulate(total / n, { realtime: i === n - 1 });
     if (!paused) {
@@ -649,18 +719,15 @@ function frame() {
   requestAnimationFrame(frame);
 }
 
-// Open where the address says; otherwise a live scene runs behind the title screen.
+// Open where the address says; otherwise on the title screen.
 const fromHash = parseHash();
 if (fromHash) restore(fromHash);
-else {
-  load(SCENES.find((s) => s.id === store.get("pacetime-last")) ?? SCENES[0]);
-  openMenu();
-}
+else openMenu();
 frame();
 
 // Handy for poking at the physics from the console.
 window.pacetime = {
-  player, world, effects, closeMenu, act, shared, bloom, throwBall,
+  player, world, effects, closeMenu, act, shared, bloom, throwBall, pickLamps,
   get instance() { return current?.instance; },
   get fps() { const n = frameTimes.length - 1; return n > 0 ? (1000 * n) / (frameTimes[n] - frameTimes[0]) : 0; },
   get drawCalls() { return renderer.info.render.calls; },

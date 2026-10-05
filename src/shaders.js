@@ -24,11 +24,17 @@ export const shared = {
   uPass: { value: 0 },               // 0 normal, 1 mirror (water reflection), 2 shadow depth
   uMirrorY: { value: -1e6 },
   uShadowMap: { value: null },
+  uShadowMapFar: { value: null },
   uShadowMatrix: { value: new THREE.Matrix4() },
+  uShadowMatrixFar: { value: new THREE.Matrix4() },
   uShadowOn: { value: 0 },
   uDebugShadow: { value: 0 },
   uReflection: { value: null },
   uReflOn: { value: 0 },
+  uBeamTex: { value: null },
+  uBeamInfo: { value: new THREE.Vector4(0, 0.05, 0, 0) }, // newest time, spacing, samples, strength
+  uBeamLight: { value: new THREE.Color(1.6, 1.45, 1.1) },
+  uBeamCone: { value: new THREE.Vector3(0.985, 0.94, 18) }, // cos inner, cos outer, range m
   uLightsOn: { value: -1e9 },         // world time the switched lights come on
   uLightsOff: { value: 1e9 },         // and go off again
   uClouds: { value: 0 },                              // cover, 0..1
@@ -40,6 +46,7 @@ export const shared = {
   uPointScale: { value: 600 },
   uExposure: { value: 1 },
   uAberrK: { value: 0.55 },   // 1 = true to life; less softens the bending
+  uObs: { value: new THREE.Vector4(1, 0, 1, 0) },  // γ, 1-β, and the same for bending
   uShiftAmt: { value: 0.4 },   // 1 = true to life; less softens the color shift
   uGlowAmt: { value: 0.5 },    // 1 = true to life; less softens the brightening
   uGrain: { value: 0 },
@@ -54,11 +61,24 @@ uniform vec3 uCam;
 uniform vec3 uBeta;
 uniform vec4 uFlags;
 uniform float uAberrK;
+uniform vec4 uObs; // your γ and 1-β for colours; the same for bending (softened in gentle mode)
+
+// Where a point at offset x (distance d) appears to you, moving along n.
+// Written so it stays exact very close to light speed: (1 - β) and γ come
+// in precisely from JS, and d + x·n is rearranged when the point is behind.
+vec3 aberrateWith(vec3 x, float d, vec3 n, float g, float omb) {
+  float xp = dot(x, n);
+  vec3 xperp = x - n * xp;
+  float s = xp >= 0.0 ? d + xp : dot(xperp, xperp) / max(d - xp, 1e-6);
+  return xperp + n * (g * (s - omb * d));
+}
+vec3 aberrate(vec3 x, float d, vec3 n) { return aberrateWith(x, d, n, uObs.z, uObs.w); }
+
 uniform float uPass;
 uniform mat4 uShadowMatrix;
 #ifdef MOVER
 uniform vec3 uVel;    // m/s, world frame
-uniform vec3 uAnchor; // where the object's origin is at world time 0
+uniform vec3 uNow;    // where the object's origin is now (kept small and exact by JS)
 uniform vec2 uLife;   // world times between which the object exists
 uniform float uC;
 uniform float uTime;
@@ -81,6 +101,8 @@ uniform vec4 uPivot;      // xyz pivot; w = 1 to orbit without turning (gondolas
 uniform float uC;
 uniform float uTime;
 uniform float uDelay;
+uniform float uContract;
+attribute vec3 aCenter;
 varying vec3 vSrcVel;
 vec3 rotateAbout(vec3 v, vec3 k, float a) {
   float c = cos(a), s = sin(a);
@@ -108,7 +130,7 @@ void main() {
       vec3 un = uVel * inversesqrt(u2);
       rel -= un * dot(rel, un) * (1.0 - sqrt(1.0 - u2 / (uC * uC)));
     }
-    vec3 w = uAnchor + rel + uVel * uTime - uCam;
+    vec3 w = uNow + rel - uCam;
     float tau = 0.0;
     if (uDelay > 0.5) {
       float a = max(uC * uC - u2, 1e-6);
@@ -120,48 +142,68 @@ void main() {
     if (te < uLife.x || te > uLife.y) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); return; }
   #endif
   #ifdef ROTOR
-    // Spinning things are built in their pose at world time 0. Find the world
-    // time whose light reaches us now (Newton's method on |p(t) - eye| = c (T - t)),
-    // and draw the vertex where it was then.
-    vec3 r0 = (uPivot.w > 0.5 ? uPivot.xyz : wp.xyz) - uRotCenter;
-    vec3 offset = uPivot.w > 0.5 ? wp.xyz - uPivot.xyz : vec3(0.0);
+    // Spinning things are built in their pose at world time 0. Each small part
+    // (a bulb, a seat) carries its own centre in aCenter; big parts (a rim, a
+    // spoke) have aCenter = position. Gondolas follow their pivot and stay level.
+    vec3 cw = (m * vec4(aCenter, 1.0)).xyz;
+    bool level = uPivot.w > 0.5;
+    vec3 basePt = level ? uPivot.xyz : cw;
+    vec3 r0 = basePt - uRotCenter;
+    vec3 off0 = wp.xyz - basePt;
+    // Where this vertex is at angle a: the part's centre on its circle, plus
+    // its shape around that centre, squashed along the part's motion (Lorentz
+    // contraction keeps a fast ball looking round rather than smeared).
+    float kc = 0.0;
+    {
+      float rv = abs(uOmega) * length(r0 - uRotAxis * dot(r0, uRotAxis));
+      if (uContract > 0.5) kc = 1.0 - sqrt(max(0.0, 1.0 - rv * rv / (uC * uC)));
+    }
+    // Find when the light reaching us now left this vertex: solve
+    // f(tau) = |p(T - tau) - eye| - c tau = 0. f falls steadily (nothing moves
+    // as fast as light), so keep a bracket and take Newton steps inside it,
+    // bisecting when they'd leave it.
     float tau = 0.0;
-    vec3 pr = rotateAbout(r0, uRotAxis, uPhase);
-    if (uDelay > 0.5) {
-      // Solve f(tau) = |p(T - tau) - eye| - c tau = 0. f falls steadily (the
-      // point moves slower than light), so keep a bracket [lo, hi] and take
-      // Newton steps that stay inside it, bisecting when they don't. Plain
-      // Newton fails for points heading straight at you near light speed.
+    vec3 pr, off;
+    for (int pass = 0; pass < 2; pass++) {
+      // pass 0 only sets up the starting guess.
+      if (pass == 1 && uDelay < 0.5) break;
       float lo = 0.0;
-      float hi = (length(uRotCenter - uCam) + length(r0) + length(offset)) / uC + 0.01;
-      tau = clamp(length(uRotCenter + pr + offset - uCam) / uC, lo, hi);
-      for (int i = 0; i < 10; i++) {
-        vec3 ri = rotateAbout(r0, uRotAxis, uPhase - uOmega * tau);
-        vec3 q = uRotCenter + ri + offset - uCam;
+      float hi = (length(uRotCenter - uCam) + length(r0) + length(off0)) / uC + 0.01;
+      for (int i = 0; i < 12; i++) {
+        float a = uPhase - uOmega * tau;
+        vec3 rp = rotateAbout(r0, uRotAxis, a);
+        vec3 op = level ? off0 : rotateAbout(off0, uRotAxis, a);
+        vec3 tn = normalize(cross(uRotAxis, rp) + 1e-6);
+        op -= tn * dot(op, tn) * kc;
+        if (pass == 0) { pr = rp; off = op; tau = clamp(length(uRotCenter + rp + op - uCam) / uC, lo, hi); break; }
+        vec3 q = uRotCenter + rp + op - uCam;
         float dq = length(q);
         float f = dq - uC * tau;
         if (f > 0.0) lo = tau; else hi = tau;
-        vec3 vel = uOmega * cross(uRotAxis, ri);
+        vec3 vel = uOmega * cross(uRotAxis, rp + (level ? vec3(0.0) : op));
         float df = -dot(vel, q) / max(dq, 1e-4) - uC;
         float next = tau - f / min(df, -1e-4);
         tau = (next > lo && next < hi) ? next : 0.5 * (lo + hi);
+        pr = rp;
+        off = op;
       }
-      pr = rotateAbout(r0, uRotAxis, uPhase - uOmega * tau);
     }
-    vSrcVel = uOmega * cross(uRotAxis, pr);
-    if (uPivot.w < 0.5) {
-      // Turn the normal with the body.
-      wp.xyz = uRotCenter + pr;
-    } else {
-      wp.xyz = uRotCenter + pr + offset;
+    float ang = uPhase - uOmega * tau;
+    pr = rotateAbout(r0, uRotAxis, ang);
+    off = level ? off0 : rotateAbout(off0, uRotAxis, ang);
+    {
+      vec3 tn = normalize(cross(uRotAxis, pr) + 1e-6);
+      off -= tn * dot(off, tn) * kc;
     }
+    vSrcVel = uOmega * cross(uRotAxis, pr + (level ? vec3(0.0) : off));
+    wp.xyz = uRotCenter + pr + off;
   #endif
   #ifdef UNLIT
     vNormalW = vec3(0.0, 1.0, 0.0);
   #else
     vNormalW = normalize(mat3(m) * normal);
     #ifdef ROTOR
-      if (uPivot.w < 0.5) vNormalW = rotateAbout(vNormalW, uRotAxis, uPhase - uOmega * tau);
+      if (uPivot.w < 0.5) vNormalW = rotateAbout(vNormalW, uRotAxis, ang);
     #endif
   #endif
   vWorld = wp.xyz;
@@ -185,12 +227,16 @@ void main() {
   #endif
   vec3 P = x;
   float b = length(uBeta);
-  if (b > 1e-5 && uFlags.x > 0.5) {
-    // Gentle mode bends the view as if you were going slower (in rapidity).
-    float bv = uAberrK > 0.999 ? b : tanh(uAberrK * atanh(min(b, 0.999999)));
-    vec3 n = uBeta / b;
-    float g = inversesqrt(1.0 - bv * bv);
-    P = x + n * ((g - 1.0) * dot(x, n)) + n * (bv * g * d);
+  #ifdef COMOVING
+    b = 0.0; // carried with you: no bending
+  #endif
+  if (b > 1e-7 && uFlags.x > 0.5) {
+    #ifdef PULSE
+      // Always true to life: the gentle look's softer bending would show it in the wrong place.
+      P = aberrateWith(x, d, uBeta / b, uObs.x, uObs.y);
+    #else
+      P = aberrate(x, d, uBeta / b);
+    #endif
   }
   gl_Position = projectionMatrix * viewMatrix * vec4(uCam + P, 1.0);
   // The sun's shadow map is made in the world's own frame, with no light delay.
@@ -210,7 +256,7 @@ uniform float uGlowAmt;
 float softD(float D, float k) {
   if (k > 0.999) return D;
   float l = log(max(D, 1e-4));
-  return exp(k * 1.5 * tanh(l / 1.5));
+  return exp(k * 1.5 * tanh(l / 0.83));
 }
 const vec3 EYE = vec3(610.0, 545.0, 465.0);
 
@@ -224,10 +270,17 @@ vec3 eyeSpan(float l0, float l1, float a) {
 }
 
 // Doppler factor for light reaching the observer from world offset x.
+uniform vec4 uObs;
 float doppler(vec3 x) {
   float b2 = dot(uBeta, uBeta);
-  if (b2 < 1e-10) return 1.0;
-  return inversesqrt(1.0 - b2) * (1.0 + dot(uBeta, normalize(x)));
+  if (b2 < 1e-14) return 1.0;
+  // γ(1 + β cosθ), written to stay exact very close to light speed. Uses the
+  // same (gentle-softened) speed as the bending, so the two agree.
+  vec3 n = uBeta * inversesqrt(b2);
+  float d = length(x);
+  float xp = dot(x, n);
+  float s = xp >= 0.0 ? d + xp : max(d * d - xp * xp, 0.0) / max(d - xp, 1e-6);
+  return uObs.z * (s / d - uObs.w * xp / d);
 }
 
 // rgb plus infrared and ultraviolet light that tails off away from the
@@ -257,9 +310,9 @@ vec3 spectralShift(vec3 rgb, float ir, float uv, float D) {
   // Gentle: colors keep their hue and lean bluer ahead, warmer behind. Light
   // from beyond the rainbow still slides into view, so hidden inks show.
   float l = log(max(D, 1e-4));
-  float s = tanh(l / 1.2);
+  float s = tanh(l / 0.66);
   vec3 tint = s > 0.0 ? mix(vec3(1.0), vec3(0.8, 0.96, 1.3), s) : mix(vec3(1.0), vec3(1.28, 0.93, 0.72), -s);
-  float Dk = exp(uShiftAmt * 3.0 * tanh(l / 1.5));
+  float Dk = exp(uShiftAmt * 3.0 * tanh(l / 0.83));
   vec3 extra = max(beyondSeen(ir, uv, Dk) - beyondSeen(ir, uv, 1.0), 0.0);
   extra *= smoothstep(1.8, 3.0, max(ir, uv));
   return max((rgb + beyondSeen(ir, uv, 1.0)) * tint + extra, 0.0);
@@ -269,7 +322,10 @@ vec3 spectralShift(vec3 rgb, float ir, float uv, float D) {
 vec3 searchlight(vec3 c, float D) {
   if (uFlags.z < 0.5) return c;
   float g = softD(D, uGlowAmt);
-  return c * g * g * uExposure;
+  // Light from behind at extreme speeds is shifted right out of sight, even
+  // in the gentle look (which otherwise only softly dims it).
+  float gone = smoothstep(-6.0, -3.0, log(max(D, 1e-9)));
+  return c * g * g * uExposure * gone;
 }
 
 uniform float uGrain;
@@ -302,16 +358,27 @@ uniform vec3 uVel;
 #endif
 uniform vec3 uGridColor;
 uniform vec3 uGrid; // spacing, line width in pixels, glow
+#ifdef ROAD
+uniform vec2 uRoad;
+uniform vec3 uRoadColor;
+uniform vec3 uRoadLine;
+#endif
 uniform float uPass;
 uniform float uMirrorY;
 uniform sampler2D uShadowMap;
+uniform sampler2D uShadowMapFar;
 uniform mat4 uShadowMatrix;
+uniform mat4 uShadowMatrixFar;
 uniform float uShadowOn;
 uniform float uDebugShadow;
 uniform sampler2D uReflection;
 uniform float uReflOn;
 uniform float uLightsOn;
 uniform float uLightsOff;
+uniform sampler2D uBeamTex;   // row 0: direction + on, row 1: origin + time
+uniform vec4 uBeamInfo;
+uniform vec3 uBeamLight;
+uniform vec3 uBeamCone;
 uniform vec4 uLampPos[8];   // xyz, range
 uniform vec3 uLampColor[8];
 #ifdef ROTOR
@@ -343,10 +410,6 @@ uniform vec3 uSpiralColor;
 uniform vec4 uFlash[6];      // xyz where, w world time when
 uniform vec3 uFlashColor[6];
 #endif
-#ifdef BEAM
-uniform vec4 uBeam;          // origin x, direction (+1/-1), period, first pulse time
-uniform vec3 uBeamColor;
-#endif
 #ifdef CLIP_RECT
 uniform vec4 uRect;          // min x, min z, max x, max z
 #endif
@@ -361,19 +424,67 @@ varying float vDist;
 uniform vec3 uCam;
 ${common}
 
-// 1 in sunlight, 0 in shadow, softened over a few texels.
-float sunVisible(vec3 p, vec3 N) {
-  if (uShadowOn <= 0.0) return 1.0;
-  vec4 s = uShadowMatrix * vec4(p + N * 0.08, 1.0);
-  vec3 q = s.xyz / s.w * 0.5 + 0.5;
-  if (q.x < 0.0 || q.y < 0.0 || q.x > 1.0 || q.y > 1.0 || q.z > 1.0) return 1.0;
-  float lit = 0.0;
-  vec2 texel = vec2(1.0 / 2048.0);
-  for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {
-    float d = texture2D(uShadowMap, q.xy + vec2(float(i), float(j)) * texel * 1.5).r;
-    lit += step(q.z - 0.0012, d);
+// Light from a torch or headlight. The beam's history is kept in uBeamTex, so
+// each point is lit by the beam as it was when its light left the lamp, and
+// seen as it was when that light got to you.
+vec4 beamSample(int row, float k) {
+  int n = int(uBeamInfo.z);
+  int k0 = int(floor(k));
+  vec4 a = texelFetch(uBeamTex, ivec2(clamp(k0, 0, n - 1), row), 0);
+  vec4 b = texelFetch(uBeamTex, ivec2(clamp(k0 + 1, 0, n - 1), row), 0);
+  return mix(a, b, fract(k));
+}
+vec3 beamLight(vec3 Q, vec3 N) {
+  if (uBeamInfo.w <= 0.0 || uBeamInfo.z < 2.0) return vec3(0.0);
+  float tq = uTime - (uDelay > 0.5 ? distance(Q, uCam) / uC : 0.0);
+  float te = tq;
+  for (int i = 0; i < 3; i++) {
+    float k = clamp((uBeamInfo.x - te) / uBeamInfo.y, 0.0, uBeamInfo.z - 1.0);
+    vec4 o = beamSample(1, k);
+    te = tq - (uDelay > 0.5 ? distance(Q, o.xyz) / uC : 0.0);
   }
-  return mix(1.0, lit / 9.0, uShadowOn);
+  float k = (uBeamInfo.x - te) / uBeamInfo.y;
+  if (k > uBeamInfo.z - 1.0) return vec3(0.0);
+  k = max(k, 0.0);
+  vec4 d = beamSample(0, k);
+  vec4 o = beamSample(1, k);
+  if (d.w <= 0.0) return vec3(0.0);
+  vec3 L = Q - o.xyz;
+  float dist = length(L);
+  vec3 Ln = L / max(dist, 1e-3);
+  float cone = smoothstep(uBeamCone.y, uBeamCone.x, dot(Ln, normalize(d.xyz)));
+  float fall = 1.0 / (1.0 + dist * dist / (uBeamCone.z * uBeamCone.z));
+  float facing = 0.25 + 0.75 * max(dot(N, -Ln), 0.0);
+  return uBeamLight * cone * fall * facing * d.w * uBeamInfo.w;
+}
+
+// 1 in sunlight, 0 in shadow. The near map is sharp, the far one coarse; the
+// lookup is nudged off the surface by more where the sun grazes it.
+// Percentage-closer filtering with bilinear weights: smooth shadow edges.
+float shadowTap(sampler2D map, mat4 M, vec3 p, float texelWorld, float bias) {
+  vec4 s = M * vec4(p, 1.0);
+  vec3 q = s.xyz / s.w * 0.5 + 0.5;
+  if (q.x < 0.002 || q.y < 0.002 || q.x > 0.998 || q.y > 0.998 || q.z > 1.0) return -1.0;
+  vec2 uv = q.xy * 2048.0 - 0.5;
+  vec2 f = fract(uv);
+  vec2 base = (floor(uv) + 0.5) / 2048.0;
+  float z = q.z - bias;
+  float lit = 0.0;
+  for (int i = -1; i <= 2; i++) for (int j = -1; j <= 2; j++) {
+    float wx = i == -1 ? 1.0 - f.x : (i == 2 ? f.x : 1.0);
+    float wy = j == -1 ? 1.0 - f.y : (j == 2 ? f.y : 1.0);
+    lit += wx * wy * step(z, texture2D(map, base + vec2(float(i), float(j)) / 2048.0).r);
+  }
+  return lit / 9.0;
+}
+float sunVisible(vec3 p, vec3 N, float ndl) {
+  if (uShadowOn <= 0.0) return 1.0;
+  float grazing = 1.0 - clamp(ndl, 0.0, 1.0);
+  vec3 pn = p + N * (0.04 + 0.12 * grazing);
+  float lit = shadowTap(uShadowMap, uShadowMatrix, pn, 60.0 / 2048.0, 0.0004 + 0.0006 * grazing);
+  if (lit < 0.0) lit = shadowTap(uShadowMapFar, uShadowMatrixFar, p + N * (0.15 + 0.4 * grazing), 240.0 / 2048.0, 0.0012 + 0.0015 * grazing);
+  if (lit < 0.0) lit = 1.0;
+  return mix(1.0, lit, uShadowOn);
 }
 
 void main() {
@@ -391,6 +502,9 @@ void main() {
     if (vAge < 0.0) discard;
   #endif
   float D = doppler(vWorld - uCam);
+  #if defined(COMOVING) || defined(PULSE)
+    D = 1.0;
+  #endif
   #if defined(MOVER) || defined(SOURCE_VEL)
     vec3 bs = uVel / uC;
     D /= inversesqrt(max(1e-6, 1.0 - dot(bs, bs))) * (1.0 + dot(bs, normalize(vWorld - uCam)));
@@ -432,6 +546,23 @@ void main() {
       base *= 0.96 + 0.06 * grain;
     }
   #endif
+  #ifdef ROAD
+    // A road along z: asphalt, glowing edge lines and a dashed centre line.
+    {
+      float ax = abs(vWorld.x);
+      float onRoad = 1.0 - smoothstep(uRoad.x - 0.05, uRoad.x + 0.05, ax);
+      base = mix(base, uRoadColor, onRoad);
+      float fw = max(fwidth(ax), 1e-4);
+      float edge = 1.0 - smoothstep(0.07, 0.07 + fw * 1.5, abs(ax - (uRoad.x - 0.3)));
+      // Dashes every 10 m, blurring to an even glow when squeezed too small to draw.
+      float dz = vWorld.z / 10.0, wz = fwidth(dz);
+      float dashes = mix(step(fract(dz), 0.45), 0.45, smoothstep(0.15, 0.5, wz));
+      float dash = (1.0 - smoothstep(0.08, 0.08 + fw * 1.5, ax)) * dashes;
+      float lines = max(edge, dash) * onRoad;
+      base = mix(base, uRoadLine, lines);
+      e = mix(e, 1.0, lines);
+    }
+  #endif
   #ifdef GRID
     vec2 gc = vWorld.xz / uGrid.x;
     vec2 gd = abs(fract(gc - 0.5) - 0.5) / fwidth(gc);
@@ -445,7 +576,7 @@ void main() {
   #endif
   float ndl = max(dot(N, uSun), 0.0);
   #ifndef UNLIT
-    if (ndl > 0.0) ndl *= sunVisible(vWorld, N);
+    if (ndl > 0.0) ndl *= sunVisible(vWorld, N, ndl);
   #endif
   #ifdef TOON
     ndl = smoothstep(0.05, 0.12, ndl) * 0.85 + smoothstep(0.55, 0.62, ndl) * 0.15;
@@ -457,9 +588,13 @@ void main() {
   for (int i = 0; i < 8; i++) {
     vec3 L = uLampPos[i].xyz - vWorld;
     float d2 = dot(L, L), r = uLampPos[i].w;
-    float fall = r * r / (r * r + d2 * 1.6) * (1.0 - smoothstep(r * 2.0, r * 3.0, sqrt(d2)));
+    // Bright close by, falling off quickly, gone past twice the range.
+    float fall = r * r / (r * r + d2 * 4.0) * (1.0 - smoothstep(r * 1.2, r * 2.0, sqrt(d2)));
     light += uLampColor[i] * fall * (0.35 + 0.65 * max(dot(N, L * inversesqrt(max(d2, 1e-4))), 0.0));
   }
+  #if !defined(UNLIT) && !defined(COMOVING)
+    light += beamLight(vWorld, N);
+  #endif
   #ifdef UNLIT
     light = vec3(1.0);
   #endif
@@ -537,19 +672,6 @@ void main() {
       }
     }
   #endif
-  #ifdef BEAM
-    // Dust along the beam line glows briefly as each pulse passes.
-    {
-      float s = (vWorld.x - uBeam.x) * uBeam.y;
-      float seen = uTime - (uDelay > 0.5 ? vDist / uC : 0.0);
-      float since = seen - uBeam.w - max(s, 0.0) / uC;
-      float age = mod(since, uBeam.z);
-      float glow = since > 0.0 && s > -0.5 ? exp(-age * 5.0) * 3.0 + exp(-age * 0.8) * 0.15 : 0.0;
-      rgb += uBeamColor * glow;
-      ir += glow * 0.4;
-      uv += glow * 0.4;
-    }
-  #endif
   #ifdef SPIRAL
     // Mist around a lighthouse glows where the turning beam's light passes.
     // Light leaving the lamp at te reaches this spot at te + r/c, then needs
@@ -579,10 +701,13 @@ void main() {
   #endif
 
   vec3 col = searchlight(spectralShift(rgb, ir, uv, D), D);
+  #ifdef COMOVING
+    col /= max(uExposure, 1e-3); // things aboard are lit by the cabin, not the view outside
+  #endif
   if (uDebugShadow > 0.5) {
     vec4 s = uShadowMatrix * vec4(vWorld, 1.0);
     vec3 q = s.xyz / s.w * 0.5 + 0.5;
-    col = vec3(texture2D(uShadowMap, q.xy).r, q.z, sunVisible(vWorld, N));
+    col = vec3(q.z, 0.0, sunVisible(vWorld, N, 1.0));
   }
   #ifdef WATER
     // The reflection pass is already drawn as seen, so it's mixed in after the shift.
@@ -714,7 +839,10 @@ void main() {
       float s = hash(cell + float(i) * 17.0);
       vec3 f = fract(dir * scale) - 0.5;
       float density = i == 0 ? 0.985 : (i == 1 ? 0.975 : 0.96) - 0.03 * band;
-      float star = step(density, s) * smoothstep(0.42, 0.0, length(f));
+      // Stars are points: when the view behind you is magnified they stay a
+      // pixel or two across and just spread apart.
+      float px = length(fwidth(dir * scale));
+      float star = step(density, s) * smoothstep(min(0.42, 1.6 * px), 0.0, length(f));
       float temp = fract(s * 113.0);
       vec3 tint = mix(vec3(1.0, 0.72, 0.5), vec3(0.72, 0.86, 1.25), temp);
       float bright = i == 0 ? 4.0 : (i == 1 ? 2.2 : 1.4);
@@ -722,7 +850,7 @@ void main() {
       ir += star * bright * (1.4 - temp);
       uv += star * bright * (0.3 + temp);
     }
-    float sunDisk = smoothstep(0.9992, 0.9996, dot(dir, uSun));
+    float sunDisk = smoothstep(0.9992, 0.9996, dot(dir, uSun)) * uSunDisk;
     rgb += vec3(6.0, 5.5, 5.0) * sunDisk;
     ir += 4.0 * sunDisk;
     uv += 3.0 * sunDisk;
@@ -777,7 +905,6 @@ export function mat({
   unique = false,
   mover = null,
   flashes = null,
-  beam = null,
   rect = null,
   wake = 0,
   sourceVel = null, // colors only: the velocity of something placed by hand at its seen position
@@ -786,7 +913,10 @@ export function mat({
   water = false,     // true, or a wave height multiplier
   snow = false,
   planks = false,
+  road = null,      // { half, color, line }
   blob = false,
+  comoving = false, // carried with you (a torch, handlebars): no bending or colour shift
+  pulse = false,    // light you sent ahead, seen by the dust it lights up: true-to-life bending, no net shift
   switched = false, // a lamp that comes on at uLightsOn
   windows = null,   // { size: [w, h], lit, color, seed }
   spiral = null,    // { uSpiral, uSpiralColor } uniforms for a lighthouse beam
@@ -795,7 +925,7 @@ export function mat({
 } = {}) {
   // Shared uniform objects (a train's motion, a wheel's spin) key by identity,
   // so every part of one train shares a material and can be merged.
-  const byIdentity = new Set(["mover", "rotor", "flashes", "beam", "spiral", "sourceVel"]);
+  const byIdentity = new Set(["mover", "rotor", "flashes", "spiral", "sourceVel"]);
   const key = JSON.stringify(arguments[0] ?? {}, (k, v) => (byIdentity.has(k) && v ? `#${idOf(v)}` : v));
   if (!unique && !wake && cache.has(key)) return cache.get(key);
   const defines = {};
@@ -806,7 +936,6 @@ export function mat({
   if (mover) defines.MOVER = "";
   if (additive) defines.ADDITIVE = "";
   if (flashes) defines.FLASHES = "";
-  if (beam) defines.BEAM = "";
   if (rect) defines.CLIP_RECT = "";
   if (wake) defines.WAKE = "";
   if (sourceVel) defines.SOURCE_VEL = "";
@@ -815,7 +944,10 @@ export function mat({
   if (water) defines.WATER = "";
   if (snow) defines.SNOW = "";
   if (planks) defines.PLANKS = "";
+  if (road) defines.ROAD = "";
   if (blob) defines.BLOB = "";
+  if (comoving) defines.COMOVING = "";
+  if (pulse) defines.PULSE = "";
   if (switched) defines.SWITCHED = "";
   if (windows) defines.WINDOWS = "";
   if (spiral) defines.SPIRAL = "";
@@ -833,10 +965,10 @@ export function mat({
       uCheckerB: { value: new THREE.Color(checker?.b ?? "#000") },
       uCheckerSize: { value: checker?.size ?? 1 },
       uGridColor: { value: new THREE.Color(grid?.color ?? "#fff") },
+      ...(road && { uRoad: { value: new THREE.Vector2(road.half, 0) }, uRoadColor: { value: new THREE.Color(road.color) }, uRoadLine: { value: new THREE.Color(road.line) } }),
       uGrid: { value: new THREE.Vector3(grid?.spacing ?? 4, grid?.width ?? 1, grid?.glow ?? 0) },
-      ...(mover && { uVel: mover.uVel, uAnchor: mover.uAnchor, uLife: mover.uLife ?? { value: new THREE.Vector2(-1e9, 1e9) } }),
+      ...(mover && { uVel: mover.uVel, uNow: mover.uNow, uLife: mover.uLife ?? { value: new THREE.Vector2(-1e9, 1e9) } }),
       ...(flashes && { uFlash: flashes.uFlash, uFlashColor: flashes.uFlashColor }),
-      ...(beam && { uBeam: beam.uBeam, uBeamColor: beam.uBeamColor }),
       ...(rect && { uRect: { value: new THREE.Vector4(...rect) } }),
       ...(wake && { uWakeFade: { value: wake } }),
       ...(sourceVel && { uVel: sourceVel }),
@@ -878,6 +1010,19 @@ uniform vec3 uCam;
 uniform vec3 uBeta;
 uniform vec4 uFlags;
 uniform float uAberrK;
+uniform vec4 uObs; // your γ and 1-β for colours; the same for bending (softened in gentle mode)
+
+// Where a point at offset x (distance d) appears to you, moving along n.
+// Written so it stays exact very close to light speed: (1 - β) and γ come
+// in precisely from JS, and d + x·n is rearranged when the point is behind.
+vec3 aberrateWith(vec3 x, float d, vec3 n, float g, float omb) {
+  float xp = dot(x, n);
+  vec3 xperp = x - n * xp;
+  float s = xp >= 0.0 ? d + xp : dot(xperp, xperp) / max(d - xp, 1e-6);
+  return xperp + n * (g * (s - omb * d));
+}
+vec3 aberrate(vec3 x, float d, vec3 n) { return aberrateWith(x, d, n, uObs.z, uObs.w); }
+
 uniform float uC;
 uniform float uTime;
 uniform float uDelay;
@@ -944,13 +1089,7 @@ void main() {
   float d = max(length(x), 1e-3);
   vec3 P = x;
   float b = length(uBeta);
-  if (b > 1e-5 && uFlags.x > 0.5) {
-    // Gentle mode bends the view as if you were going slower (in rapidity).
-    float bv = uAberrK > 0.999 ? b : tanh(uAberrK * atanh(min(b, 0.999999)));
-    vec3 n = uBeta / b;
-    float g = inversesqrt(1.0 - bv * bv);
-    P = x + n * ((g - 1.0) * dot(x, n)) + n * (bv * g * d);
-  }
+  if (b > 1e-7 && uFlags.x > 0.5) P = aberrate(x, d, uBeta / b);
   vec4 clip = projectionMatrix * viewMatrix * vec4(uCam + P, 1.0);
   gl_Position = clip;
   gl_PointSize = clamp(aSize * uPointScale / max(length(P), 0.1), 1.0, 64.0);

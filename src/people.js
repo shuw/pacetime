@@ -59,6 +59,11 @@ export function personGeometry(look, { scale = 1, pose = "stand" } = {}) {
   // Arms: little nubs, up when riding.
   for (const sx of [-1, 1]) {
     if (pose === "ride") add(small, look.body, [sx * (R + 0.04), cy + H * 0.75, -0.02], [0, 0, sx * -0.3], [0.08, 0.2, 0.08]);
+    else if (pose === "wave") {
+      // One arm up and out in a big wave, the other at the side.
+      if (sx > 0) add(small, look.body, [R + 0.14, cy + H * 0.7, -0.02], [0, 0, -0.7], [0.08, 0.24, 0.08]);
+      else add(small, look.body, [-(R + 0.02), cy - H * 0.05, -0.02], [0, 0, -0.35], [0.07, 0.17, 0.08]);
+    }
     else add(small, look.body, [sx * (R + 0.02), cy - H * 0.05, -0.02], [0, 0, sx * 0.35], [0.07, 0.17, 0.08]);
   }
   // Eyes: big whites, dark pupils, a highlight each.

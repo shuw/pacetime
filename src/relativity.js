@@ -88,3 +88,12 @@ export function seenTimeOf(path, eye, T = world.t, span = 600) {
   }
   return (lo + hi) / 2;
 }
+
+// Speeds for people: km/h, with a decimal while they're small.
+export function kmh(v) {
+  const k = v * 3.6;
+  if (k >= 1e9) return `${Number((k / 1e9).toFixed(2))} billion km/h`;
+  if (k >= 1e6) return `${Number((k / 1e6).toFixed(1))} million km/h`;
+  if (k >= 100) return `${Math.round(k).toLocaleString("en-US")} km/h`;
+  return `${Number(k.toFixed(1))} km/h`;
+}

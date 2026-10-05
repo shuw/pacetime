@@ -1,4 +1,4 @@
-import { effects, lightSpeed, world } from "./relativity.js";
+import { effects, kmh, lightSpeed, world } from "./relativity.js";
 import { shared } from "./shaders.js";
 
 // Gentle softens the color shift, brightening and bending; true to life is the real thing.
@@ -30,7 +30,7 @@ const TOGGLES = [
   ["ghosts", "Where things really are", "x-ray"],
 ];
 
-const fmtC = (c) => `${c < 10 ? c.toFixed(1) : Math.round(c)} m/s`;
+const fmtC = kmh;
 export const cWord = (c) => C_WORDS.find(([v]) => c <= v)[1];
 
 let setLight = () => {};
@@ -121,10 +121,39 @@ function showNote(text) {
   if (text) noteTimer = setTimeout(() => el.classList.remove("show"), 9000);
 }
 
+// 0.533, 0.990, 0.99996…: enough digits to show every nine.
+export function formatBeta(b, omb) {
+  if (b < 0.99) return b.toFixed(3);
+  const nines = Math.floor(-Math.log10(Math.max(omb, 1e-15)));
+  const k = Math.min(15, nines + 2);
+  return (Math.floor((1 - omb) * 10 ** k) / 10 ** k).toFixed(k);
+}
+
+// Seconds, until they get long: then minutes, hours, days and years.
+export function formatTime(s, unit = "") {
+  if (s < 10000) return s.toFixed(1) + unit;
+  const units = [[60, "min"], [3600, "h"], [86400, "days"], [31557600, "years"]];
+  let [d, name] = units[0];
+  for (const u of units) if (s >= u[0] * 2) [d, name] = u;
+  const v = s / d;
+  return `${v < 100 ? v.toFixed(1) : Math.round(v).toLocaleString("en-US")} ${name}`;
+}
+
+// For sentences: "32 seconds", "12 minutes", "1 hour 43 minutes", "3.2 days".
+export function humanTime(s) {
+  const n = (v, unit) => `${v} ${unit}${v === 1 ? "" : "s"}`;
+  if (s < 90) return n(Math.round(s), "second");
+  if (s < 5400) return n(Math.round(s / 60), "minute");
+  if (s < 172800) { const h = Math.floor(s / 3600), m = Math.round((s - h * 3600) / 60); return m ? `${n(h, "hour")} ${n(m, "minute")}` : n(h, "hour"); }
+  if (s < 3 * 31557600) return `${(s / 86400).toFixed(s < 864000 ? 1 : 0)} days`;
+  return `${(s / 31557600).toLocaleString("en-US", { maximumFractionDigits: 1 })} years`;
+}
+
 export function updateHud({ player, instance, locked, prompt }) {
   const b = player.beta;
-  $("beta").textContent = b > 0.999 ? b.toFixed(5) : b.toFixed(3);
-  $("gamma").textContent = `γ ${player.gamma < 100 ? player.gamma.toFixed(2) : Math.round(player.gamma)}`;
+  $("beta").textContent = formatBeta(b, player.omb);
+  const g = player.gamma;
+  $("gamma").textContent = `γ ${g < 100 ? g.toFixed(2) : Math.round(g).toLocaleString("en-US")}`;
   $("speed-fill").style.width = `${(b * 100).toFixed(2)}%`;
   $("riding").textContent = player.vehicle ? "· riding" : "";
   // Which pace is in effect (a held key wins over the chosen pace), and a
@@ -138,10 +167,10 @@ export function updateHud({ player, instance, locked, prompt }) {
   });
 
   $("tau").textContent = player.tau.toFixed(1);
-  $("worldt").textContent = world.t.toFixed(1);
+  $("worldt").textContent = formatTime(world.t);
   const gap = world.t - player.tau;
   $("younger-row").hidden = gap < 0.05;
-  $("younger").textContent = `${gap.toFixed(1)} s`;
+  $("younger").textContent = formatTime(gap, " s");
 
   const goals = instance.goals ?? [];
   const sig = goals.map((g) => g.text + g.done).join("|");
@@ -190,6 +219,10 @@ export function updateHud({ player, instance, locked, prompt }) {
     $("clock-time").textContent = clock.text;
     $("clock-icon").classList.toggle("moon", !clock.sun);
   }
+
+  // Places with light at its real speed have no light slider.
+  document.querySelector(".gauge .light").hidden = !!instance.fixedC;
+  document.querySelector('#lab label[for="c-slider"]').hidden = !!instance.fixedC;
 
   $("prompt").hidden = !prompt;
   $("act-btn").hidden = !prompt;
