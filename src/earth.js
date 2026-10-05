@@ -87,7 +87,7 @@ export function reflection(obj, y0 = 0, strength = 0.45, { stretch = 1 } = {}) {
 export function lampPost(x, z, { h = 4, color = "#ffcf8a", pole = "#2a2622", range = 6, power = 1, switched = false, fancy = false } = {}) {
   const g = new THREE.Group();
   g.userData.lamp = { pos: new THREE.Vector3(x, h + 0.2, z), color: new THREE.Color(color), range, power, switched };
-  g.add(box(0.12, h, 0.12, { color: pole, ir: 0.2 }, [x, h / 2, z]));
+  g.add(box(0.12, h, 0.12, { color: pole, ir: 0.2, surface: "paint" }, [x, h / 2, z]));
   if (fancy) {
     // A Victorian seaside lamp: a fluted base, a crown and a glass globe.
     g.add(mesh(G.cyl, mat({ color: pole, ir: 0.2 }), { pos: [x, 0.35, z], scale: [0.22, 0.7, 0.22] }));
@@ -182,11 +182,11 @@ export function neon(text, { pos = [0, 0, 0], rotY = 0, size = 0.25, color = "#f
 // A cottage with a pitched roof (snow optional) and lit windows.
 export function cottage(x, z, rotY = 0, { w = 6, d = 5, h = 3.4, color = "#6b4a3a", roof = "#2b2f3a", snow = false, seed = 1 } = {}) {
   const g = new THREE.Group();
-  g.add(box(w, h, d, { color, ir: 0.5, windows: { size: [1.6, 1.7], lit: 0.7, color: "#ffc070", seed } }, [0, h / 2, 0]));
+  g.add(box(w, h, d, { color, ir: 0.5, surface: "plaster", windows: { size: [1.6, 1.7], lit: 0.7, color: "#ffc070", seed } }, [0, h / 2, 0]));
   const roofGeo = new THREE.CylinderGeometry(0.01, 1, 1, 3, 1);
   roofGeo.rotateZ(Math.PI / 2);
   roofGeo.rotateY(Math.PI / 2);
-  g.add(mesh(roofGeo, mat({ color: snow ? "#e6eef6" : roof, ir: 0.5, uv: snow ? 0.4 : 0.1 }), { pos: [0, h + 1.1, 0], scale: [w + 0.6, 2.2, (d + 0.8) / 1.5], rot: [0, Math.PI / 2, 0] }));
+  g.add(mesh(roofGeo, mat({ color: snow ? "#e6eef6" : roof, ir: 0.5, uv: snow ? 0.4 : 0.1, surface: snow ? null : "tiles" }), { pos: [0, h + 1.1, 0], scale: [w + 0.6, 2.2, (d + 0.8) / 1.5], rot: [0, Math.PI / 2, 0] }));
   g.add(box(0.6, 1.6, 0.6, { color: "#4a3a34" }, [w * 0.25, h + 1.6, d * 0.15]));
   g.add(box(1, 1.9, 0.05, { color: "#ffb35a", emissive: 0.8, ir: 1 }, [0, 0.95, d / 2 + 0.03]));
   g.position.set(x, 0, z);
@@ -194,12 +194,34 @@ export function cottage(x, z, rotY = 0, { w = 6, d = 5, h = 3.4, color = "#6b4a3
   return g;
 }
 
-export function mountain(x, z, r, h, { snowLine = 0.55 } = {}) {
-  const g = new THREE.Group();
-  g.add(mesh(new THREE.ConeGeometry(r, h, 7, 4), mat({ color: "#2c3546", ir: 0.4, uv: 0.1 }), { pos: [x, h / 2 - 2, z], rot: [0, x * 0.1, 0] }));
-  const capH = h * (1 - snowLine);
-  g.add(mesh(new THREE.ConeGeometry(r * (1 - snowLine) * 1.02, capH, 7, 2), mat({ color: "#e3ebf5", ir: 0.6, uv: 0.5 }), { pos: [x, h - capH / 2 - 2 + 0.05, z], rot: [0, x * 0.1, 0] }));
-  return g;
+// A craggy peak: a cone pushed out into ridges and gullies, rock shading
+// darkening into crevices, and snow that thins out unevenly below the summit.
+export function mountain(x, z, r, h, { snowLine = 0.55, seed = 1 } = {}) {
+  const rand = rng(Math.round(x * 13 + z * 7 + seed * 101));
+  const ridges = 4 + Math.floor(rand() * 4), twist = rand() * 6.28, lean = (rand() - 0.5) * 0.3;
+  const geo = new THREE.ConeGeometry(r, h, 72, 28);
+  const p = geo.attributes.position, col = new Float32Array(p.count * 3);
+  const rock = new THREE.Color("#5b6170"), dark = new THREE.Color("#2e3340"), snow = new THREE.Color("#dfe8f2"), c = new THREE.Color();
+  const wobble = (a, t) => Math.sin(a * 3 + t * 9 + seed) * 0.5 + Math.sin(a * 7.3 - t * 13 + seed * 2) * 0.3 + Math.sin(a * 17.1 + t * 31) * 0.2;
+  for (let i = 0; i < p.count; i++) {
+    const t = (p.getY(i) + h / 2) / h; // 0 at the foot, 1 at the summit
+    const vx = p.getX(i), vz = p.getZ(i), a = Math.atan2(vz, vx);
+    // Ridges running down from the summit, with a wobble so no two match.
+    const ridge = Math.pow(Math.abs(Math.cos((a + twist + t * 1.5) * ridges / 2)), 3);
+    const k = 1 + 0.4 * ridge * (1 - t) - 0.22 * (1 - ridge) * Math.sin(t * Math.PI) + 0.12 * wobble(a, t) * (1 - t * 0.8);
+    p.setX(i, vx * k + lean * t * r * 0.3);
+    p.setZ(i, vz * k);
+    p.setY(i, p.getY(i) + h / 2 - 2);
+    // Snow lies above a ragged line, thicker on ridges, thinner in gullies.
+    const line = snowLine + 0.08 * wobble(a * 1.7, t) - 0.08 * ridge;
+    const cover = THREE.MathUtils.smoothstep(t, line - 0.03, line + 0.04);
+    c.copy(dark).lerp(rock, 0.4 + 0.6 * ridge).multiplyScalar(0.85 + 0.3 * rand());
+    c.lerp(snow, cover);
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  geo.computeVertexNormals();
+  return mesh(geo, mat({ color: "#ffffff", vertexColors: true, ir: 0.45, uv: 0.2, surface: "rock", vary: 0.04, rough: 0.8 }), { pos: [x, 0, z], rot: [0, x * 0.1, 0] });
 }
 
 const FIREWORK_COLORS = ["#ff5a7a", "#ffd166", "#7bdcff", "#b98cff", "#7dffb0", "#ffffff", "#ff9f40"];

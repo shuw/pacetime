@@ -70,10 +70,10 @@ export class Train {
   // of glass between, a pale roof, and a passenger or two at every window.
   paint(look, { cars, carLen, gap, width, height, m, add }) {
     const rand = rng(look.seed ?? 3);
-    const body = m({ color: look.body, ir: 0.5, uv: 0.2 });
-    const roof = m({ color: look.roof, ir: 0.5, uv: 0.3 });
-    const trim = m({ color: look.trim, ir: 0.6, uv: 0.4 });
-    const dark = m({ color: "#2a2a33", ir: 0.2 });
+    const body = m({ color: look.body, ir: 0.5, uv: 0.2, surface: "paint" });
+    const roof = m({ color: look.roof, ir: 0.5, uv: 0.3, surface: "paint" });
+    const trim = m({ color: look.trim, ir: 0.6, uv: 0.4, surface: "paint" });
+    const dark = m({ color: "#2a2a33", ir: 0.2, surface: "metal" });
     const glass = m({ color: "#9fd4ff", additive: true, opacity: 0.12, ir: 0.1, uv: 0.3 });
     const sill = 1.0, lintel = 2.55;
     for (let i = 0; i < cars; i++) {

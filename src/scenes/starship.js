@@ -419,7 +419,7 @@ export default {
       spawn: [0, 2.6, 0],
       far: 2e6,
       env: {
-        night: 1, space: 1, sunDisk: 0, sun: BODIES.sun.at.toArray(), sunColor: BODIES.sun.color, sky: [0.06, 0.055, 0.1], ground: [0, 0, 0],
+        vary: 0, night: 1, space: 1, sunDisk: 0, sun: BODIES.sun.at.toArray(), sunColor: BODIES.sun.color, sky: [0.06, 0.055, 0.1], ground: [0, 0, 0],
         fog: "#000000", fogRange: [1e7, 2e7], skyTop: "#000000", skyHorizon: "#000000",
       },
       post: { bloom: { strength: 0.6, radius: 0.45, threshold: 0.7 } },

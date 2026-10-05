@@ -22,7 +22,7 @@ const ONBOARD = -3; // where each train's clock sits, from its middle
 const GROUND = -0.6; // the meadow and the track bed, below the platform
 const EDGE = 3.6; // the platform's edge
 
-const AFTERNOON = { p: 0, hour: 15.5, elev: 0.42, sun: [1.3, 1.16, 0.95], sky: [0.42, 0.48, 0.6], ground: [0.42, 0.44, 0.3], top: "#3a78d0", hor: "#e6eef8", fog: "#dbe7f2", lit: "#ffffff", shade: "#b6c4d8", clouds: 0.38, stars: 0, night: 0, fogNear: 260, fogFar: 1500, bloom: [0.25, 0.92], dark: 0 };
+const AFTERNOON = { p: 0, hour: 15.5, elev: 0.48, sun: [1.45, 1.28, 1.02], sky: [0.3, 0.36, 0.48], ground: [0.3, 0.32, 0.2], top: "#3a78d0", hor: "#e6eef8", fog: "#dbe7f2", lit: "#ffffff", shade: "#b6c4d8", clouds: 0.38, stars: 0, night: 0, fogNear: 260, fogFar: 1500, bloom: [0.25, 0.92], dark: 0 };
 
 const bounce = (s) => {
   const p = ((world.c * s) % (2 * H) + 2 * H) % (2 * H);
@@ -49,7 +49,7 @@ function tickLamps(parent, materialFor, x, y, z) {
 function lightClock(extra = {}, { tower = false } = {}) {
   const g = new THREE.Group();
   const m = (o) => ({ ...o, ...extra });
-  const brass = m({ color: "#d8a94a", ir: 0.7, uv: 0.3 });
+  const brass = m({ color: "#d8a94a", ir: 0.7, uv: 0.3, surface: "metal" });
   for (const y of [BASE, BASE + H]) {
     g.add(mesh(G.cyl, mat(brass), { pos: [0, y, 0], scale: [0.62, 0.08, 0.62] }));
     g.add(mesh(new THREE.TorusGeometry(0.62, 0.04, 8, 40), mat(brass), { pos: [0, y, 0], rot: [Math.PI / 2, 0, 0] }));
@@ -60,8 +60,8 @@ function lightClock(extra = {}, { tower = false } = {}) {
   }
   g.add(mesh(new THREE.CylinderGeometry(0.58, 0.58, H, 32, 1, true), mat(m({ color: "#cfeaff", additive: true, opacity: 0.12, ir: 0.1, uv: 0.2, doubleSided: true, unique: true })), { pos: [0, BASE + H / 2, 0] }));
   if (tower) {
-    g.add(mesh(G.cyl, mat({ color: "#e8dcc4", ir: 0.5 }), { pos: [0, BASE / 2 - 0.02, 0], scale: [0.8, BASE, 0.8] }));
-    g.add(mesh(new THREE.ConeGeometry(0.95, 0.9, 8), mat({ color: "#b8322c", ir: 0.5 }), { pos: [0, BASE + H + 0.75, 0] }));
+    g.add(mesh(G.cyl, mat({ color: "#e8dcc4", ir: 0.5, surface: "stone" }), { pos: [0, BASE / 2 - 0.02, 0], scale: [0.8, BASE, 0.8] }));
+    g.add(mesh(new THREE.ConeGeometry(0.95, 0.9, 8), mat({ color: "#b8322c", ir: 0.5, surface: "tiles" }), { pos: [0, BASE + H + 0.75, 0] }));
     g.add(mesh(G.sphere, mat({ color: "#d8a94a", ir: 0.7 }), { pos: [0, BASE + H + 1.28, 0], scale: 0.12 }));
   }
   return g;
@@ -71,14 +71,14 @@ function lightClock(extra = {}, { tower = false } = {}) {
 function gate(x, width = 5.4, height = 4.6) {
   const g = new THREE.Group();
   const slab = new THREE.Group();
-  slab.add(box(0.3, height, width, { color: "#b8322c", ir: 0.5 }, [0, height / 2, 0]));
-  const trim = { color: "#f4efe6", ir: 0.6 };
+  slab.add(box(0.3, height, width, { color: "#b8322c", ir: 0.5, surface: "wood" }, [0, height / 2, 0]));
+  const trim = { color: "#f4efe6", ir: 0.6, surface: "paint" };
   for (const [y, h] of [[0.15, 0.3], [height - 0.15, 0.3], [height / 2, 0.22]]) slab.add(box(0.34, h, width, trim, [0, y, 0]));
   for (const s of [-1, 1]) slab.add(box(0.34, height, 0.25, trim, [0, height / 2, (s * width) / 2]));
   for (const s of [-1, 1]) slab.add(box(0.33, 0.22, Math.hypot(width, height) * 0.48, trim, [0, height * 0.25, 0], [Math.atan2(height / 2, width) * s, 0, 0]));
   slab.children.forEach((c) => (c.position.y += GROUND));
   g.add(slab);
-  const iron = { color: "#f4efe6", ir: 0.5 };
+  const iron = { color: "#f4efe6", ir: 0.5, surface: "paint" };
   for (const s of [-1, 1]) g.add(box(0.3, height * 2 + 0.6, 0.3, iron, [0, GROUND + height + 0.3, s * (width / 2 + 0.3)]));
   g.add(box(0.32, 0.3, width + 1, iron, [0, GROUND + height * 2 + 0.6, 0]));
   const lamp = mat({ color: "#ff5a4a", emissive: 1, unlit: true, unique: true });
@@ -156,10 +156,10 @@ function cow(x, z, rotY, seed) {
 // A tunnel mouth in a grassy hill at the end of the line.
 function hillTunnel(x, dir) {
   const g = new THREE.Group();
-  g.add(mesh(G.sphere, mat({ color: "#5f9a48", ir: 1.2, uv: 0.1 }), { pos: [x + dir * 32, GROUND - 4, 0], scale: [38, 24, 52] }));
-  const stone = mat({ color: "#a39a8a", ir: 0.5 });
+  g.add(mesh(G.sphere, mat({ color: "#5f9a48", ir: 1.2, uv: 0.1, surface: "grass" }), { pos: [x + dir * 32, GROUND - 4, 0], scale: [38, 24, 52] }));
+  const stone = mat({ color: "#a39a8a", ir: 0.5, surface: "stone" });
   g.add(mesh(new THREE.TorusGeometry(3.6, 0.8, 8, 24, Math.PI), stone, { pos: [x, GROUND + 3.2, 0], rot: [0, Math.PI / 2, 0] }));
-  for (const s of [-1, 1]) g.add(box(1.2, 3.4, 1.6, { color: "#a39a8a", ir: 0.5 }, [x, GROUND + 1.6, s * 3.6]));
+  for (const s of [-1, 1]) g.add(box(1.2, 3.4, 1.6, { color: "#a39a8a", ir: 0.5, surface: "stone" }, [x, GROUND + 1.6, s * 3.6]));
   g.add(mesh(new THREE.CircleGeometry(3.6, 32, 0, Math.PI), mat({ color: "#0d0c10", unlit: true, doubleSided: true }), { pos: [x + dir * 0.4, GROUND + 3.2, 0], rot: [0, Math.PI / 2, 0] }));
   g.add(box(0.4, 3.4, 7.2, { color: "#0d0c10", unlit: true }, [x + dir * 0.4, GROUND + 1.6, 0]));
   return g;
@@ -187,18 +187,18 @@ export default {
     const rand = rng(11);
 
     // The valley: a meadow, the track bed, alps and pines all round.
-    group.add(surface({ color: "#6aa84f", ir: 1.3, uv: 0.1, checker: { b: "#64a24a", size: 9 }, flashes }, { y: GROUND, radius: 2400 }));
+    group.add(surface({ color: "#6aa84f", ir: 1.3, uv: 0.1, surface: "grass", flashes }, { y: GROUND, radius: 2400 }));
     // Rolling green foothills before the mountains.
     for (let i = 0; i < 9; i++) {
       const x = -700 + i * 170 + rand() * 60;
       group.add(mesh(G.sphere, mat({ color: i % 2 ? "#5f9a48" : "#6aa04e", ir: 1.2, uv: 0.1 }), { pos: [x, GROUND - 8, -260 - rand() * 80], scale: [90 + rand() * 50, 34 + rand() * 18, 60] }));
       group.add(mesh(G.sphere, mat({ color: i % 2 ? "#6aa04e" : "#5f9a48", ir: 1.2, uv: 0.1 }), { pos: [x + 60, GROUND - 8, 300 + rand() * 80], scale: [80 + rand() * 40, 26 + rand() * 14, 60] }));
     }
-    group.add(box(2 * P + 24, 0.06, 5, { color: "#8a8076", ir: 0.4, flashes }, [0, GROUND + 0.03, 0]));
-    for (const s of [-0.75, 0.75]) group.add(box(2 * P + 24, 0.12, 0.12, { color: "#c9ccd4", ir: 0.4, uv: 0.4 }, [0, GROUND + 0.12, s]));
+    group.add(box(2 * P + 24, 0.06, 5, { color: "#8a8076", ir: 0.4, surface: "gravel", flashes }, [0, GROUND + 0.03, 0]));
+    for (const s of [-0.75, 0.75]) group.add(box(2 * P + 24, 0.12, 0.12, { color: "#c9ccd4", ir: 0.4, uv: 0.4, surface: "metal" }, [0, GROUND + 0.12, s]));
     {
       const n = Math.floor((2 * P + 24) / 0.9);
-      const sleepers = new THREE.InstancedMesh(G.box, mat({ color: "#5a4030", ir: 0.4 }), n);
+      const sleepers = new THREE.InstancedMesh(G.box, mat({ color: "#5a4030", ir: 0.4, surface: "wood" }), n);
       const m4 = new THREE.Matrix4();
       for (let i = 0; i < n; i++) sleepers.setMatrixAt(i, m4.compose(new THREE.Vector3(-P - 12 + i * 0.9, GROUND + 0.07, 0), new THREE.Quaternion(), new THREE.Vector3(0.24, 0.1, 2.4)));
       group.add(sleepers);
@@ -206,9 +206,9 @@ export default {
     group.add(hillTunnel(-P, -1), hillTunnel(P, 1));
     for (let i = 0; i < 12; i++) {
       const x = -900 + i * 165 + rand() * 60, z = -420 - rand() * 380;
-      group.add(mountain(x, z, 110 + rand() * 90, 170 + rand() * 170, { snowLine: 0.58 }));
+      group.add(mountain(x, z, 110 + rand() * 90, 170 + rand() * 170, { snowLine: 0.58, seed: i }));
     }
-    for (let i = 0; i < 8; i++) group.add(mountain(-800 + i * 230 + rand() * 50, 520 + rand() * 260, 90 + rand() * 60, 110 + rand() * 90, { snowLine: 0.66 }));
+    for (let i = 0; i < 8; i++) group.add(mountain(-800 + i * 230 + rand() * 50, 520 + rand() * 260, 90 + rand() * 60, 110 + rand() * 90, { snowLine: 0.66, seed: 20 + i }));
     const pines = [];
     for (let i = 0; i < 90; i++) {
       const far = rand() < 0.5;
@@ -234,8 +234,8 @@ export default {
     // behind, lamp posts with bunting, benches and flower boxes.
     const plank = { color: "#b8834f", ir: 0.6, uv: 0.1, planks: true, flashes };
     group.add(box(2 * P + 16, 0.2, 6, plank, [0, -0.1, EDGE + 3]));
-    group.add(box(2 * P + 16, 0.2, 14.5, { color: "#d8cfbf", ir: 0.5, uv: 0.2, checker: { b: "#d1c7b4", size: 1.2 }, flashes }, [0, -0.1, EDGE + 6 + 7.25]));
-    group.add(box(2 * P + 16, -GROUND, 0.4, { color: "#a39a8a", ir: 0.4 }, [0, GROUND / 2, EDGE - 0.2]));
+    group.add(box(2 * P + 16, 0.2, 14.5, { color: "#d8cfbf", ir: 0.5, uv: 0.2, surface: "paving", flashes }, [0, -0.1, EDGE + 6 + 7.25]));
+    group.add(box(2 * P + 16, -GROUND, 0.4, { color: "#a39a8a", ir: 0.4, surface: "stone" }, [0, GROUND / 2, EDGE - 0.2]));
     group.add(box(2 * P + 16, 0.02, 0.22, { color: "#ffd166", ir: 0.6, uv: 0.4 }, [0, 0.01, EDGE + 0.4]));
     for (let x = -P + 6; x <= P - 6; x += 24) {
       group.add(lampPost(x, EDGE + 5.6, { h: 3.8, fancy: true, pole: "#23465a", color: "#ffe6b0", range: 6, power: 0.4 }));
@@ -246,24 +246,24 @@ export default {
         group.add(flag);
       }
       // A bench and a flower box between the lamps.
-      group.add(box(2.2, 0.08, 0.5, { color: "#8a5a3a", ir: 0.5 }, [x + 12, 0.45, EDGE + 13]));
-      group.add(box(2.2, 0.5, 0.08, { color: "#8a5a3a", ir: 0.5 }, [x + 12, 0.75, EDGE + 13.25]));
+      group.add(box(2.2, 0.08, 0.5, { color: "#8a5a3a", ir: 0.5, surface: "wood" }, [x + 12, 0.45, EDGE + 13]));
+      group.add(box(2.2, 0.5, 0.08, { color: "#8a5a3a", ir: 0.5, surface: "wood" }, [x + 12, 0.75, EDGE + 13.25]));
       for (const sx of [-0.9, 0.9]) group.add(box(0.08, 0.45, 0.45, { color: "#2b2d33" }, [x + 12 + sx, 0.22, EDGE + 13]));
-      group.add(box(1.8, 0.4, 0.5, { color: "#7a4a2a", ir: 0.4 }, [x + 6, 0.2, EDGE + 19.5]));
+      group.add(box(1.8, 0.4, 0.5, { color: "#7a4a2a", ir: 0.4, surface: "wood" }, [x + 6, 0.2, EDGE + 19.5]));
       for (let k = 0; k < 6; k++) group.add(mesh(G.ball, mat({ color: ["#ff5a7a", "#ffd166", "#f4f1ea", "#c77dff"][k % 4], ir: 0.8, uv: 0.5 }), { pos: [x + 5.3 + k * 0.28, 0.48, EDGE + 19.5], scale: 0.16 }));
     }
     // The station house behind the promenade, with its own clock.
     {
       const sx = -128, sz = 28.5;
-      group.add(box(16, 6, 7, { color: "#f2e8d5", ir: 0.5, windows: { size: [1.8, 2.2], lit: 0.2, color: "#ffc070", seed: 4 } }, [sx, 3 + GROUND, sz]));
-      for (const x of [-8, -2.7, 2.7, 8]) group.add(box(0.35, 6, 0.35, { color: "#5a3a26", ir: 0.4 }, [sx + x, 3 + GROUND, sz - 3.55]));
-      group.add(box(16.4, 0.35, 0.35, { color: "#5a3a26", ir: 0.4 }, [sx, 3.1 + GROUND, sz - 3.55]));
+      group.add(box(16, 6, 7, { color: "#f2e8d5", ir: 0.5, surface: "plaster", windows: { size: [1.8, 2.2], lit: 0.2, color: "#ffc070", seed: 4 } }, [sx, 3 + GROUND, sz]));
+      for (const x of [-8, -2.7, 2.7, 8]) group.add(box(0.35, 6, 0.35, { color: "#5a3a26", ir: 0.4, surface: "wood" }, [sx + x, 3 + GROUND, sz - 3.55]));
+      group.add(box(16.4, 0.35, 0.35, { color: "#5a3a26", ir: 0.4, surface: "wood" }, [sx, 3.1 + GROUND, sz - 3.55]));
       // A pitched roof: a triangular prism along the building.
       const roofShape = new THREE.Shape([new THREE.Vector2(-4.4, 0), new THREE.Vector2(4.4, 0), new THREE.Vector2(0, 3.2)]);
       const roof = new THREE.ExtrudeGeometry(roofShape, { depth: 17.4, bevelEnabled: false });
       roof.translate(0, 0, -8.7);
       roof.rotateY(Math.PI / 2);
-      group.add(mesh(roof, mat({ color: "#b8322c", ir: 0.5 }), { pos: [sx, 6 + GROUND, sz] }));
+      group.add(mesh(roof, mat({ color: "#b8322c", ir: 0.5, surface: "tiles" }), { pos: [sx, 6 + GROUND, sz] }));
       const board = box(7, 1.3, 0.2, { color: "#f4f1ea", ir: 0.5 }, [sx, 5.2 + GROUND, sz - 3.7]);
       group.add(board);
       const name = neon("BERN", { size: 0.22, color: "#7a1f1a", width: 0.09 });
@@ -279,7 +279,7 @@ export default {
     // On the promenade: a ticket kiosk, a fountain, and topiary in planters.
     {
       const kx = -40, kz = 21.5;
-      group.add(box(4, 2.6, 2.4, { color: "#f2e8d5", ir: 0.5 }, [kx, 1.3, kz]));
+      group.add(box(4, 2.6, 2.4, { color: "#f2e8d5", ir: 0.5, surface: "plaster" }, [kx, 1.3, kz]));
       group.add(box(2.4, 1.0, 0.1, { color: "#3a2a20" }, [kx, 1.5, kz - 1.25]));
       for (let i = 0; i < 6; i++) group.add(box(0.7, 0.08, 1.4, { color: i % 2 ? "#f4f1ea" : "#c8282d", ir: 0.5 }, [kx - 1.75 + i * 0.7, 2.75, kz - 1.6], [0.35, 0, 0]));
       const label = neon("TICKETS", { size: 0.09, color: "#7a1f1a", width: 0.035 });
@@ -290,12 +290,12 @@ export default {
       group.add(label);
       group.add(person(randomLook(rand), { pos: [kx, 0.2, kz - 0.5], scale: 0.9 }));
       const fx = 110, fz = 16;
-      group.add(mesh(G.cyl, mat({ color: "#d8cfbf", ir: 0.5 }), { pos: [fx, 0.3, fz], scale: [2.6, 0.6, 2.6] }));
-      group.add(mesh(G.cyl, mat({ color: "#4cb6e0", ir: 0.2, uv: 0.4, emissive: 0.15 }), { pos: [fx, 0.58, fz], scale: [2.35, 0.06, 2.35] }));
-      group.add(mesh(G.cyl, mat({ color: "#d8cfbf", ir: 0.5 }), { pos: [fx, 1.1, fz], scale: [0.3, 1.2, 0.3] }));
+      group.add(mesh(G.cyl, mat({ color: "#d8cfbf", ir: 0.5, surface: "stone" }), { pos: [fx, 0.3, fz], scale: [2.6, 0.6, 2.6] }));
+      group.add(mesh(G.cyl, mat({ color: "#4cb6e0", ir: 0.2, uv: 0.4, emissive: 0.15, rough: 0.05 }), { pos: [fx, 0.58, fz], scale: [2.35, 0.06, 2.35] }));
+      group.add(mesh(G.cyl, mat({ color: "#d8cfbf", ir: 0.5, surface: "stone" }), { pos: [fx, 1.1, fz], scale: [0.3, 1.2, 0.3] }));
       group.add(mesh(G.sphere, mat({ color: "#bff0ff", additive: true, opacity: 0.35, emissive: 0.6 }), { pos: [fx, 1.9, fz], scale: [0.7, 0.45, 0.7] }));
       for (let x = -P + 30; x <= P - 18; x += 24) for (const z of [20.5]) {
-        group.add(box(1.2, 0.7, 1.2, { color: "#7a4a2a", ir: 0.4 }, [x, 0.35, z]));
+        group.add(box(1.2, 0.7, 1.2, { color: "#7a4a2a", ir: 0.4, surface: "wood" }, [x, 0.35, z]));
         group.add(mesh(G.sphere, mat({ color: "#3f8a45", ir: 1.3, uv: 0.1 }), { pos: [x, 1.6, z], scale: 0.85 }));
         group.add(mesh(G.sphere, mat({ color: "#3f8a45", ir: 1.3, uv: 0.1 }), { pos: [x, 2.55, z], scale: 0.55 }));
       }
@@ -306,7 +306,7 @@ export default {
     // A painted ring and a signpost at each place to watch from.
     const signpost = (x, z, text, color) => {
       group.add(marker(x, z, color));
-      group.add(box(0.12, 2.2, 0.12, { color: "#5a3a26", ir: 0.4 }, [x + 1.6, 1.1, z]));
+      group.add(box(0.12, 2.2, 0.12, { color: "#5a3a26", ir: 0.4, surface: "wood" }, [x + 1.6, 1.1, z]));
       const s = neon(text, { size: 0.1, color: "#2b2622", width: 0.04 });
       group.add(box(s.textWidth + 0.5, 0.75, 0.08, { color }, [x + 1.6, 2.1, z]));
       s.position.set(x + 1.6 - s.textWidth / 2, 1.9, z + 0.06);
@@ -334,7 +334,7 @@ export default {
 
     // The glasshouse tunnel: white iron arches, glass between, red doors.
     {
-      const iron = mat({ color: "#f4f1ea", ir: 0.6, uv: 0.3 });
+      const iron = mat({ color: "#f4f1ea", ir: 0.6, uv: 0.3, surface: "paint" });
       const R = 2.9, CY = 2.1;
       for (let x = ENTRY; x <= EXIT + 0.01; x += 4) {
         group.add(mesh(new THREE.TorusGeometry(R, 0.09, 6, 32, Math.PI), iron, { pos: [x, CY, 0], rot: [0, Math.PI / 2, 0] }));
@@ -486,7 +486,7 @@ export default {
         fog: AFTERNOON.fog, fogRange: [AFTERNOON.fogNear, AFTERNOON.fogFar], skyTop: AFTERNOON.top, skyHorizon: AFTERNOON.hor,
       },
       shadows: true,
-      post: { bloom: { strength: 0.3, radius: 0.4, threshold: 0.9 } },
+      post: { bloom: { strength: 0.25, radius: 0.4, threshold: 0.97 } },
       goals,
       log,
       tips: [

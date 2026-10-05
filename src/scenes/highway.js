@@ -277,7 +277,7 @@ export default {
       walk: [[-5, -1e12, 5, 1e12]],
       spawn: [0, 0, 0],
       env: {
-        night: 1, space: 1, sun: [0.55, 0.18, -0.82], sunColor: [0.5, 0.5, 0.6], sky: [0.06, 0.06, 0.1], ground: [0.02, 0.02, 0.03],
+        vary: 0, night: 1, space: 1, sun: [0.55, 0.18, -0.82], sunColor: [0.5, 0.5, 0.6], sky: [0.06, 0.06, 0.1], ground: [0.02, 0.02, 0.03],
         fog: "#05060c", fogRange: [700, 6000], skyTop: "#000000", skyHorizon: "#000000",
       },
       post: { bloom: { strength: 0.8, radius: 0.5, threshold: 0.5 } },

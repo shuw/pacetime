@@ -3,6 +3,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { reflScale, shared, skyMaterial } from "./shaders.js";
 import { effects, viewDoppler, world } from "./relativity.js";
 
@@ -132,8 +133,25 @@ const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(root, camera));
 export const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0, 0.5, 0.8);
 composer.addPass(bloom);
+// A finishing grade: corners gently darkened, shadows nudged cool and
+// highlights warm, and a little extra contrast.
+export const grade = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uVignette: { value: 0.32 }, uWarm: { value: 0.04 }, uContrast: { value: 0.06 } },
+  vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float uVignette, uWarm, uContrast; varying vec2 vUv;
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+      c.rgb += uWarm * mix(vec3(-0.6, -0.1, 0.8), vec3(0.8, 0.25, -0.6), smoothstep(0.05, 0.6, l)) * min(l, 1.0);
+      c.rgb = mix(c.rgb, c.rgb * c.rgb * (3.0 - 2.0 * c.rgb), uContrast * step(c.rgb, vec3(1.0)));
+      vec2 d = vUv - 0.5;
+      c.rgb *= 1.0 - uVignette * smoothstep(0.25, 0.85, dot(d, d) * 2.2);
+      gl_FragColor = c;
+    }`,
+});
+composer.addPass(grade);
 composer.addPass(new OutputPass());
-let usePost = false;
 
 /** Sky and light for a place. @param {import("./place.js").Env} e */
 export function applyEnv(e) {
@@ -144,6 +162,7 @@ export function applyEnv(e) {
   shared.uMoon.value = 1;
   shared.uAurora.value = e.aurora ?? 0;
   shared.uClouds.value = e.clouds ?? 0;
+  shared.uVaryOn.value = e.vary ?? 1;
   shared.uLightsOn.value = -1e9;
   shared.uLightsOff.value = 1e9;
   shared.uSun.value.set(...e.sun).normalize();
@@ -157,8 +176,10 @@ export function applyEnv(e) {
 }
 
 export function applyPost(post) {
-  usePost = !!post?.bloom;
-  if (usePost) Object.assign(bloom, post.bloom);
+  bloom.enabled = !!post?.bloom;
+  if (post?.bloom) Object.assign(bloom, post.bloom);
+  Object.assign(grade.uniforms.uVignette, { value: post?.vignette ?? 0.32 });
+  Object.assign(grade.uniforms.uWarm, { value: post?.warm ?? 0.04 });
 }
 
 // Draw the place as seen from eye: shadows and reflections first, then the view.
@@ -169,8 +190,7 @@ export function draw(place, eye) {
     renderShadow(place, eye);
     renderMirror(place);
   }
-  if (usePost) composer.render();
-  else renderer.render(root, camera);
+  composer.render();
 }
 
 // Compile a newly loaded place's shaders in the background, so its first

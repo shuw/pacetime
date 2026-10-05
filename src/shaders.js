@@ -45,6 +45,7 @@ export const shared = {
   uLampColor: { value: Array.from({ length: 8 }, () => new THREE.Color(0, 0, 0)) },
   uPointScale: { value: 600 },
   uExposure: { value: 1 },
+  uVaryOn: { value: 1 },
   uAberrK: { value: 0.55 },   // 1 = true to life; less softens the bending
   uObs: { value: new THREE.Vector4(1, 0, 1, 0) },  // γ, 1-β, and the same for bending
   uShiftAmt: { value: 0.4 },   // 1 = true to life; less softens the color shift
@@ -113,6 +114,8 @@ varying vec3 vNormalW;
 varying vec3 vWorld;
 varying vec3 vTint;
 varying float vDist;
+varying vec3 vPat;  // where this point is on its object at rest: textures stick to moving things
+varying vec3 vPatN;
 
 void main() {
   mat4 m = modelMatrix;
@@ -120,6 +123,8 @@ void main() {
     m = m * instanceMatrix;
   #endif
   vec4 wp = m * vec4(position, 1.0);
+  vPat = wp.xyz;
+  vPatN = mat3(m) * normal;
   #ifdef MOVER
     // Moving objects are built around the origin. Squash them along their
     // motion (Lorentz contraction), then find where this vertex was when the
@@ -358,6 +363,9 @@ uniform vec3 uVel;
 #endif
 uniform vec3 uGridColor;
 uniform vec3 uGrid; // spacing, line width in pixels, glow
+uniform vec4 uFinish; // roughness, large-scale variation, shine, metal (shine tinted by the surface)
+uniform float uVaryOn; // 0 in places whose world moves under you, where the variation would shimmer
+uniform vec3 uSkyTop;
 #ifdef ROAD
 uniform vec2 uRoad;
 uniform vec3 uRoadColor;
@@ -385,7 +393,6 @@ uniform vec3 uLampColor[8];
 varying vec3 vSrcVel;
 #endif
 #ifdef WATER
-uniform vec3 uSkyTop;
 uniform vec3 uSkyHorizon;
 uniform float uWave;
 uniform float uReflScale;
@@ -421,6 +428,8 @@ varying vec3 vNormalW;
 varying vec3 vWorld;
 varying vec3 vTint;
 varying float vDist;
+varying vec3 vPat;
+varying vec3 vPatN;
 uniform vec3 uCam;
 ${common}
 
@@ -477,6 +486,36 @@ float shadowTap(sampler2D map, mat4 M, vec3 p, float texelWorld, float bias) {
   }
   return lit / 9.0;
 }
+// Noise and helpers for surface textures, drawn in each object's rest frame.
+float hash12(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), f.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+float fbm2(vec2 p) {
+  return 0.55 * vnoise(p) + 0.3 * vnoise(p * 2.03 + 7.1) + 0.15 * vnoise(p * 4.07 + 3.3);
+}
+// Lay a pattern on whichever plane a surface mostly faces.
+vec2 planar(vec3 p, vec3 n) {
+  vec3 a = abs(n);
+  return a.y > a.x && a.y > a.z ? p.xz : (a.x > a.z ? p.zy : p.xy);
+}
+// Tilt the normal by the slope of a height pattern on screen, for relief.
+vec3 bumpN(vec3 N, vec3 p, float h, float k) {
+  vec3 dpx = dFdx(p), dpy = dFdy(p);
+  float dhx = dFdx(h), dhy = dFdy(h);
+  vec3 r1 = cross(dpy, N), r2 = cross(N, dpx);
+  float det = dot(dpx, r1);
+  if (abs(det) < 1e-9) return N;
+  vec3 g = sign(det) * (dhx * r1 + dhy * r2);
+  return normalize(abs(det) * N - k * 0.02 * g);
+}
+
 float sunVisible(vec3 p, vec3 N, float ndl) {
   if (uShadowOn <= 0.0) return 1.0;
   float grazing = 1.0 - clamp(ndl, 0.0, 1.0);
@@ -570,9 +609,165 @@ void main() {
     base = mix(base, uGridColor, line);
     e = mix(e, uGrid.z, line);
   #endif
+  float rough = uFinish.x;
+  float hgt = 0.0, bumpK = 0.0;
+  #ifndef UNLIT
+  {
+    vec3 sN = normalize(vPatN + 1e-6);
+    vec2 sq = planar(vPat, sN);
+    // How many metres one pixel covers here: fine detail fades out with distance.
+    float px = max(length(fwidth(sq)), 1e-5);
+    float fine = 1.0 - smoothstep(0.02, 0.08, px);
+    #ifdef SURF_GRASS
+    {
+      float big = fbm2(sq * 0.05), mid = fbm2(sq * 0.4), blade = vnoise(sq * 11.0);
+      base *= 0.72 + 0.45 * mid + 0.14 * (blade - 0.5) * fine;
+      base = mix(base, base * vec3(1.25, 1.1, 0.55), smoothstep(0.5, 0.75, big) * 0.75);
+      base = mix(base, base * vec3(0.7, 0.92, 0.72), smoothstep(0.45, 0.2, big) * 0.6);
+      // Tiny flowers, close by.
+      vec2 fc = floor(sq * 4.0);
+      float flower = step(0.985, hash12(fc)) * (1.0 - smoothstep(0.0, 0.18, length(fract(sq * 4.0) - 0.5))) * fine;
+      base = mix(base, hash12(fc + 1.0) > 0.5 ? vec3(1.0, 0.95, 0.6) : vec3(1.0, 1.0, 1.0), flower * 0.9);
+      hgt = mid + blade * 0.5 * fine; bumpK = 0.5;
+    }
+    #endif
+    #ifdef SURF_PAVING
+    {
+      // Stone flags in staggered rows, each its own shade, with soft joints.
+      vec2 size = vec2(0.9, 0.6);
+      vec2 g = sq / size;
+      g.x += hash12(vec2(floor(g.y), 3.0)) ;
+      vec2 cell = floor(g), f = fract(g);
+      float h = hash12(cell);
+      base *= 0.84 + 0.26 * h + 0.1 * (fbm2(sq * 2.5) - 0.5) + 0.05 * (vnoise(sq * 25.0) - 0.5) * fine;
+      base = mix(base, base * vec3(1.06, 1.0, 0.9), step(0.7, hash12(cell + 8.0))); // a few warmer stones
+      float edge = min(min(f.x, 1.0 - f.x) * size.x, min(f.y, 1.0 - f.y) * size.y);
+      float joint = (1.0 - smoothstep(0.006, 0.02, edge)) * (1.0 - smoothstep(0.015, 0.05, px));
+      base *= 1.0 - 0.3 * joint;
+      hgt = 1.0 - joint; bumpK = 0.7 * fine;
+    }
+    #endif
+    #ifdef SURF_COBBLE
+    {
+      vec2 g = sq / vec2(0.3, 0.24);
+      g.x += mod(floor(g.y), 2.0) * 0.5;
+      vec2 cell = floor(g), f = fract(g) - 0.5;
+      vec2 jit = vec2(hash12(cell + 7.7), hash12(cell + 1.3)) * 0.1 - 0.05;
+      float r = length((f - jit) * vec2(1.0, 1.1));
+      float stone = 1.0 - smoothstep(0.34, 0.47, r);
+      base *= mix(0.42, 0.8 + 0.34 * hash12(cell + 3.1), mix(1.0, stone, fine));
+      base *= 0.94 + 0.12 * vnoise(sq * 16.0) * fine;
+      hgt = stone * (1.0 - r); bumpK = 1.4 * fine;
+    }
+    #endif
+    #ifdef SURF_BRICK
+    {
+      vec2 size = vec2(0.24, 0.085);
+      vec2 g = sq / size;
+      g.x += mod(floor(g.y), 2.0) * 0.5;
+      vec2 cell = floor(g), f = fract(g);
+      float edge = min(min(f.x, 1.0 - f.x) * size.x, min(f.y, 1.0 - f.y) * size.y);
+      float mortar = (1.0 - smoothstep(0.004, 0.011, edge)) * fine;
+      vec3 brick = base * (0.74 + 0.4 * hash12(cell + 11.0)) * (0.94 + 0.12 * vnoise(sq * 30.0));
+      base = mix(brick, vec3(0.6, 0.58, 0.54) * (0.6 + 0.4 * dot(base, vec3(0.33))), mortar);
+      hgt = 1.0 - mortar; bumpK = 0.6 * fine;
+    }
+    #endif
+    #ifdef SURF_STONE
+    {
+      vec2 size = vec2(0.9, 0.42);
+      vec2 g = sq / size;
+      g.x += mod(floor(g.y), 2.0) * 0.37;
+      vec2 cell = floor(g), f = fract(g);
+      float edge = min(min(f.x, 1.0 - f.x) * size.x, min(f.y, 1.0 - f.y) * size.y);
+      float joint = (1.0 - smoothstep(0.01, 0.028, edge)) * fine;
+      base *= (0.78 + 0.34 * hash12(cell + 5.0)) * (0.86 + 0.28 * fbm2(sq * 1.6));
+      base *= 1.0 - 0.45 * joint;
+      hgt = 1.0 - joint + 0.3 * fbm2(sq * 4.0); bumpK = 0.7 * fine;
+    }
+    #endif
+    #ifdef SURF_ROCK
+    {
+      float m1 = fbm2(sq * 0.04), m2 = fbm2(sq * 0.3);
+      base *= 0.7 + 0.45 * m1 + 0.2 * (m2 - 0.5);
+      base *= 1.0 + 0.08 * sin(vPat.y * 0.9 + m1 * 6.0) * (1.0 - smoothstep(0.4, 1.5, px)); // layers, close up
+      hgt = m2; bumpK = 1.0;
+    }
+    #endif
+    #ifdef SURF_GRAVEL
+    {
+      vec2 g = sq / 0.07, cell = floor(g);
+      vec2 f = fract(g) - 0.5 - (vec2(hash12(cell), hash12(cell + 9.0)) - 0.5) * 0.4;
+      float pebble = 1.0 - smoothstep(0.25, 0.5, length(f));
+      base *= mix(0.55, 0.75 + 0.5 * hash12(cell + 2.0), mix(0.7, pebble, fine));
+      base *= 0.9 + 0.2 * fbm2(sq * 0.7);
+      hgt = pebble; bumpK = 0.8 * fine;
+    }
+    #endif
+    #ifdef SURF_TILES
+    {
+      vec2 g = sq / vec2(0.32, 0.22);
+      g.x += mod(floor(g.y), 2.0) * 0.5;
+      vec2 cell = floor(g), f = fract(g);
+      float lap = smoothstep(0.0, 0.4, f.y) * (0.75 + 0.25 * sin(f.x * 3.1416));
+      base *= (0.8 + 0.3 * hash12(cell + 4.0)) * mix(1.0, 0.55 + 0.45 * lap, fine);
+      hgt = lap; bumpK = 0.9 * fine;
+    }
+    #endif
+    #ifdef SURF_PLASTER
+    {
+      base *= 0.92 + 0.12 * fbm2(sq * 0.6) + 0.05 * (vnoise(sq * 14.0) - 0.5) * fine;
+      hgt = vnoise(sq * 14.0); bumpK = 0.2 * fine;
+    }
+    #endif
+    #ifdef SURF_ASPHALT
+    {
+      base *= 0.84 + 0.26 * fbm2(sq * 0.11) + 0.14 * (hash12(floor(sq * 45.0)) - 0.5) * fine;
+      float puddle = smoothstep(0.6, 0.68, fbm2(sq * 0.08 + 5.0));
+      base *= 1.0 - 0.4 * puddle;
+      rough = mix(rough, 0.06, puddle);
+      hgt = hash12(floor(sq * 45.0)) * (1.0 - puddle); bumpK = 0.3 * fine;
+    }
+    #endif
+    #ifdef SURF_WOOD
+    {
+      float w = fbm2(sq * vec2(0.6, 5.0));
+      base *= 0.86 + 0.1 * sin((sq.y * 7.0 + w * 3.0) * 6.2832) * fine + 0.12 * (w - 0.5);
+      hgt = w; bumpK = 0.15 * fine;
+    }
+    #endif
+    #ifdef SURF_METAL
+    {
+      base *= 0.93 + 0.08 * vnoise(vec2(sq.x * 50.0, sq.y * 1.5)) * fine + 0.04 * (fbm2(sq * 0.5) - 0.5);
+    }
+    #endif
+    #ifdef SURF_PAINT
+    {
+      base *= 0.97 + 0.05 * fbm2(sq * 1.5);
+    }
+    #endif
+    #ifdef SURF_FABRIC
+    {
+      base *= 0.92 + 0.08 * vnoise(sq * 40.0) * fine + 0.06 * (fbm2(sq * 0.8) - 0.5);
+    }
+    #endif
+    #ifdef SURF_SAND
+    {
+      float n = fbm2(sq * 0.25);
+      base *= 0.88 + 0.12 * sin(dot(sq, vec2(0.8, 0.6)) * 2.2 + n * 7.0) + 0.06 * (hash12(floor(sq * 60.0)) - 0.5) * fine;
+      hgt = sin(dot(sq, vec2(0.8, 0.6)) * 2.2 + n * 7.0); bumpK = 0.35;
+    }
+    #endif
+    // A faint large-scale variation everywhere, so nothing is one flat color.
+    base *= 1.0 + uFinish.y * uVaryOn * (fbm2(sq * 0.28 + 2.7) * 2.0 - 1.0) * (1.0 - e);
+  }
+  #endif
   vec3 N = normalize(vNormalW);
   #ifdef DOUBLE_SIDED
     if (!gl_FrontFacing) N = -N;
+  #endif
+  #ifdef SURFACE
+    N = bumpN(N, vWorld, hgt, bumpK);
   #endif
   float ndl = max(dot(N, uSun), 0.0);
   #ifndef UNLIT
@@ -582,6 +777,10 @@ void main() {
     ndl = smoothstep(0.05, 0.12, ndl) * 0.85 + smoothstep(0.55, 0.62, ndl) * 0.15;
   #endif
   vec3 light = mix(uGround, uSky, N.y * 0.5 + 0.5) + uSunColor * ndl;
+  vec3 V = normalize(uCam - vWorld);
+  float shin = mix(160.0, 8.0, rough);
+  float shine = (1.0 - rough) * (1.0 - rough) * uFinish.z * (shin + 8.0) / 25.0;
+  vec3 gloss = uSunColor * pow(max(dot(N, normalize(uSun + V)), 0.0), shin) * ndl * shine;
   // Walls darken toward the ground they stand on, which seats them in the scene.
   light *= mix(1.0, mix(0.55, 1.0, smoothstep(0.0, 1.8, abs(vWorld.y))), step(abs(N.y), 0.6));
   // Nearby lamps.
@@ -590,7 +789,9 @@ void main() {
     float d2 = dot(L, L), r = uLampPos[i].w;
     // Bright close by, falling off quickly, gone past twice the range.
     float fall = r * r / (r * r + d2 * 4.0) * (1.0 - smoothstep(r * 1.2, r * 2.0, sqrt(d2)));
-    light += uLampColor[i] * fall * (0.35 + 0.65 * max(dot(N, L * inversesqrt(max(d2, 1e-4))), 0.0));
+    vec3 Ln = L * inversesqrt(max(d2, 1e-4));
+    light += uLampColor[i] * fall * (0.35 + 0.65 * max(dot(N, Ln), 0.0));
+    gloss += uLampColor[i] * fall * pow(max(dot(N, normalize(Ln + V)), 0.0), shin) * shine;
   }
   #if !defined(UNLIT) && !defined(COMOVING)
     light += beamLight(vWorld, N);
@@ -604,6 +805,15 @@ void main() {
   vec3 rgb = base * mix(light, vec3(1.6), e);
   float ir = uSpec.x * mix(lum, 1.6, e);
   float uv = uSpec.y * mix(lum, 1.6, e);
+  #ifndef UNLIT
+    // Highlights (tinted by the surface for metal) and a soft rim of sky light
+    // around edges, which lifts shapes off what's behind them.
+    // (Near things only: on far hills it would read as a halo.)
+    float rim = pow(1.0 - max(dot(N, V), 0.0), 4.0) * (0.1 + 0.25 * (1.0 - rough)) * (1.0 - smoothstep(30.0, 90.0, vDist));
+    vec3 lit = (gloss * mix(vec3(1.0), base * 1.6, uFinish.w) + rim * mix(uSky, uSkyTop, 0.5) * 0.9) * (1.0 - e);
+    rgb += lit;
+    ir += dot(lit, vec3(0.33)) * 0.5;
+  #endif
 
   #ifdef WATER
     // Gentle swell, and the sky reflected more strongly at grazing angles.
@@ -890,6 +1100,13 @@ const idOf = (o) => { if (!ids.has(o)) ids.set(o, nextId++); return ids.get(o); 
 
 // color: css color; ir/uv: how strongly the surface sends out light just
 // beyond either end of the rainbow; emissive: 0..1 self-lit.
+// Each surface's default roughness and large-scale variation.
+const FINISH = {
+  grass: [0.95, 0.04], paving: [0.8, 0.04], cobble: [0.65, 0.03], brick: [0.85, 0.05], stone: [0.85, 0.05],
+  rock: [0.85, 0.08], gravel: [0.95, 0.03], tiles: [0.6, 0.05], plaster: [0.9, 0.05], asphalt: [0.5, 0.04], wood: [0.7, 0.05], metal: [0.32, 0.03],
+  paint: [0.32, 0.02], fabric: [1, 0.05], sand: [0.95, 0.06],
+};
+
 export function mat({
   color = "#ffffff",
   ir = 0.25,
@@ -922,6 +1139,10 @@ export function mat({
   spiral = null,    // { uSpiral, uSpiralColor } uniforms for a lighthouse beam
   depthWrite = null,
   vertexColors = false,
+  surface = null,   // a texture: grass, paving, cobble, brick, stone, rock, gravel, tiles, plaster, asphalt, wood, metal, paint, fabric, sand
+  rough = null,     // 0 glossy to 1 matte; each surface has its own default
+  vary = null,      // how much large-scale variation (0 for none)
+  shine = 1,        // highlight strength
 } = {}) {
   // Shared uniform objects (a train's motion, a wheel's spin) key by identity,
   // so every part of one train shares a material and can be merged.
@@ -952,6 +1173,7 @@ export function mat({
   if (windows) defines.WINDOWS = "";
   if (spiral) defines.SPIRAL = "";
   if (doubleSided) defines.DOUBLE_SIDED = "";
+  if (surface) { defines.SURFACE = ""; defines[`SURF_${surface.toUpperCase()}`] = ""; }
   const m = new THREE.ShaderMaterial({
     vertexShader: vertex,
     fragmentShader: fragment,
@@ -962,6 +1184,7 @@ export function mat({
       uColor: { value: new THREE.Color(color) },
       uSpec: { value: new THREE.Vector3(ir, uv, emissive) },
       uOpacity: { value: opacity },
+      uFinish: { value: new THREE.Vector4(rough ?? FINISH[surface]?.[0] ?? 0.75, vary ?? FINISH[surface]?.[1] ?? 0.06, shine, surface === "metal" ? 1 : 0) },
       uCheckerB: { value: new THREE.Color(checker?.b ?? "#000") },
       uCheckerSize: { value: checker?.size ?? 1 },
       uGridColor: { value: new THREE.Color(grid?.color ?? "#fff") },

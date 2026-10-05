@@ -94,6 +94,7 @@
  * @property {number} [sunDisk]    0 hides the sky's own sun
  * @property {number} [clouds]
  * @property {number} [aurora]
+ * @property {number} [vary]       0 turns off the faint surface variation (for worlds that move under you)
  */
 
 export {};
