@@ -231,6 +231,7 @@ document.querySelector(".paces").addEventListener("click", (e) => {
   if (b) player.setPace(Number(b.dataset.pace));
 });
 document.getElementById("help-btn").addEventListener("click", () => setHelp(true));
+document.getElementById("menu-help").addEventListener("click", () => setHelp(true));
 document.getElementById("help-close").addEventListener("click", () => setHelp(false));
 help.addEventListener("click", (e) => { if (e.target === help) setHelp(false); });
 addEventListener("pointerdown", unlockAudio);

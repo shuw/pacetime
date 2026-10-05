@@ -7,6 +7,7 @@
 //   node video/capture.mjs --preview    three stills a shot, no blur, to check framing
 //   node video/capture.mjs --shot=a,b   just those shots (with --preview, or full)
 //   node video/capture.mjs --preview --stills=8   more stills a shot
+//   node video/capture.mjs --bars       with 2.39:1 letterbox bars
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { open } from "../scripts/lib.mjs";
 import { CAPTIONS, FPS, LENGTH } from "./timeline.mjs";
@@ -19,6 +20,7 @@ const STILLS = Number(args.find((a) => a.startsWith("--stills="))?.slice(9) ?? 3
 const OUT = new URL("./out/", import.meta.url).pathname;
 const FRAMES = OUT + (preview ? "preview/" : "frames/");
 const SUB = preview ? 1 : 8, SHUTTER = 0.5;
+const BARS = args.includes("--bars") ? 138 : 0; // 2.39:1 letterbox bars, if wanted
 if (!only) rmSync(FRAMES, { recursive: true, force: true });
 mkdirSync(FRAMES, { recursive: true });
 
@@ -28,12 +30,12 @@ await t.page.addStyleTag({ content: `
   #hud, #toast, #veil, #menu { display: none !important; }
   #acc { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 4; pointer-events: none; }
   #vid { position: fixed; inset: 0; pointer-events: none; z-index: 50; font-family: "Big Shoulders Display", "Arial Narrow", sans-serif; }
-  #vid .lbox { position: absolute; left: 0; right: 0; height: 138px; margin: 0; padding: 0; border: 0; background: #000; }
-  #vid-cap { position: absolute; left: 0; right: 0; bottom: 178px; display: flex; justify-content: center; flex-wrap: wrap; gap: 0 0.28em; padding: 0 120px;
+  #vid .lbox { position: absolute; left: 0; right: 0; height: ${BARS}px; margin: 0; padding: 0; border: 0; background: #000; }
+  #vid-cap { position: absolute; left: 0; right: 0; bottom: ${BARS + 80}px; display: flex; justify-content: center; flex-wrap: wrap; gap: 0 0.28em; padding: 0 120px;
     font-weight: 800; font-size: 84px; line-height: 1.05; letter-spacing: 0.02em; text-transform: uppercase; color: #fff; }
   #vid-cap span { display: inline-block; text-shadow: 0 4px 0 rgba(0,0,0,0.35), 0 0 34px rgba(0,0,0,0.6), 0 0 2px rgba(0,0,0,0.9); }
   #vid-cap span.hot { color: #ffd38a; }
-  #vid-counter { position: absolute; left: 0; right: 0; top: 168px; text-align: center; font-weight: 800; font-size: 120px; line-height: 1; color: #fff; font-variant-numeric: tabular-nums;
+  #vid-counter { position: absolute; left: 0; right: 0; top: ${BARS + 64}px; text-align: center; font-weight: 800; font-size: 120px; line-height: 1; color: #fff; font-variant-numeric: tabular-nums;
     text-shadow: 0 0 40px rgba(110,180,255,0.6), 0 3px 0 rgba(0,0,0,0.4); }
   #vid-counter small { display: block; margin-top: 12px; font: 500 22px "JetBrains Mono", monospace; letter-spacing: 0.3em; color: rgba(255,255,255,0.8); text-shadow: 0 0 12px rgba(0,0,0,0.8); }
   #vid-labels { position: absolute; inset: 0; }
@@ -43,15 +45,17 @@ await t.page.addStyleTag({ content: `
   #vid-scrim { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 50%, rgba(5,6,12,0.35), rgba(5,6,12,0.85)); }
   #vid-title { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 22px; text-align: center; color: #fff; }
   #vid-title .spec { width: 520px; height: 4px; background: linear-gradient(90deg, #4b2bd9, #6f8bff, #38d6ff, #7cff9a, #ffe45c, #ff9b3d, #ff6a4d, #8f1d2a); }
-  #vid-title h1 { margin: 0; font-weight: 800; font-size: 210px; line-height: 0.9; letter-spacing: 0.04em; text-shadow: 0 0 60px rgba(120,150,255,0.45); }
+  #vid-title h1 { margin: 0; display: flex; align-items: center; text-transform: uppercase; font-weight: 800; font-size: 210px; line-height: 0.9; letter-spacing: 0.04em; text-shadow: 0 0 60px rgba(120,150,255,0.45); }
+  #vid-title h1 svg { width: 1.15em; height: 1.15em; margin-right: 0.08em; filter: drop-shadow(0 0 40px rgba(159, 232, 255, 0.35)); }
+  #vid-title h1 .w-light { text-shadow: none; filter: drop-shadow(0 0 30px rgba(120, 200, 255, 0.35)); }
   #vid-title p { margin: 0; font: 500 38px "Public Sans", sans-serif; letter-spacing: 0.04em; color: rgba(255,255,255,0.9); }
   #vid-title .url { font: 500 34px "JetBrains Mono", monospace; letter-spacing: 0.08em; color: #ffd38a; margin-top: 10px; }
   #vid-fade { position: absolute; inset: 0; background: #000; }
   #vid-blk { position: absolute; inset: 0; background: #000; }
-  #vid-split { position: absolute; top: 138px; bottom: 138px; width: 4px; margin-left: -2px; background: #fff; box-shadow: 0 0 24px rgba(255,255,255,0.8); }
+  #vid-split { position: absolute; top: ${BARS}px; bottom: ${BARS}px; width: 4px; margin-left: -2px; background: #fff; box-shadow: 0 0 24px rgba(255,255,255,0.8); }
   #vid-split b { position: absolute; bottom: 40px; font: 800 44px "Big Shoulders Display", sans-serif; letter-spacing: 0.08em; white-space: nowrap; text-shadow: 0 0 20px rgba(0,0,0,0.9); }
   #vid-split b.off { right: 28px; color: #c9cede; } #vid-split b.on { left: 28px; color: #ffd38a; }
-  #vid-cards { position: absolute; right: 90px; bottom: 170px; width: 680px; display: flex; flex-direction: column; gap: 16px; }
+  #vid-cards { position: absolute; right: 90px; bottom: ${BARS + 80}px; width: 680px; display: flex; flex-direction: column; gap: 16px; }
   #vid-cards .card { background: #fff6e6; color: #2b2340; border-radius: 6px; padding: 16px 22px 18px; box-shadow: 0 12px 40px rgba(0,0,0,0.45); font: 500 32px/1.3 "Public Sans", sans-serif; transform-origin: 50% 100%; }
   #vid-cards .card b { display: block; margin-bottom: 6px; font: 500 18px "JetBrains Mono", monospace; letter-spacing: 0.14em; color: #c0485a; }
 ` });
@@ -59,9 +63,12 @@ await t.page.evaluate(({ sub, shutter }) => {
   const d = document.createElement("div");
   d.id = "vid";
   d.innerHTML = `<div id="vid-blk"></div><div id="vid-scrim"></div><div id="vid-split"><b class="off">EINSTEIN OFF</b><b class="on">EINSTEIN ON</b></div><div id="vid-labels"><svg></svg></div><div id="vid-counter"></div><div id="vid-cards"></div><div id="vid-cap"></div>
-    <div id="vid-title"><div class="spec"></div><h1>SLOWLIGHT</h1><p>Light at a walking pace. Relativity you can play.</p><p class="url">shuw.github.io/slowlight</p></div>
+    <div id="vid-title"><div class="spec"></div><h1><span>SLOWLIGHT</span></h1><p>Light at a walking pace. Relativity you can play.</p><p class="url">shuw.github.io/slowlight</p></div>
     <div class="lbox" style="top:0"></div><div class="lbox" style="bottom:0"></div><div id="vid-fade"></div>`;
   document.body.append(d);
+  // The game's logo on the end card (with its own gradient ids, as the title screen's copy is hidden).
+  const logo = document.querySelector(".logo");
+  if (logo) d.querySelector("#vid-title h1").innerHTML = logo.innerHTML.replaceAll("slm", "slv");
   // The blended frame sits over the game's own canvas.
   const gl = document.getElementById("view");
   const acc = document.createElement("canvas");

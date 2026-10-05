@@ -176,6 +176,10 @@ body.photo #hud > *:not(#slowmo) { display: none !important; }
 #about-game h3, #place-help-title { font: 800 24px/1.05 var(--display); letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink); margin: 0; text-wrap: balance; }
 .help-about .lede { font-size: 15px; line-height: 1.5; color: var(--ink); max-width: 60ch; }
 #about-place, #about-game { display: grid; gap: 10px; padding-bottom: 6px; }
+.help-about h3 { margin-top: 10px; }
+.help-about .links { line-height: 1.9; }
+.help-about .links a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(159, 180, 255, 0.35); }
+.help-about .links a:hover { color: var(--ink); border-color: var(--ink); }
 .help-about ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: 13.5px; line-height: 1.55; color: #c9cede; max-width: 62ch; }
 .keys { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; align-items: baseline; }
 .keys dt { display: flex; gap: 4px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
@@ -228,7 +232,33 @@ body.photo #hud > *:not(#slowmo) { display: none !important; }
 .menu-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 32px; }
 .menu-head > div { display: grid; gap: 14px; }
 .spectrum { height: 3px; width: 120px; border-radius: 2px; background: var(--spectrum); }
-.logo { font-family: var(--display); font-weight: 800; font-size: clamp(56px, 10vw, 112px); line-height: 0.85; letter-spacing: 0.02em; text-transform: uppercase; margin: 0; }
+.logo { display: flex; align-items: center; gap: 0.02em; font-family: var(--display); font-weight: 800; font-size: clamp(56px, 10vw, 112px); line-height: 0.85; letter-spacing: 0.02em; text-transform: uppercase; margin: 0 0 0 -0.12em; }
+.logo .mark { width: 1.15em; height: 1.15em; flex: none; margin-right: 0.08em; }
+/* The wordmark: SLOW in white, LIGHT in the starbow's colours. */
+.w-light {
+  background:
+    linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, 0.7) 50%, transparent 65%) -150% 0 / 60% 100% no-repeat,
+    linear-gradient(90deg, #8b7bff, #38d6ff 25%, #7cff9a 48%, #ffe45c 72%, #ff6a4d);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+/* The mark springs open from its vanishing point, then the road keeps flowing toward you. */
+@media (prefers-reduced-motion: no-preference) {
+  .logo .mark .arch, .logo .mark .glow { transform-box: view-box; transform-origin: 32px 38px; }
+  .logo .mark .arch { animation: arch-in 0.8s cubic-bezier(0.2, 0.9, 0.25, 1.15) calc(0.1s + var(--n) * 0.09s) backwards, arch-pulse 3.6s ease-in-out calc(1.4s + var(--n) * 0.18s) infinite; }
+  .logo .mark .road { stroke-dasharray: 34; animation: road-in 0.7s ease-out 0.2s backwards; }
+  .logo .mark .dash { animation: dash-flow 0.55s linear infinite; }
+  .logo .mark .glow { animation: glow 2.8s ease-in-out infinite; }
+  .logo .w-slow, .logo .w-light { display: inline-block; animation: word-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+  .logo .w-slow { animation-delay: 0.3s; }
+  .logo .w-light { animation: word-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.42s backwards, sheen 7s ease-in-out 1.2s infinite; }
+}
+@keyframes arch-in { from { transform: scale(0); } }
+@keyframes arch-pulse { 0%, 100% { opacity: 0.82; } 12% { opacity: 1; } }
+@keyframes road-in { from { stroke-dashoffset: 34; } }
+@keyframes dash-flow { to { stroke-dashoffset: -7.5; } }
+@keyframes glow { 50% { transform: scale(1.25); opacity: 0.75; } }
+@keyframes word-in { from { opacity: 0; transform: translateX(-0.12em); } }
+@keyframes sheen { 0% { background-position: -150% 0, 0 0; } 25%, 100% { background-position: 250% 0, 0 0; } }
 .tagline { font-size: 17px; line-height: 1.5; color: #c9cede; margin: 0; max-width: 46ch; }
 #resume {
   all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; padding: 12px 18px; border-radius: 8px;
@@ -265,8 +295,16 @@ body.photo #hud > *:not(#slowmo) { display: none !important; }
 .scene-card .tag { font: 11px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--c); }
 .scene-card p { margin: 0; font-size: 13px; line-height: 1.45; color: #b5bbcc; }
 .scene-card .done { color: var(--good); }
-.controls { font-size: 12px; color: var(--muted); line-height: 2; margin: 6px 0 0; }
-.controls.touch { display: none; margin-top: 0; }
+.menu-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.controls { font-size: 14px; color: var(--muted); margin: 0; }
+.controls.touch { display: none; }
+#menu-help {
+  display: inline-flex; align-items: center; gap: 10px; padding: 9px 16px 9px 10px; cursor: pointer;
+  font: 500 14px var(--body); color: var(--ink); background: rgba(159, 180, 255, 0.08);
+  border: 1px solid var(--accent); border-radius: 999px;
+}
+#menu-help kbd { min-width: 1.5em; text-align: center; }
+#menu-help:hover, #menu-help:focus-visible { background: rgba(159, 180, 255, 0.18); }
 
 @media (pointer: coarse) {
   .controls { display: none; }

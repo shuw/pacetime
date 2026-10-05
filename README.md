@@ -1,3 +1,5 @@
+<img src="logo.svg" alt="" width="96" align="left">
+
 # Slowlight
 
 A browser game where light moves at a walking pace. At the speed of a jog or a bicycle, the strange parts of special relativity stop being equations and become things you can stand and watch, ride through, and throw things at.
